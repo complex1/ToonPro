@@ -37,17 +37,25 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Restore pinned Qt SDK
+        id: qt-sdk
+        uses: actions/cache@v4
+        with:
+          path: .deps/Qt
+          key: qt-6.10.3-${{ matrix.target }}-base-svg-multimedia-runtime-v2
       - name: Install Linux desktop and packaging dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build zlib1g-dev patchelf binutils xvfb xauth fonts-dejavu-core \
+          sudo apt-get install -y ninja-build zlib1g-dev pkg-config nasm libssl-dev libva-dev libvdpau-dev \
+            libva2 libva-drm2 libva-x11-2 libvdpau1 patchelf binutils xvfb xauth fonts-dejavu-core \
             libgl1-mesa-dev libegl1-mesa-dev libgl1-mesa-dri libfontconfig1 libfreetype6 \
             libx11-xcb1 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
             libxcb-render-util0 libxcb-xinerama0 libxcb-xkb1 libxcb-xinput0 \
             libxkbcommon-x11-0 libdbus-1-3 libasound2t64 libpulse0 libnss3 libglib2.0-0t64 \
             libxcomposite1 libxrandr2 libxdamage1 libxss1 libxtst6
       - name: Install pinned Qt SDK and Multimedia runtime dependencies
+        if: steps.qt-sdk.outputs.cache-hit != 'true'
         run: |
           python -m pip install aqtinstall==3.3.0
           python -m aqt install-qt ${{ matrix.host }} desktop 6.10.3 ${{ matrix.arch }} --outputdir .deps/Qt --modules qtmultimedia --archives qtbase qtsvg qtmultimedia ${{ runner.os == 'Linux' && 'qtdeclarative icu' || '' }}
@@ -89,17 +97,37 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build with bounded parallelism
         run: cmake --build build --config Release --parallel 4
+      - name: Build pinned Linux software video runtime
+        if: success() && github.event_name == 'workflow_dispatch' && runner.os == 'Linux'
+        env:
+          TOON_CODEC_JOBS: 2
+        run: bash scripts/build_linux_codecs.sh build/linux-codecs
       - name: Test on macOS
         if: runner.os == 'macOS'
         run: ctest --test-dir build -C Release --output-on-failure --parallel 2
       - name: Test on Linux with a virtual display
         if: runner.os == 'Linux'
-        run: xvfb-run -a -s "-screen 0 1600x1200x24" ctest --test-dir build -C Release --output-on-failure --parallel 2
+        run: |
+          if [ -d "$PWD/build/linux-codecs/install/lib" ]; then
+            export LD_LIBRARY_PATH="$PWD/build/linux-codecs/install/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          fi
+          xvfb-run -a -s "-screen 0 1600x1200x24" ctest --test-dir build -C Release --output-on-failure --parallel 2
+      - name: Diagnose Windows save and workspace flows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:PATH = "${{ github.workspace }}\.deps\Qt\6.10.3\msvc2022_64\bin;$env:PATH"
+          $env:QT_FORCE_STDERR_LOGGING = '1'
+          foreach ($suite in @('drawing_template_library', 'property_row', 'project_save', 'cel_workflows')) {
+            ctest --test-dir build -C Release --output-on-failure --parallel 1 --stop-on-failure -R ('^' + $suite + '$')
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
       - name: Test on Windows
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $env:PATH = "${{ github.workspace }}\.deps\Qt\6.10.3\msvc2022_64\bin;$env:PATH"
+          $env:QT_FORCE_STDERR_LOGGING = '1'
           ctest --test-dir build -C Release --output-on-failure --parallel 2
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Check packaging scripts
@@ -117,9 +145,9 @@ jobs:
       - name: Stage, relocate and verify Linux candidate
         if: success() && github.event_name == 'workflow_dispatch' && runner.os == 'Linux'
         run: >-
-          xvfb-run -a -s "-screen 0 1600x1200x24"
           python scripts/package_desktop.py --build-dir build --config Release
-          --qt-root ".deps/Qt/6.10.3/${{ matrix.qt_dir }}" --output-dir build/package --skip-build
+          --qt-root ".deps/Qt/6.10.3/${{ matrix.qt_dir }}" --output-dir build/package --skip-build --xvfb
+          --ffmpeg-root build/linux-codecs/install
       - name: Stage, relocate and verify Windows candidate
         if: success() && runner.os == 'Windows' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/codex/release-candidate-')))
         shell: pwsh
@@ -139,6 +167,7 @@ jobs:
             build/package/SHA256SUMS
             build/package/package.json
             build/package/verification/**
+            build/linux-codecs/dependency-sources/**
           if-no-files-found: error
           retention-days: 30
       - name: Upload diagnostic logs even when verification fails
@@ -151,5 +180,6 @@ jobs:
             build/Testing/Temporary/**
             build/package/verification/**
             build/test-artifacts/*.png
+            build/linux-codecs/logs/**
           if-no-files-found: warn
           retention-days: 14

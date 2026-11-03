@@ -27,6 +27,9 @@ SOURCES = (
     ("qt5", "6417867c2da7aa2b1b94fb9ab084b514fb7009bb", "e08a1fd60954a6cb6cb8457d3d920ca9f066472e30a2aafd1648e1827dd9bd41"),
     ("FFmpeg", "n7.1.3", "e0b04c4b43d7e6d67cb6710334fb513adf13ac860532f30e1d0ac4c231f232fb"),
 )
+OPTIONAL_SOURCES = (
+    ("qtdeclarative", "3a714efe0672ae1ba06f09864f64957560c69b91", "288d6c2e7abcb4ce91dbc0ec2c939a4f1fd037c37dd016bd27619ac84761da82"),
+)
 FFMPEG_VENDOR_SHA1 = "27051817deec88bed3b9652d49f9127d22268d83"
 MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
 
@@ -92,7 +95,9 @@ def download_source(cache: Path, name: str, revision: str, expected: str) -> tup
 
 def read_sdk_manifests(qt_root: Path) -> list[tuple[Path, dict]]:
     manifests = []
-    for name, revision, _ in SOURCES[:3]:
+    modules = SOURCES[:3] + tuple(source for source in OPTIONAL_SOURCES
+                                 if list((qt_root / "sbom").glob(f"{source[0]}-*.spdx.json")))
+    for name, revision, _ in modules:
         matches = list((qt_root / "sbom").glob(f"{name}-*.spdx.json"))
         if len(matches) != 1 or matches[0].name != f"{name}-{QT_VERSION}.spdx.json":
             raise RuntimeError(f"Expected one audited Qt {QT_VERSION} SPDX manifest for {name}")
@@ -128,19 +133,30 @@ def verify_bundle(directory: Path) -> dict:
         path = directory / relative
         if path.is_symlink() or not path.resolve().is_relative_to(directory.resolve()) or not path.is_file() or digest(path) != item["sha256"]:
             raise RuntimeError(f"Source bundle integrity failure: {item['file']}")
-    for name, revision, expected in SOURCES:
+    known = {name: (revision, expected) for name, revision, expected in SOURCES + OPTIONAL_SOURCES}
+    supplied = manifest.get("sources", [])
+    names = [item.get("name") for item in supplied]
+    if len(names) != len(set(names)) or not {source[0] for source in SOURCES}.issubset(names):
+        raise RuntimeError("Source manifest omits or duplicates required components")
+    for item in supplied:
+        name = item.get("name")
+        if name not in known or (item.get("revision"), item.get("sha256")) != known[name]:
+            raise RuntimeError(f"Source manifest component is not an audited revision: {name}")
+        revision, expected = known[name]
         validate_archive(directory / "archives" / f"{name}-{revision}.tar.gz", name, revision, expected)
     return manifest
 
 
 def collect(qt_root: Path, output: Path, cache: Path) -> Path:
     manifests = read_sdk_manifests(qt_root)
+    sdk_names = {package["name"] for _, package in manifests}
+    requested = SOURCES + tuple(source for source in OPTIONAL_SOURCES if source[0] in sdk_names)
     archive_path = output.with_name(output.name + ".tar.gz")
     if output.exists() or output.is_symlink() or archive_path.exists() or archive_path.is_symlink():
         raise RuntimeError("Use a fresh output directory and archive name; existing contents are preserved")
     cache.mkdir(parents=True, exist_ok=True)
     # Fetch and validate before creating the output, so failed downloads can be retried.
-    collected = [(name, revision, expected, *download_source(cache, name, revision, expected)) for name, revision, expected in SOURCES]
+    collected = [(name, revision, expected, *download_source(cache, name, revision, expected)) for name, revision, expected in requested]
     output.mkdir(parents=True)
     (output / "archives").mkdir()
     (output / "sdk-sbom").mkdir()
@@ -150,7 +166,7 @@ def collect(qt_root: Path, output: Path, cache: Path) -> Path:
         destination = output / "archives" / path.name
         shutil.copy2(path, destination)
         files.append({"file": destination.relative_to(output).as_posix(), "sha256": expected})
-        match = "SDK source commit" if name in ("qtbase", "qtsvg") else "SDK release version; source commit resolved from Qt v6.10.3 tag"
+        match = "SDK source commit" if name in ("qtbase", "qtsvg", "qtdeclarative") else "SDK release version; source commit resolved from Qt v6.10.3 tag"
         if name == "qtshadertools":
             match = "Required build dependency pinned by qtmultimedia dependencies.yaml"
         elif name == "qt5":
@@ -173,7 +189,9 @@ def collect(qt_root: Path, output: Path, cache: Path) -> Path:
     manifest = {"schemaVersion": 1, "qtVersion": QT_VERSION, "sources": sources, "files": files,
         "sha256Provenance": "Pinned HTTPS archive digests recorded during source audit; FFmpeg additionally checked against Qt's provisioning SHA-1. These are integrity checks, not publisher signatures.",
         "sourceRebuildVerified": False, "legalApproval": False,
-        "coverage": "QtBase, QtSvg, QtMultimedia, their vendored third-party trees, QtShaderTools build dependency, FFmpeg and Qt provisioning scripts. OS/runtime libraries and additional deployed modules require separate inventory review."}
+        "coverage": "QtBase, QtSvg, QtMultimedia, " + ("QtDeclarative (QtQml/QtQuick), " if "qtdeclarative" in sdk_names else "")
+            + "their vendored third-party trees, QtShaderTools build dependency, FFmpeg and Qt provisioning scripts. "
+              "OS/runtime libraries and additional deployed modules require separate inventory review. Custom codec runtime sources are supplied separately."}
     (output / "SOURCE-MANIFEST.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     sums = [f"{item['sha256']}  {item['file']}" for item in files]
     sums.append(f"{digest(output / 'SOURCE-MANIFEST.json')}  SOURCE-MANIFEST.json")

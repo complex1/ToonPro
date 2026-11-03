@@ -7,6 +7,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl build-essential cmake ninja-build python3 python3-venv \
     zlib1g-dev pkg-config nasm libssl-dev libva-dev libvdpau-dev \
+    libva2 libva-drm2 libva-x11-2 libvdpau1 \
     patchelf binutils xvfb xauth fontconfig fonts-dejavu-core \
     libgl1-mesa-dev libegl1-mesa-dev libgl1-mesa-dri libfontconfig1 libfreetype6 \
     libx11-xcb1 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \

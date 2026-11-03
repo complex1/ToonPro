@@ -78,7 +78,7 @@ python scripts/package_desktop.py `
   --output-dir dist/0.75.0/windows-x86_64-candidate
 ```
 
-The portable ZIP contains `bin/ToonPro.exe`, deployed Qt/FFmpeg libraries and plugins. Qt's deployment step includes compiler redistribution files. A clean-machine check must confirm whether the bundled Visual C++ redistributable needs installation. Windows packages are unsigned: the script does not implement Authenticode signing or claim SmartScreen acceptance.
+The portable ZIP contains `bin/ToonPro.exe`, deployed Qt/FFmpeg libraries and plugins. CMake stages release MSVC runtime DLLs beside the executable. Verification inspects both normal and delayed DLL imports and rejects missing compiler runtimes. Windows 10/11 supplies UCRT; no Visual Studio installation should be needed, subject to actual clean-machine validation. Windows packages are unsigned: the script does not implement Authenticode signing or claim SmartScreen acceptance.
 
 ### Linux
 
@@ -100,6 +100,18 @@ xvfb-run -a -s "-screen 0 1600x1200x24" \
 ```
 
 Packaging explicitly copies the matching SDK's FFmpeg runtime, normalizes ELF runtime paths to the package, resolves its dependency closure and creates `ToonPro.sh`. Extract the `.tar.gz` and launch through that script. Qt and FFmpeg must resolve inside the package; remaining OS libraries are listed in the verification report. This is a portable directory, not an AppImage, `.deb` or `.rpm` installer. The desktop backend is X11/XCB; Wayland desktops need XWayland. Xvfb verifies the XCB runtime but does not establish real display, audio-device or tablet behavior. Other distributions and older glibc versions require separate verification.
+
+The audited Linux SDK supplies hardware H.264 encoders but no software H.264 encoder. A machine without suitable GPU encoding therefore cannot pass the MP4 export check with that runtime. The isolated replacement recipe builds FFmpeg 7.1.3 with OpenH264 2.7.0 and native AAC, keeping Qt's library ABI and leaving GPL/nonfree FFmpeg features disabled:
+
+```sh
+# Run inside the Linux x86_64 build environment, with a fresh output directory.
+TOON_CODEC_JOBS=2 bash scripts/build_linux_codecs.sh \
+  build/release-linux-codecs .cache/dependency-sources
+```
+
+The recipe requires the codec build dependencies listed in the Linux Dockerfile and Python 3.12 or later. It installs under `build/release-linux-codecs/install`, records source/configuration/library hashes and checks the ABI, codec discovery and FFmpeg license configuration. Supply `--ffmpeg-root build/release-linux-codecs/install` to the Linux packaging command to deploy it into the fresh stage. The final relocated Qt MP4 encode/decode checks must still pass; merely finding an encoder does not establish working export. This replacement is being validated and is not yet a verified Linux release artifact.
+
+The recipe preserves both source archives and rebuild inputs under `build/release-linux-codecs/dependency-sources`. OpenH264 is distributed under BSD-2-Clause, but Cisco's royalty coverage for its downloaded binary does not apply to this separately built/redistributed library; codec patent and distribution review remains a public-release requirement. [Cisco's OpenH264 FAQ](https://www.openh264.org/faq.html)
 
 ## Signing and candidate CI
 

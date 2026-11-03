@@ -206,6 +206,42 @@ def digest(path: Path) -> str:
     return sha.hexdigest()
 
 
+def linux_ffmpeg_runtime_metadata(stage: Path, provenance: dict | None, verification: dict) -> dict:
+    """Keep codec build evidence separate from bytes and checks after deployment."""
+    libraries = []
+    names = r"lib(?:avcodec|avformat|avutil|avdevice|avfilter|swresample|swscale|openh264)\.so(?:\.[0-9]+)*"
+    build_hashes = provenance.get("libraries", {}) if provenance else {}
+    for path in sorted((stage / "lib").iterdir()):
+        if path.is_symlink() or not path.is_file() or not re.fullmatch(names, path.name):
+            continue
+        item = {"file": path.relative_to(stage).as_posix(), "sha256": digest(path), "bytes": path.stat().st_size}
+        if path.name in build_hashes:
+            item["sourceBuildSha256"] = build_hashes[path.name]
+        libraries.append(item)
+    required = ("wav-export", "h264-aac-export", "h264-decode-pixels", "aac-decode-samples")
+    runs = []
+    for smoke in verification.get("smokes", []):
+        report = smoke.get("report", {})
+        checks = {}
+        for name in required:
+            matches = [item for item in report.get("checks", []) if item.get("name") == name]
+            checks[name] = len(matches) == 1 and matches[0].get("passed") is True
+        passed = smoke.get("exitCode") == 0 and report.get("success") is True and all(checks.values())
+        runs.append({"mode": smoke.get("mode", "unknown"), "success": passed, "checks": checks})
+    result = {"provider": "custom" if provenance else "qt-sdk", "provenance": provenance,
+              "provenanceScope": "Codec build before deployment; library hashes precede RPATH rewriting." if provenance else "SDK runtime; no separate codec build manifest supplied.",
+              "deployedLibraryHashScope": "Final staged library bytes after deployment and RPATH rewriting; symlink aliases are omitted.",
+              "deployedLibraries": libraries,
+              "packagedMediaVerification": {
+                  "success": verification.get("success") is True and bool(runs) and all(run["success"] for run in runs),
+                  "report": "verification/package-verification.json", "requiredChecks": list(required), "runs": runs}}
+    if provenance:
+        path = stage / "third-party/ffmpeg-runtime/sources.json"
+        result["provenanceFile"] = path.relative_to(stage).as_posix()
+        result["provenanceFileSha256"] = digest(path)
+    return result
+
+
 def relocate_macos_offscreen(plugin: Path, qt_root: Path) -> None:
     # This plugin is copied after macdeployqt, so it still has the SDK layout.
     # Keep its own Qt lookup relative to the deployed bundle, even when loading
@@ -377,6 +413,7 @@ def main() -> int:
     parser.add_argument("--skip-build", action="store_true")
     parser.add_argument("--require-3d", action="store_true")
     parser.add_argument("--skip-native-smoke", action="store_true", help="CI without a window server; offscreen smoke is still required")
+    parser.add_argument("--xvfb", action="store_true", help="Linux: verify native XCB startup in a bounded, private virtual display")
     parser.add_argument("--dmg", action="store_true", help="Also create a macOS drag-to-Applications disk image")
     parser.add_argument("--sign-identity", help="macOS Developer ID Application identity from the existing keychain")
     parser.add_argument("--notarize-profile", help="Existing notarytool keychain profile; requires --sign-identity and uploads to Apple")
@@ -388,6 +425,8 @@ def main() -> int:
         parser.error("DMG, Developer ID signing and notarization options require macOS.")
     if args.ffmpeg_root and system != "Linux":
         parser.error("Custom FFmpeg runtime deployment currently requires Linux.")
+    if args.xvfb and (system != "Linux" or args.skip_native_smoke):
+        parser.error("--xvfb requires Linux and an enabled native smoke.")
     if args.notarize_profile and not args.sign_identity:
         parser.error("Notarization requires --sign-identity; ad-hoc code cannot be notarized.")
     if args.sign_identity and not args.sign_identity.startswith("Developer ID Application:"):
@@ -448,6 +487,8 @@ def main() -> int:
         verification.append("--require-3d")
     if args.skip_native_smoke:
         verification.append("--skip-native-smoke")
+    if args.xvfb:
+        verification.append("--xvfb")
     run(verification)
     report = json.loads((output / "verification/package-verification.json").read_text(encoding="utf-8"))
     version = report["smokes"][0]["report"]["applicationVersion"]
@@ -503,10 +544,13 @@ def main() -> int:
                 "archive": archive.name, "sha256": digest(archive), "bytes": archive.stat().st_size,
                 "signature": signature, "notarized": notarized, "published": False,
                 "releaseChannel": "candidate", "publicReleaseReady": False, "releaseBlockers": blockers,
-                "runtimeVerified": True, "nativeRuntimeVerified": not args.skip_native_smoke, "capabilities": capabilities,
+                "runtimeVerified": True, "nativeRuntimeVerified": not args.skip_native_smoke,
+                "virtualDisplayUsed": args.xvfb, "capabilities": capabilities,
                 "ffmpegRuntime": {"provider": "custom" if ffmpeg_root else "qt-sdk", "provenance": ffmpeg_provenance},
                 "artifacts": [{"file": path.name, "sha256": digest(path), "bytes": path.stat().st_size} for path in artifacts],
                 "verification": "verification/package-verification.json"}
+    if system == "Linux":
+        manifest["ffmpegRuntime"] = linux_ffmpeg_runtime_metadata(stage, ffmpeg_provenance, report)
     (output / "package.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     (output / "SHA256SUMS").write_text("".join(f"{digest(path)}  {path.name}\n" for path in artifacts), encoding="utf-8")
     print(f"Verified package: {archive}")

@@ -78,6 +78,9 @@ bool DrawingTemplateLibrary::commit(const QVector<DrawingTemplateEntry> &entries
         m_writable=false;
         return fail("The drawing template library changed outside Toon Pro. Reopen the application before saving templates; the file was preserved.",error);
     }
+    // Windows cannot atomically replace the destination while this read handle
+    // is still open. Finish the conflict check before QSaveFile publishes it.
+    current.close();
     const auto data=serialize(entries);
     if (data.size()>maxTemplateFileBytes) return fail("Drawing template library exceeds the 1 MiB limit.",error);
     if (!QDir().mkpath(QFileInfo(m_filePath).absolutePath())) return fail("Could not create the drawing template library folder.",error);

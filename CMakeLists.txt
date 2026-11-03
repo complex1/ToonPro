@@ -138,7 +138,9 @@ if(MSVC)
     # Source strings and test fixtures contain Unicode. Propagate encoding to
     # application/test consumers; expose the CRT math constants used by the
     # existing geometry code before any consumer includes <cmath>.
-    target_compile_options(toon_core PUBLIC /utf-8 /bigobj PRIVATE /W4)
+    # MSBuild parallelizes projects; cap the large core/workspace projects at
+    # two compiler processes each so a clean Windows build also makes progress.
+    target_compile_options(toon_core PUBLIC /utf-8 /bigobj /MP2 PRIVATE /W4)
     target_compile_definitions(toon_core PUBLIC _USE_MATH_DEFINES)
     target_compile_options(toon_workspace PRIVATE /W4)
 else()
@@ -663,6 +665,12 @@ if(BUILD_TESTING)
         set_tests_properties(${edit_suite} PROPERTIES TIMEOUT 60)
     endforeach()
     set_tests_properties(foundation drawing controls cursor reference_storage references stabilizer brush_library abr brush_engine brush_panel brush_advanced brush_settings_panel PROPERTIES TIMEOUT 60)
+    if(WIN32)
+        # QtTest otherwise sends plain output to OutputDebugString on hosted
+        # Windows runners, hiding assertion details from CTest and its logs.
+        get_property(_toon_registered_tests DIRECTORY PROPERTY TESTS)
+        set_property(TEST ${_toon_registered_tests} APPEND PROPERTY ENVIRONMENT "QT_FORCE_STDERR_LOGGING=1")
+    endif()
 endif()
 
 option(TOON_BUILD_BENCHMARKS "Build opt-in offscreen performance benchmarks" OFF)
@@ -718,5 +726,36 @@ file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/build-capabilities-$<CONFIG>.json" CON
 "{\n  \"application\": \"Toon Pro\",\n  \"version\": \"${PROJECT_VERSION}\",\n  \"qtVersion\": \"${Qt6_VERSION}\",\n  \"system\": \"${CMAKE_SYSTEM_NAME}\",\n  \"architecture\": \"${_toon_arch}\",\n  \"configuration\": \"$<CONFIG>\",\n  \"filamentRequested\": \"${_toon_filament_mode}\",\n  \"filamentEnabled\": ${_toon_filament_json},\n  \"renderer3D\": \"${_toon_renderer}\",\n  \"minimumOS\": \"${_toon_minimum_os}\",\n  \"desktopBackend\": \"${_toon_desktop_backend}\"\n}\n")
 install(TARGETS ToonPro BUNDLE DESTINATION . RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES "${CMAKE_BINARY_DIR}/build-capabilities-$<CONFIG>.json" DESTINATION "${_toon_metadata_destination}" RENAME build-capabilities.json)
-qt_generate_deploy_app_script(TARGET ToonPro OUTPUT_SCRIPT toon_deploy_script INCLUDE_PLUGIN_TYPES multimedia)
+set(_toon_deploy_runtime_options)
+if(MSVC)
+    # A portable ZIP must carry its compiler DLLs beside ToonPro.exe. A smoke
+    # run on a Visual Studio runner otherwise silently uses the installed CRT.
+    # Windows 10/11 already provide UCRT; never redistribute debug runtimes.
+    set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP TRUE)
+    set(CMAKE_INSTALL_DEBUG_LIBRARIES FALSE)
+    set(CMAKE_INSTALL_DEBUG_LIBRARIES_ONLY FALSE)
+    set(CMAKE_INSTALL_UCRT_LIBRARIES FALSE)
+    include(InstallRequiredSystemLibraries)
+    set(_toon_crt_names)
+    foreach(_toon_crt IN LISTS CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS)
+        if(NOT EXISTS "${_toon_crt}")
+            message(FATAL_ERROR "Required MSVC runtime is missing: ${_toon_crt}")
+        endif()
+        get_filename_component(_toon_crt_name "${_toon_crt}" NAME)
+        string(TOLOWER "${_toon_crt_name}" _toon_crt_name)
+        list(APPEND _toon_crt_names "${_toon_crt_name}")
+    endforeach()
+    foreach(_toon_required_crt msvcp140.dll vcruntime140.dll vcruntime140_1.dll)
+        if(NOT _toon_required_crt IN_LIST _toon_crt_names)
+            message(FATAL_ERROR "Install the Visual Studio 2022 C++ redistributable files before packaging: ${_toon_required_crt} was not found.")
+        endif()
+    endforeach()
+    install(PROGRAMS ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS} DESTINATION ${CMAKE_INSTALL_BINDIR}
+        CONFIGURATIONS Release RelWithDebInfo MinSizeRel)
+    # Qt's default release deployment adds a separate runtime installer and
+    # needs VCINSTALLDIR. App-local deployment above is explicit and verified.
+    list(APPEND _toon_deploy_runtime_options NO_COMPILER_RUNTIME)
+endif()
+qt_generate_deploy_app_script(TARGET ToonPro OUTPUT_SCRIPT toon_deploy_script
+    ${_toon_deploy_runtime_options} INCLUDE_PLUGIN_TYPES multimedia)
 install(SCRIPT ${toon_deploy_script})

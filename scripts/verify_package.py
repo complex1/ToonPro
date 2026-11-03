@@ -3,18 +3,120 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager, nullcontext
 import json
+import hashlib
 import os
 from pathlib import Path
 import platform
 import re
+import select
 import shutil
+import socket
 import subprocess
 import struct
 import sys
 import tempfile
+import time
 
 MACHO_MAGIC = {b"\xfe\xed\xfa\xce", b"\xce\xfa\xed\xfe", b"\xfe\xed\xfa\xcf", b"\xcf\xfa\xed\xfe", b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca", b"\xca\xfe\xba\xbf", b"\xbf\xba\xfe\xca"}
+MSVC_RUNTIME = re.compile(r"(?:vcruntime|msvcp|concrt|vcomp|msvcr)[0-9][a-z0-9_]*\.dll", re.IGNORECASE)
+
+
+def pe_imports(binary: Path) -> list[str]:
+    """Read normal and delayed PE DLL imports without SDK tools on PATH."""
+    with binary.open("rb") as stream:
+        total = binary.stat().st_size
+        def read(offset: int, size: int) -> bytes:
+            if offset < 0 or size < 0 or offset + size > total:
+                raise RuntimeError(f"Truncated PE import metadata: {binary}")
+            stream.seek(offset)
+            return stream.read(size)
+        dos = read(0, 64)
+        if dos[:2] != b"MZ":
+            raise RuntimeError(f"Invalid PE runtime binary: {binary}")
+        pe = struct.unpack_from("<I", dos, 60)[0]
+        header = read(pe, 24)
+        if header[:4] != b"PE\0\0":
+            raise RuntimeError(f"Invalid PE signature: {binary}")
+        count, optional_size = struct.unpack_from("<H", header, 6)[0], struct.unpack_from("<H", header, 20)[0]
+        optional = read(pe + 24, optional_size)
+        magic = struct.unpack_from("<H", optional)[0] if len(optional) >= 2 else 0
+        directory_offset = 112 if magic == 0x20B else 96 if magic == 0x10B else 0
+        if not directory_offset or optional_size < directory_offset or count > 96:
+            raise RuntimeError(f"Invalid PE optional header: {binary}")
+        image_base = struct.unpack_from("<Q" if magic == 0x20B else "<I", optional, 24 if magic == 0x20B else 28)[0]
+        header_size = struct.unpack_from("<I", optional, 60)[0]
+        directory_count = struct.unpack_from("<I", optional, directory_offset - 4)[0]
+        sections = []
+        for index in range(count):
+            entry = read(pe + 24 + optional_size + index * 40, 40)
+            sections.append(struct.unpack_from("<IIII", entry, 8))
+        def rva_offset(rva: int, size: int) -> int:
+            if 0 < rva < header_size and rva + size <= header_size:
+                read(rva, size)
+                return rva
+            for virtual_size, address, raw_size, raw_offset in sections:
+                delta = rva - address
+                if 0 <= delta < max(virtual_size, raw_size) and delta + size <= raw_size:
+                    read(raw_offset + delta, size)
+                    return raw_offset + delta
+            raise RuntimeError(f"PE import points outside a file-backed section: {binary}")
+        names = set()
+        for directory, entry_size, name_offset in ((1, 20, 12), (13, 32, 4)):
+            if directory >= directory_count:
+                continue
+            offset = directory_offset + directory * 8
+            if offset + 8 > optional_size:
+                raise RuntimeError(f"Truncated PE data directory: {binary}")
+            rva, size = struct.unpack_from("<II", optional, offset)
+            if not rva:
+                continue
+            if size < entry_size or size // entry_size > 4096:
+                raise RuntimeError(f"Invalid PE import directory size: {binary}")
+            terminated = False
+            for index in range(size // entry_size):
+                entry = read(rva_offset(rva + index * entry_size, entry_size), entry_size)
+                if not any(entry):
+                    terminated = True
+                    break
+                name_rva = struct.unpack_from("<I", entry, name_offset)[0]
+                if directory == 13 and not struct.unpack_from("<I", entry)[0] & 1:
+                    name_rva -= image_base
+                data = bytearray()
+                for position in range(260):
+                    character = read(rva_offset(name_rva + position, 1), 1)
+                    if character == b"\0":
+                        break
+                    data.extend(character)
+                else:
+                    raise RuntimeError(f"Unterminated PE DLL import: {binary}")
+                name = data.decode("ascii").lower()
+                if not name or "/" in name or "\\" in name:
+                    raise RuntimeError(f"Invalid PE DLL import name: {binary}")
+                names.add(name)
+            if not terminated:
+                raise RuntimeError(f"Unterminated PE import directory: {binary}")
+        return sorted(names)
+
+
+def inspect_windows(stage: Path) -> list[dict]:
+    local_runtime = {path.name.lower(): path for path in (stage / "bin").glob("*.dll")}
+    required = {"vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll"}
+    if required - local_runtime.keys():
+        raise RuntimeError("App-local MSVC runtime is missing: " + ", ".join(sorted(required - local_runtime.keys())))
+    result = []
+    for binary in sorted(stage.rglob("*")):
+        if not binary.is_file() or binary.suffix.lower() not in {".dll", ".exe"}:
+            continue
+        imports = pe_imports(binary)
+        for name in imports:
+            if MSVC_RUNTIME.fullmatch(name) and name not in local_runtime:
+                raise RuntimeError(f"MSVC dependency {name} from {binary.relative_to(stage)} is not bundled in bin/")
+        result.append({"file": binary.relative_to(stage).as_posix(), "imports": imports})
+    if not result:
+        raise RuntimeError("No Windows PE application binaries found in the package.")
+    return result
 
 
 def binary_architecture(executable: Path, system: str) -> str:
@@ -173,6 +275,55 @@ def clean_environment(offscreen: bool, high_dpi: bool) -> dict[str, str]:
     return environment
 
 
+@contextmanager
+def virtual_x_display(log_path: Path, timeout: float = 15):
+    """Start our own X server using its ready descriptor, never SIGUSR1."""
+    executable = shutil.which("Xvfb")
+    if not executable:
+        raise RuntimeError("--xvfb requires Xvfb for the native XCB smoke.")
+    read_fd, write_fd = os.pipe()
+    process = None
+    try:
+        with log_path.open("w", encoding="utf-8") as log:
+            process = subprocess.Popen([executable, "-displayfd", str(write_fd), "-screen", "0", "1600x1200x24",
+                                        "-nolisten", "tcp", "-ac"], pass_fds=(write_fd,),
+                                       stdout=subprocess.DEVNULL, stderr=log)
+            os.close(write_fd)
+            write_fd = -1
+            deadline, announced = time.monotonic() + timeout, b""
+            while b"\n" not in announced:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise RuntimeError("Xvfb did not become ready before the startup deadline; see " + str(log_path))
+                if process.poll() is not None:
+                    raise RuntimeError("Xvfb exited before becoming ready; see " + str(log_path))
+                if select.select([read_fd], [], [], min(.1, remaining))[0]:
+                    part = os.read(read_fd, 64)
+                    if not part or len(announced) + len(part) > 64:
+                        raise RuntimeError("Xvfb returned an invalid ready response.")
+                    announced += part
+            number = announced.strip()
+            if not number.isdigit() or int(number) > 65535:
+                raise RuntimeError("Xvfb returned an invalid display number.")
+            # The ready descriptor is emitted after initialization. Also verify
+            # the local socket accepts a connection before launching Qt.
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+                connection.settimeout(2)
+                connection.connect(f"/tmp/.X11-unix/X{int(number)}")
+            yield ":" + number.decode("ascii")
+    finally:
+        os.close(read_fd)
+        if write_fd >= 0:
+            os.close(write_fd)
+        if process is not None and process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--stage", type=Path, required=True)
@@ -180,10 +331,13 @@ def main() -> int:
     parser.add_argument("--forbid-path", action="append", default=[])
     parser.add_argument("--require-3d", action="store_true")
     parser.add_argument("--skip-native-smoke", action="store_true")
+    parser.add_argument("--xvfb", action="store_true", help="Linux: run the native XCB smoke in a bounded, private virtual display")
     args = parser.parse_args()
     system = platform.system()
     if system not in {"Darwin", "Windows", "Linux"}:
         parser.error("Native package verification supports macOS, Windows and Linux.")
+    if args.xvfb and (system != "Linux" or args.skip_native_smoke):
+        parser.error("--xvfb requires Linux and an enabled native smoke.")
     stage = args.stage.resolve()
     payload = stage / {"Darwin": "ToonPro.app/Contents/MacOS/ToonPro", "Windows": "bin/ToonPro.exe", "Linux": "bin/ToonPro"}[system]
     architecture = binary_architecture(payload, system)
@@ -207,9 +361,10 @@ def main() -> int:
             raise RuntimeError(f"FFmpeg runtime library is missing: {library}")
     if not any(path.endswith("third-party/third-party-notices.txt") for path in paths):
         raise RuntimeError("Dependency notices are missing.")
-    dependencies = inspect_macos(stage, args.forbid_path) if system == "Darwin" else inspect_linux(stage, args.forbid_path) if system == "Linux" else []
+    dependencies = inspect_macos(stage, args.forbid_path) if system == "Darwin" else inspect_linux(stage, args.forbid_path) if system == "Linux" else inspect_windows(stage)
     smokes = []
-    with tempfile.TemporaryDirectory(prefix="toon-package-relocated-") as temporary:
+    display_context = virtual_x_display(reports / "xvfb.log") if args.xvfb else nullcontext(None)
+    with display_context as display, tempfile.TemporaryDirectory(prefix="toon-package-relocated-") as temporary:
         relocated = Path(temporary) / "installed"
         shutil.copytree(stage, relocated, symlinks=True)
         executable = relocated / {"Darwin": "ToonPro.app/Contents/MacOS/ToonPro", "Windows": "bin/ToonPro.exe", "Linux": "ToonPro.sh"}[system]
@@ -223,7 +378,10 @@ def main() -> int:
             command = [str(executable), "--package-smoke", str(destination)]
             if args.require_3d:
                 command.append("--require-3d")
-            result = subprocess.run(command, cwd=temporary, env=clean_environment(offscreen, high_dpi),
+            environment = clean_environment(offscreen, high_dpi)
+            if display:
+                environment["DISPLAY"] = display
+            result = subprocess.run(command, cwd=temporary, env=environment,
                                     capture_output=True, text=True, timeout=60)
             (reports / (name + ".stdout.log")).write_text(result.stdout, encoding="utf-8")
             (reports / (name + ".stderr.log")).write_text(result.stderr, encoding="utf-8")
@@ -249,10 +407,14 @@ def main() -> int:
                       "verificationHostArchitecture": platform.machine(),
                       "verifiedProcessArchitectures": sorted({smoke["report"].get("architecture", "unknown") for smoke in smokes}),
                       "relocated": True, "sdkEnvironmentRemoved": True, "dependencies": dependencies, "smokes": smokes,
-                      "nativeSmokeSkipped": args.skip_native_smoke}
+                      "nativeSmokeSkipped": args.skip_native_smoke, "virtualDisplayUsed": args.xvfb}
     if system == "Linux":
         package_report["systemLibraries"] = sorted({lib["name"] for binary in dependencies for lib in binary["libraries"] if not lib.get("bundled")})
         package_report["desktopBackend"] = "X11/XCB (XWayland required on Wayland desktops)"
+    elif system == "Windows":
+        package_report["msvcRuntimeLibraries"] = [{"file": path.relative_to(stage).as_posix(),
+            "sha256": hashlib.sha256(path.read_bytes()).hexdigest()} for path in sorted((stage / "bin").glob("*.dll"))
+            if MSVC_RUNTIME.fullmatch(path.name)]
     (reports / "package-verification.json").write_text(json.dumps(package_report, indent=2) + "\n", encoding="utf-8")
     print(f"Verified relocated package: {reports / 'package-verification.json'}")
     return 0

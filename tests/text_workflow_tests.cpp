@@ -119,6 +119,25 @@ private slots:
     void genericSavedFontResolvesToItsActualFamilyInProperties(){
         Canvas canvas;setup(canvas);create(canvas);canvas.drawingTools()->finishTextEdit();const auto original=object(canvas);DrawingToolPanel panel(&canvas);panel.resize(240,640);panel.show();canvas.drawingTools()->notifySettings();auto *font=panel.findChild<QFontComboBox *>("artworkFont");const auto resolved=QFontInfo(QFont(original.fontFamily)).family();QCOMPARE(font->currentText(),font->findText(resolved)>=0?resolved:original.fontFamily);QCOMPARE(QFontInfo(QFont(font->currentText())).family(),resolved);QCOMPARE(object(canvas),original);
     }
+    void propertyEditsPreserveUnavailableSavedFont(){
+        Canvas canvas;setup(canvas);create(canvas);canvas.drawingTools()->finishTextEdit();
+        canvas.drawingTools()->textStyle.fontFamily="Toon Pro unavailable test family";
+        canvas.drawingTools()->applyObjectStyle();
+        DrawingToolPanel panel(&canvas);panel.resize(260,650);panel.show();canvas.drawingTools()->notifySettings();
+        const auto original=object(canvas);const int history=canvas.document()->history()->index();
+        auto *text=panel.findChild<QPlainTextEdit *>("artworkText");
+        text->setPlainText(original.text);canvas.drawingTools()->finishTextEdit();
+        QCOMPARE(object(canvas),original);QCOMPARE(canvas.document()->history()->index(),history);
+        panel.findChild<ValueSlider *>("artworkFontSize")->setValue(original.fontSize+5);canvas.drawingTools()->finishTextEdit();
+        QCOMPARE(object(canvas).fontFamily,original.fontFamily);
+        QCOMPARE(canvas.document()->history()->index(),history+1);
+        auto *font=panel.findChild<QFontComboBox *>("artworkFont");
+        QString replacement;
+        for(int i=0;i<font->count();++i)if(font->itemText(i)!=font->currentText()){replacement=font->itemText(i);break;}
+        QVERIFY(!replacement.isEmpty());font->setCurrentFont(QFont(replacement));
+        QCOMPARE(object(canvas).fontFamily,replacement);QCOMPARE(canvas.document()->history()->index(),history+2);
+        canvas.document()->history()->undo();QCOMPARE(object(canvas).fontFamily,original.fontFamily);
+    }
     void preview(){
         const auto output=qEnvironmentVariable("TOON_UI_PREVIEW");if(output.isEmpty())QSKIP("Opt-in Text workflow preview.");Canvas canvas;setup(canvas);create(canvas);QVERIFY(editor(canvas)->isVisible());input(editor(canvas),QString::fromUtf8("帰り道\nThe way home"));QVERIFY(QDir().mkpath(output));QVERIFY(canvas.grab().save(output+"/text-inline.png"));canvas.drawingTools()->finishTextEdit();QVERIFY(canvas.grab().save(output+"/text-artwork.png"));DrawingToolPanel panel(&canvas);panel.resize(240,640);panel.show();canvas.drawingTools()->notifySettings();QCoreApplication::processEvents();QVERIFY(panel.grab().save(output+"/text-properties.png"));
     }

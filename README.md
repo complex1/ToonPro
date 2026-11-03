@@ -1,8 +1,14 @@
 # Toon Pro
 
-A native desktop workspace for a solo artist making hand-drawn anime. Built with **C++20, Qt 6 Widgets, and CMake** for macOS and Windows.
+A native desktop workspace for a solo artist making hand-drawn anime. Built with **C++20, Qt 6 Widgets, and CMake** for macOS, Windows and Linux.
 
 This repository contains a native **drawing workspace with frame-by-frame animation, layer/property keyframes, vector path morphing and production-sheet exports**. 3D references, rest-skeleton editing, mesh binding, weight painting and FK/two-bone IK posing are available. Drawing exposures, property animation, 2D/3D camera keys and embedded audio clips share the shot timeline.
+
+## Desktop release candidates — 0.75.0
+
+Optimized desktop packages, dependency deployment, relocated runtime checks and SHA-256 manifests are now available through the [packaging workflow](docs/packaging.md). The source and Windows candidate CI are in [complex1/ToonPro](https://github.com/complex1/ToonPro/tree/codex/release-candidate-0.75.0).
+
+These are **unsigned/ad-hoc-signed test candidates**, not a signed production release. macOS arm64 includes the Metal 3D renderer; the other platform builds currently provide the 2D drawing/animation workflow without 3D rendering. See [release verification and remaining acceptance work](docs/release-0.75.0.md) for the exact build/test status and artifacts. Older milestone results below describe their original development builds.
 
 ## Scene and Movie playback in 0.75.0
 

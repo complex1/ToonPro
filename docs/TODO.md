@@ -2,6 +2,18 @@
 
 Updated 3 November 2026. Current implementation: **0.75.0** Scene/Movie playback, shot thumbnails and a global playhead with continuous shot audio. The app builds and all **130 regression suites pass**. Nine native Mac suites and nine Retina suites each pass **140 checks**, with no failures/skips. Results are recorded in [the development log](DEVELOPMENT.md). Earlier release results below are historical.
 
+## Distribution candidates — 0.75
+
+- [x] Add Release build configuration and capability metadata for macOS arm64/x86_64, Windows x86_64 and Ubuntu 24.04 x86_64.
+- [x] Package Qt/FFmpeg dependencies, notices, SHA-256 manifests and isolated runtime verification; provide optional Mac DMG/signing/notarization controls.
+- [x] Verify the macOS arm64 candidate's drawing/save/reopen, movie review, audio/video and 3D rendering from a relocated installation.
+- [x] Collect and verify the matching Mac SDK dependency source archives and rebuild/replacement instructions.
+- [ ] Complete all platform candidates and record final results in [release verification](release-0.75.0.md).
+- [ ] Test physical Huion input and real production projects on each supported operating system.
+- [ ] Validate clean-machine installation on supported OS baselines, including an actual Intel Mac and Windows compiler-runtime installation.
+- [ ] Complete dependency-source coverage/replacement review and choose application distribution terms.
+- [ ] Sign/notarize public production packages when developer credentials are available; current artist choice is unsigned test candidates.
+
 ## Scene and Movie review — 0.75
 
 - [x] Add Shot/Scene/Movie review modes, lazy shot thumbnails, global frame/time navigation and direct return to editing.

@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import package_desktop as package
 import verify_package as verify
+import collect_dependency_sources as sources
 
 
 def elf(path, machine=62):
@@ -24,7 +25,190 @@ def elf(path, machine=62):
     path.write_bytes(value)
 
 
+def pe_runtime(path, imports=(), delayed=()):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = bytearray(2048)
+    data[:2] = b"MZ"
+    struct.pack_into("<I", data, 60, 0x80)
+    data[0x80:0x84] = b"PE\0\0"
+    struct.pack_into("<HHIIIHH", data, 0x84, 0x8664, 1, 0, 0, 0, 240, 0x22)
+    optional = 0x98
+    struct.pack_into("<H", data, optional, 0x20B)
+    struct.pack_into("<Q", data, optional + 24, 0x140000000)
+    struct.pack_into("<I", data, optional + 60, 512)
+    struct.pack_into("<I", data, optional + 108, 16)
+    section = optional + 240
+    data[section:section + 8] = b".rdata\0\0"
+    struct.pack_into("<IIII", data, section + 8, 1536, 0x1000, 1536, 512)
+    cursor = 0x400
+    for directory, names, offset, entry_size, name_offset in ((1, imports, 0x200, 20, 12), (13, delayed, 0x300, 32, 4)):
+        if not names: continue
+        struct.pack_into("<II", data, optional + 112 + directory * 8, offset + 0xE00, entry_size * (len(names) + 1))
+        for index, name in enumerate(names):
+            entry = offset + index * entry_size
+            if directory == 13: struct.pack_into("<I", data, entry, 1)
+            struct.pack_into("<I", data, entry + name_offset, cursor + 0xE00)
+            encoded = name.encode("ascii") + b"\0"
+            data[cursor:cursor + len(encoded)] = encoded
+            cursor += len(encoded)
+    path.write_bytes(data)
+
+
 class PackageScriptTests(unittest.TestCase):
+    def test_linux_codec_metadata_keeps_build_provenance_and_final_hashes_separate(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            stage = Path(temporary)
+            (stage / "lib").mkdir()
+            codec = stage / "lib/libavcodec.so.61.19.101"
+            codec.write_bytes(b"original codec build")
+            provenance = {"libraries": {codec.name: package.digest(codec)}, "qtEndToEndVerified": False}
+            original = json.dumps(provenance, indent=2)
+            evidence = stage / "third-party/ffmpeg-runtime/sources.json"
+            evidence.parent.mkdir(parents=True); evidence.write_text(original)
+            codec.write_bytes(b"deployed codec with rewritten RPATH")
+            (stage / "lib/libQt6Core.so.6").write_bytes(b"unrelated runtime")
+            if os.name != "nt": (stage / "lib/libavcodec.so.61").symlink_to(codec.name)
+            checks = [{"name": name, "passed": True} for name in
+                      ["wav-export", "h264-aac-export", "h264-decode-pixels", "aac-decode-samples"]]
+            report = {"success": True, "smokes": [{"mode": "offscreen-2x", "exitCode": 0,
+                       "report": {"success": True, "checks": checks}}]}
+            result = package.linux_ffmpeg_runtime_metadata(stage, provenance, report)
+            self.assertEqual(len(result["deployedLibraries"]), 1)
+            deployed = result["deployedLibraries"][0]
+            self.assertEqual(deployed["file"], "lib/" + codec.name)
+            self.assertEqual(deployed["sha256"], package.digest(codec))
+            self.assertEqual(deployed["sourceBuildSha256"], provenance["libraries"][codec.name])
+            self.assertNotEqual(deployed["sha256"], deployed["sourceBuildSha256"])
+            self.assertEqual(evidence.read_text(), original)
+            self.assertFalse(result["provenance"]["qtEndToEndVerified"])
+            self.assertEqual(result["provenanceFileSha256"], package.digest(evidence))
+            self.assertTrue(result["packagedMediaVerification"]["success"])
+            self.assertEqual(result["packagedMediaVerification"]["runs"][0]["mode"], "offscreen-2x")
+
+    def test_packaged_media_metadata_requires_every_actual_check_in_every_run(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            stage = Path(temporary); (stage / "lib").mkdir()
+            checks = [{"name": name, "passed": True} for name in
+                      ["wav-export", "h264-aac-export", "h264-decode-pixels", "aac-decode-samples"]]
+            valid = {"success": True, "smokes": [{"mode": "native", "exitCode": 0,
+                      "report": {"success": True, "checks": checks}}]}
+            cases = []
+            for case in ["missing", "failed", "duplicate", "exit", "report", "overall", "empty"]:
+                data = json.loads(json.dumps(valid))
+                if case == "missing": data["smokes"][0]["report"]["checks"].pop()
+                elif case == "failed": data["smokes"][0]["report"]["checks"][1]["passed"] = False
+                elif case == "duplicate": data["smokes"][0]["report"]["checks"].append(checks[1])
+                elif case == "exit": data["smokes"][0]["exitCode"] = 1
+                elif case == "report": data["smokes"][0]["report"]["success"] = False
+                elif case == "overall": data["success"] = False
+                else: data["smokes"] = []
+                cases.append((case, data))
+            for name, report in cases:
+                with self.subTest(name=name):
+                    result = package.linux_ffmpeg_runtime_metadata(stage, None, report)
+                    self.assertFalse(result["packagedMediaVerification"]["success"])
+
+    def test_source_collection_detects_and_checks_optional_qtdeclarative_commit(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            sdk = Path(temporary)
+            (sdk / "sbom").mkdir()
+            for name, revision, _ in sources.SOURCES[:3] + sources.OPTIONAL_SOURCES:
+                packages = [{"name": name, "downloadLocation": f"git://code.qt.io/qt/{name}.git@{revision}"}]
+                if name == "qtmultimedia":
+                    packages.append({"name": "FFmpeg", "versionInfo": "7.1.3",
+                        "downloadLocation": "https://github.com/FFmpeg/FFmpeg/archive/refs/tags/n7.1.3.tar.gz"})
+                (sdk / "sbom" / f"{name}-6.10.3.spdx.json").write_text(json.dumps({"packages": packages}))
+            self.assertEqual([p["name"] for _, p in sources.read_sdk_manifests(sdk)],
+                             ["qtbase", "qtsvg", "qtmultimedia", "qtdeclarative"])
+            optional = sdk / "sbom/qtdeclarative-6.10.3.spdx.json"
+            optional.write_text(optional.read_text().replace(sources.OPTIONAL_SOURCES[0][1], "different-commit"))
+            with self.assertRaisesRegex(RuntimeError, "does not match audited revision"):
+                sources.read_sdk_manifests(sdk)
+            optional.unlink()
+            self.assertEqual(len(sources.read_sdk_manifests(sdk)), 3)
+
+    def test_source_verification_preserves_legacy_bundle_support(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+            notes = folder / "REBUILDING.txt"
+            notes.write_text("Existing source bundle contents remain unchanged.")
+            manifest = {"schemaVersion": 1,
+                "files": [{"file": notes.name, "sha256": sources.digest(notes)}],
+                "sources": [{"name": name, "revision": revision, "sha256": sha} for name, revision, sha in sources.SOURCES]}
+            path = folder / "SOURCE-MANIFEST.json"
+            path.write_text(json.dumps(manifest))
+            with mock.patch.object(sources, "validate_archive") as validate:
+                sources.verify_bundle(folder)
+                self.assertEqual(validate.call_count, 6)
+                name, revision, sha = sources.OPTIONAL_SOURCES[0]
+                manifest["sources"].append({"name": name, "revision": revision, "sha256": sha})
+                path.write_text(json.dumps(manifest))
+                validate.reset_mock()
+                sources.verify_bundle(folder)
+                self.assertEqual(validate.call_count, 7)
+                manifest["sources"][-1]["sha256"] = "unreviewed"
+                path.write_text(json.dumps(manifest))
+                with self.assertRaisesRegex(RuntimeError, "not an audited revision"):
+                    sources.verify_bundle(folder)
+
+    def test_pe_imports_include_delayed_crt_dependencies(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            binary = Path(temporary) / "app.exe"
+            pe_runtime(binary, ["KERNEL32.dll", "VCRUNTIME140.dll"], ["MSVCP140_ATOMIC_WAIT.dll"])
+            self.assertEqual(verify.pe_imports(binary), ["kernel32.dll", "msvcp140_atomic_wait.dll", "vcruntime140.dll"])
+            binary.write_bytes(binary.read_bytes()[:550])
+            with self.assertRaisesRegex(RuntimeError, "Truncated PE"):
+                verify.pe_imports(binary)
+
+    def test_windows_requires_app_local_crt_including_delayed_variants(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            stage = Path(temporary)
+            pe_runtime(stage / "bin/ToonPro.exe", ["VCRUNTIME140.dll"], ["msvcp140_atomic_wait.dll"])
+            with self.assertRaisesRegex(RuntimeError, "App-local MSVC runtime is missing"):
+                verify.inspect_windows(stage)
+            for name in ["vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll"]:
+                pe_runtime(stage / "bin" / name)
+            with self.assertRaisesRegex(RuntimeError, "msvcp140_atomic_wait.dll.*not bundled"):
+                verify.inspect_windows(stage)
+            pe_runtime(stage / "bin/msvcp140_atomic_wait.dll")
+            result = verify.inspect_windows(stage)
+            self.assertEqual(len(result), 5)
+            self.assertEqual(result[0]["file"], "bin/ToonPro.exe")
+
+    @unittest.skipIf(os.name == "nt", "Xvfb uses POSIX ready descriptors")
+    def test_virtual_display_uses_ready_descriptor_and_cleans_up_its_process(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            process = mock.Mock()
+            process.poll.return_value = None
+            def start(command, **kwargs):
+                self.assertNotIn("xvfb-run", command)
+                fd = int(command[command.index("-displayfd") + 1])
+                self.assertEqual(kwargs["pass_fds"], (fd,))
+                os.write(fd, b"103\n")
+                return process
+            with mock.patch.object(verify.shutil, "which", return_value="/usr/bin/Xvfb"), \
+                 mock.patch.object(verify.subprocess, "Popen", side_effect=start), \
+                 mock.patch.object(verify.socket, "socket") as connection:
+                with verify.virtual_x_display(Path(temporary) / "xvfb.log") as display:
+                    self.assertEqual(display, ":103")
+                    connection.return_value.__enter__.return_value.connect.assert_called_once_with("/tmp/.X11-unix/X103")
+                process.terminate.assert_called_once()
+                process.wait.assert_called_once_with(timeout=5)
+
+    @unittest.skipIf(os.name == "nt", "Xvfb uses POSIX ready descriptors")
+    def test_virtual_display_rejects_bad_ready_response_and_cleans_up(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            process = mock.Mock()
+            process.poll.return_value = None
+            def start(command, **kwargs):
+                os.write(kwargs["pass_fds"][0], b"invalid\n")
+                return process
+            with mock.patch.object(verify.shutil, "which", return_value="Xvfb"), \
+                 mock.patch.object(verify.subprocess, "Popen", side_effect=start):
+                with self.assertRaisesRegex(RuntimeError, "invalid display"):
+                    with verify.virtual_x_display(Path(temporary) / "xvfb.log"): pass
+                process.terminate.assert_called_once()
+
     def test_sdk_notices_follow_deployed_qt_modules(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -17,6 +17,11 @@ including their license files and vendored third-party source directories.
 QtBase and QtSvg use the exact commits recorded by the installed Qt 6.10.3
 SDK's SPDX files, including vendor fixes after the initial release. Replacing
 these with the initial 6.10.3 release tarballs would lose those fixes.
+When the SDK includes QtDeclarative, the collection also contains its exact
+SPDX source commit (3a714efe0672ae1ba06f09864f64957560c69b91). This supplies
+QtQml and QtQuick, which are transitive runtime dependencies of the Linux
+multimedia plugin even though Toon Pro's interface uses Qt Widgets. Its
+dependencies.yaml matches the included QtBase and QtShaderTools revisions.
 QtMultimedia uses its v6.10.3 tag resolved to commit df54b9d71bd5c83691b598942e19107dfc23c2a7;
 the installed SDK records the release version but no source commit for this
 module. QtShaderTools is included at the revision required by that module.
@@ -39,7 +44,8 @@ the same CPU architecture, C++ ABI, shared-library build and deployment target
 as the package. SDK configuration evidence is in sdk-sbom/qconfig.pri where
 provided. Preserve Qt's framework layout on macOS and DLL layout on Windows.
 
-Build QtBase first, QtSvg and QtShaderTools next, then FFmpeg and QtMultimedia.
+Build QtBase first, QtSvg and QtShaderTools next, then QtDeclarative if included,
+followed by FFmpeg and QtMultimedia.
 QtBase's configure script supports an independent install prefix:
 
   mkdir qtbase-build
@@ -55,8 +61,9 @@ above are a starting point, not a reproduction of the vendor's private build
 environment. Configure Qt modules with the newly installed qt-configure-module
 tool in separate build directories, then run cmake --build and cmake --install.
 For QtMultimedia provide the replacement FFmpeg prefix through FFMPEG_DIR.
-Qt Quick/QML modules are optional for Toon Pro's Widgets UI; if rebuilding the
-SDK's optional QML components, their matching sources must also be obtained.
+Use the supplied QtDeclarative archive to rebuild included Qt Quick/QML
+libraries. Other optional Qt modules are covered only when explicitly listed
+in SOURCE-MANIFEST.json; their matching sources must otherwise be obtained.
 
 Qt's supplied FFmpeg instructions are in the extracted qt5 snapshot:
 
@@ -72,6 +79,10 @@ system paths and may invoke sudo. Use the supplied FFmpeg archive offline and
 copy the relevant configure options into your isolated build. Keep shared
 libraries enabled, preserve the ABI major versions, and review any newly
 enabled optional codecs or libraries against their own licensing terms.
+For a package using a separately built FFmpeg/OpenH264 runtime, use its matching
+codec source bundle and build recipe instead of assuming the SDK provisioning
+recipe reproduces that runtime. Its metadata is in third-party/ffmpeg-runtime
+inside the application package; the codec source bundle is supplied separately.
 
 Installing modified compatible libraries
 ----------------------------------------
@@ -116,6 +127,9 @@ Additional Linux runtime libraries, optional Qt modules, or modified external
 dependencies need their own matching source/notice review. No written source
 offer or application EULA is created by this file. Source rebuilds and modified
 library installation have not yet been independently verified.
+This Qt source collection does not include ICU sources. The packaged ICU 73.2
+library has a complete version-matched upstream license notice in the binary
+package, but its source/build inventory requires separate review.
 
 Official references
 -------------------
