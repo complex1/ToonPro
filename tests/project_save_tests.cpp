@@ -32,7 +32,7 @@ private slots:
   project.movie="Changed while saving";project.shots[0].layers[0].tiles.begin().value().fill(Qt::red);
   QTRY_COMPARE_WITH_TIMEOUT(done.size(),1,15000);QVERIFY(done[0][0].toBool());QVERIFY(!writer.busy());QVERIFY(ticks>1);
   QString error;const auto saved=loadProject(dir.filePath("movie.toonproj"),&error);QVERIFY2(saved,qPrintable(error));QCOMPARE(saved->toJson(),original);QCOMPARE(saved->shots[0].layers[0].tiles.first().pixel(10,10),pixel);
-  QCOMPARE(QDir(dir.path()).entryList({".toon-save-*"},QDir::Files|QDir::Hidden).size(),0);
+  QCOMPARE(QDir(dir.path()).entryList({".toon-save-*"},QDir::AllEntries|QDir::Hidden|QDir::NoDotAndDotDot).size(),0);
  }
  void cancelledAndFailedWritesPreserveTheDestination(){
   QTemporaryDir dir;const auto path=dir.filePath("movie.toonproj");QFile file(path);QVERIFY(file.open(QIODevice::WriteOnly));file.write("original");file.close();
@@ -40,6 +40,7 @@ private slots:
   QTRY_COMPARE_WITH_TIMEOUT(done.size(),1,10000);QVERIFY(done[0][1].toBool());QVERIFY(!done[0][0].toBool());QCOMPARE(bytes(path),QByteArray("original"));
   auto invalid=Project::create();invalid.width=0;QVERIFY(writer.start(invalid,path));QTRY_COMPARE(done.size(),2);QVERIFY(!done[1][0].toBool());QVERIFY(!done[1][3].toString().isEmpty());QCOMPARE(bytes(path),QByteArray("original"));
   QVERIFY(writer.start(Project::create(),dir.path()));QTRY_COMPARE(done.size(),3);QVERIFY(!done[2][0].toBool());QVERIFY(QFileInfo(dir.path()).isDir());
+  QCOMPARE(QDir(dir.path()).entryList(QDir::AllEntries|QDir::Hidden|QDir::NoDotAndDotDot),QStringList{"movie.toonproj"});
  }
  void destructionCannotPublishLateRecovery(){
   QTemporaryDir dir;const auto path=dir.filePath("late.recovery");

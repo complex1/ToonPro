@@ -14,7 +14,7 @@
 #include <QSaveFile>
 #include <QThread>
 #include <QTimer>
-#include <QTemporaryFile>
+#include <QTemporaryDir>
 #include <filesystem>
 #include <QVideoFrameInput>
 #include <QVideoFrame>
@@ -105,11 +105,13 @@ public slots:
         m_totalSamples = videoExportSampleCount(m_project, m_settings);
         QString outputPath = m_path;
         if (!m_settings.overwriteApproved) {
-            m_stagingFile = std::make_unique<QTemporaryFile>(QFileInfo(m_path).absoluteDir().filePath(".toon-export-XXXXXX.mp4"));
-            if (!m_stagingFile->open()) {
+            // Do not retain a QTemporaryFile handle across QSaveFile::commit:
+            // close() does not release that handle on Windows.
+            m_stagingDirectory = std::make_unique<QTemporaryDir>(QFileInfo(m_path).absoluteDir().filePath(".toon-export-XXXXXX"));
+            if (!m_stagingDirectory->isValid()) {
                 finishWithoutRecorder(VideoExportOutcome::Failed, "Could not prepare an atomic export in the destination folder."); return;
             }
-            outputPath = m_stagingFile->fileName(); m_stagingFile->close();
+            outputPath = m_stagingDirectory->filePath("video.mp4");
         }
         m_output = std::make_unique<QSaveFile>(outputPath);
         // Never fall back to overwriting the final file when an atomic temp cannot be created.
@@ -352,12 +354,12 @@ private:
                 m_outcome = VideoExportOutcome::Failed;
                 m_error = "Could not finish the exported file: " + m_output->errorString();
             }
-            if (m_outcome == VideoExportOutcome::Completed && m_stagingFile && cancelRequested())
+            if (m_outcome == VideoExportOutcome::Completed && m_stagingDirectory && cancelRequested())
                 m_outcome = VideoExportOutcome::Cancelled;
-            if (m_outcome == VideoExportOutcome::Completed && m_stagingFile) {
+            if (m_outcome == VideoExportOutcome::Completed && m_stagingDirectory) {
                 // Publish without replacement atomically: a check followed by
                 // QSaveFile::commit alone would race another writer. The staging
-                // file is in the same folder; a hard link fails if any target,
+                // file is on the same filesystem; a hard link fails if any target,
                 // including a dangling symlink, already occupies the name.
                 const auto nativePath = [](const QString &path) {
 #ifdef Q_OS_WIN
@@ -367,7 +369,7 @@ private:
 #endif
                 };
                 std::error_code error;
-                std::filesystem::create_hard_link(nativePath(m_stagingFile->fileName()), nativePath(m_path), error);
+                std::filesystem::create_hard_link(nativePath(m_stagingDirectory->filePath("video.mp4")), nativePath(m_path), error);
                 if (error) {
                     m_outcome = VideoExportOutcome::Failed;
                     m_error = "Could not publish the video without replacing an existing file: " + QString::fromStdString(error.message());
@@ -377,7 +379,7 @@ private:
         if (m_outcome != VideoExportOutcome::Completed && m_output && m_output->isOpen()) m_output->cancelWriting();
         // All encoder threads have finished writing before the atomic file is closed.
         m_recorder.reset(); m_audioInput.reset(); m_videoInput.reset(); m_session.reset();
-        m_memoryOutput.reset(); m_output.reset(); m_stagingFile.reset(); m_mix.reset();
+        m_memoryOutput.reset(); m_output.reset(); m_stagingDirectory.reset(); m_mix.reset();
         if (m_outcome == VideoExportOutcome::Cancelled) m_error.clear();
         emit finished({m_outcome, m_path, m_error, m_sentFrames});
     }
@@ -413,8 +415,8 @@ private:
     const VideoExportSettings m_settings;
     const QString m_path;
     std::shared_ptr<std::atomic_bool> m_cancelled;
+    std::unique_ptr<QTemporaryDir> m_stagingDirectory;
     std::unique_ptr<QSaveFile> m_output;
-    std::unique_ptr<QTemporaryFile> m_stagingFile;
     std::unique_ptr<SingleFrameBuffer> m_memoryOutput;
     std::unique_ptr<QMediaCaptureSession> m_session;
     std::unique_ptr<QMediaRecorder> m_recorder;
@@ -456,7 +458,9 @@ bool VideoExport::start(Project snapshot, VideoExportSettings settings, const QS
     m_thread = thread; m_worker = worker; m_busy = true;
     thread->setObjectName("Video export"); worker->moveToThread(thread);
     connect(thread, &QThread::started, worker, &VideoExportWorker::begin);
-    connect(worker, &VideoExportWorker::progress, this, &VideoExport::progress);
+    // Preserve worker ordering for synchronous observers. Auto-connected UI
+    // receivers still queue delivery to their own thread.
+    connect(worker, &VideoExportWorker::progress, this, &VideoExport::progress, Qt::DirectConnection);
     connect(worker, &VideoExportWorker::finished, this, [this, thread](const VideoExportResult &result) {
         if (m_thread == thread) { m_busy = false; m_worker = nullptr; m_thread = nullptr; }
         emit finished(result);

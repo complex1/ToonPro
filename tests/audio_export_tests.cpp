@@ -71,7 +71,7 @@ private slots:
         qint64 previous = 0;
         for (const auto &event : progress) { const auto current = event[0].toLongLong(); QVERIFY(current >= previous); QVERIFY(current <= samples); QCOMPARE(event[1].toLongLong(), samples); previous = current; }
         QCOMPARE(previous, samples); QCOMPARE(project.toJson(), original);
-        QCOMPARE(QDir(dir.path()).entryList(QDir::Files | QDir::Hidden).size(), 1);
+        QCOMPARE(QDir(dir.path()).entryList(QDir::AllEntries | QDir::Hidden | QDir::NoDotAndDotDot), QStringList{"stereo.wav"});
     }
     void movieCutsUseGlobalFractionalSampleBoundaries() {
         auto project = fixture(23.976); project.shots[0].durationFrames = 31;
@@ -146,10 +146,10 @@ private slots:
         AudioExport exporter; QSignalSpy finished(&exporter, &AudioExport::finished);
         QVERIFY(exporter.start(project, settings, path)); exporter.cancel(); QTRY_COMPARE_WITH_TIMEOUT(finished.count(), 1, 10000);
         QCOMPARE(resultOf(finished).outcome, AudioExportOutcome::Cancelled); QCOMPARE(bytes(path), QByteArray("preserve"));
-        QCOMPARE(QDir(dir.path()).entryList(QDir::Files | QDir::Hidden), QStringList{"cancel.wav"});
+        QCOMPARE(QDir(dir.path()).entryList(QDir::AllEntries | QDir::Hidden | QDir::NoDotAndDotDot), QStringList{"cancel.wav"});
         settings.overwriteApproved = false; finished.clear(); QVERIFY(exporter.start(project, settings, dir.filePath("new.wav"))); exporter.cancel();
         QTRY_COMPARE_WITH_TIMEOUT(finished.count(), 1, 10000); QCOMPARE(resultOf(finished).outcome, AudioExportOutcome::Cancelled);
-        QCOMPARE(QDir(dir.path()).entryList(QDir::Files | QDir::Hidden), QStringList{"cancel.wav"});
+        QCOMPARE(QDir(dir.path()).entryList(QDir::AllEntries | QDir::Hidden | QDir::NoDotAndDotDot), QStringList{"cancel.wav"});
     }
     void outputAppearingDuringExportIsNotOverwritten() {
         QTemporaryDir dir; const auto path = dir.filePath("raced.wav"); auto project = fixture();
@@ -162,7 +162,7 @@ private slots:
         }, Qt::DirectConnection);
         QVERIFY(exporter.start(project, audioExportDefaults(project), path)); QTRY_COMPARE(finished.count(), 1);
         QVERIFY(created); QCOMPARE(resultOf(finished).outcome, AudioExportOutcome::Failed);
-        QCOMPARE(bytes(path), QByteArray("other program")); QCOMPARE(QDir(dir.path()).entryList(QDir::Files | QDir::Hidden), QStringList{"raced.wav"});
+        QCOMPARE(bytes(path), QByteArray("other program")); QCOMPARE(QDir(dir.path()).entryList(QDir::AllEntries | QDir::Hidden | QDir::NoDotAndDotDot), QStringList{"raced.wav"});
     }
 };
 QTEST_MAIN(AudioExportTest)

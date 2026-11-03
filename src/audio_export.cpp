@@ -7,7 +7,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QSaveFile>
-#include <QTemporaryFile>
+#include <QTemporaryDir>
 #include <QThread>
 #include <QtEndian>
 #include <array>
@@ -102,12 +102,14 @@ private:
         if (target.isDir()) return fail("Choose a file, not a folder, for the WAV destination.");
         if (!m_settings.overwriteApproved && (target.exists() || target.isSymLink()))
             return fail("The destination already exists. Replacement was not approved.");
-        std::unique_ptr<QTemporaryFile> staging;
+        std::unique_ptr<QTemporaryDir> staging;
         QString outputPath = m_path;
         if (!m_settings.overwriteApproved) {
-            staging = std::make_unique<QTemporaryFile>(target.absoluteDir().filePath(".toon-audio-XXXXXX.wav"));
-            if (!staging->open()) return fail("Could not create the audio export: " + staging->errorString());
-            outputPath = staging->fileName(); staging->close();
+            // QTemporaryFile::close retains a Windows handle that blocks
+            // QSaveFile::commit. A private directory needs no open file handle.
+            staging = std::make_unique<QTemporaryDir>(target.absoluteDir().filePath(".toon-audio-XXXXXX"));
+            if (!staging->isValid()) return fail("Could not create the audio export: " + staging->errorString());
+            outputPath = staging->filePath("audio.wav");
         }
         QSaveFile output(outputPath); output.setDirectWriteFallback(false);
         if (!output.open(QIODevice::WriteOnly)) return fail("Could not create the audio export: " + output.errorString());
@@ -138,10 +140,10 @@ private:
         if (!output.commit()) return fail("Could not finish the WAV file: " + output.errorString());
         if (staging) {
             if (cancelled()) return cancel();
-            // A same-folder hard link publishes without replacement atomically,
+            // A same-filesystem hard link publishes without replacement atomically,
             // including if another program creates the target during export.
             std::error_code error;
-            std::filesystem::create_hard_link(nativePath(staging->fileName()), nativePath(m_path), error);
+            std::filesystem::create_hard_link(nativePath(outputPath), nativePath(m_path), error);
             if (error) return fail("Could not publish the WAV without replacing an existing file: " + QString::fromStdString(error.message()));
         }
         result.outcome = AudioExportOutcome::Completed; emit progress(total, total); return result;

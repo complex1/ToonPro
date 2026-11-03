@@ -90,7 +90,7 @@ private slots:
         QVERIFY(manifest["shots"].toArray()[0].toObject()["layers"].toArray()[0].toObject()["tiles"].toArray().isEmpty());
         QTemporaryDir directory; const auto path=directory.filePath("brush.toonproj");
         QVERIFY2(saveProject(p,path,&error),qPrintable(error));
-        QFile file(path); QVERIFY(file.open(QIODevice::ReadOnly)); QCOMPARE(file.read(10),QByteArray("TOONPRO19\n"));
+        QFile file(path); QVERIFY(file.open(QIODevice::ReadOnly)); QCOMPARE(file.read(10),QByteArray("TOONPRO19\n")); file.close();
         const auto loaded=loadProject(path,&error); QVERIFY2(loaded.has_value(),qPrintable(error));
         QCOMPARE(loaded->toJson(),manifest); QCOMPARE(loaded->shots[0].layers[0].tiles,layer.tiles);
         const auto &restored=loaded->shots[0].layers[0].objects[0];

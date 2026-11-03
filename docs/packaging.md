@@ -9,9 +9,9 @@ The scripts stage the native application, Qt libraries/plugins, matching FFmpeg 
 | Target | Package format | 3D reference rendering | Verification status |
 | --- | --- | --- | --- |
 | macOS arm64, deployment target 13.0 | ZIP and optional DMG | Filament 1.78.0 / Metal | 0.75.0 package passed all 20 checks in offscreen 2× and native Cocoa modes. A copy from the mounted DMG also passed the native checks. |
-| macOS x86_64, deployment target 13.0 | ZIP and optional DMG | Unavailable in this build | Build/verification in progress; no Intel-hardware acceptance claimed. |
-| Linux x86_64, Ubuntu 24.04 / glibc 2.39 baseline | Portable `.tar.gz` | Unavailable in this build | Build/verification in progress; no verified Linux candidate claimed yet. |
-| Windows x86_64, MSVC 2022 | Portable ZIP | Unavailable in this build | CI recipe configured; native Windows build/verification still pending. |
+| macOS x86_64, deployment target 13.0 | ZIP and optional DMG | Unavailable in this build | Cross-compiled; intermittent AAC export crashes under Rosetta. Artifact withheld pending diagnosis and actual Intel acceptance. |
+| Linux x86_64, Ubuntu 24.04 / glibc 2.39 baseline | Portable `.tar.gz` | Unavailable in this build | 25 selected suites and six save/export follow-up suites pass; relocated offscreen 2× and native XCB package checks pass with software H.264/AAC. Final archive passes all 20 checks in each mode in a clean Ubuntu runtime container without SDK/compiler/source. |
+| Windows x86_64, MSVC 2022 | Portable ZIP | Unavailable in this build | Application compiles in native Windows CI. First full run: 195/246 suites passed; failed candidates are withheld while fixes and diagnostics run. |
 
 These are build targets and recorded results, not a claim of testing every OS version. The verified Apple Silicon artifacts are in `dist/0.75.0/macos-arm64/`. Their exact sizes, hashes, capabilities and checks are in `package.json`, `SHA256SUMS` and `verification/package-verification.json`. The current Mac candidate has an **ad-hoc signature**, with no Developer ID signature or notarization. Clean-machine installation and physical Huion acceptance remain separate checks.
 
@@ -82,7 +82,7 @@ The portable ZIP contains `bin/ToonPro.exe`, deployed Qt/FFmpeg libraries and pl
 
 ### Linux
 
-The current target uses Ubuntu 24.04 / glibc 2.39 and Qt's `gcc_64` SDK. Packaging requires `patchelf`, `readelf` from binutils and `ldd`. Native GUI checks require an X11 display, or Xvfb for automated checks. The dependency list is in the workflow; [the Linux release Dockerfile](../scripts/linux-release.Dockerfile) provides the same baseline for an isolated build environment.
+The current target uses Ubuntu 24.04 / glibc 2.39 and Qt's `gcc_64` SDK. Packaging requires `patchelf`, `readelf` from binutils and `ldd`. Native GUI checks require an X11 display, or Xvfb for automated checks. Build the software codec runtime with the recipe below before packaging. The dependency list is in the workflow; [the Linux release Dockerfile](../scripts/linux-release.Dockerfile) provides the same baseline for an isolated build environment.
 
 ```sh
 cmake -S . -B build-release-linux -G Ninja \
@@ -92,10 +92,10 @@ cmake -S . -B build-release-linux -G Ninja \
 cmake --build build-release-linux --config Release --parallel 4
 xvfb-run -a -s "-screen 0 1600x1200x24" \
   ctest --test-dir build-release-linux -C Release --output-on-failure --parallel 2
-xvfb-run -a -s "-screen 0 1600x1200x24" \
-  python3 scripts/package_desktop.py \
+python3 scripts/package_desktop.py --xvfb \
     --build-dir build-release-linux --config Release --skip-build \
     --qt-root .deps/Qt/6.10.3/gcc_64 \
+    --ffmpeg-root build/release-linux-codecs/install \
     --output-dir dist/0.75.0/linux-x86_64-candidate
 ```
 
@@ -109,7 +109,7 @@ TOON_CODEC_JOBS=2 bash scripts/build_linux_codecs.sh \
   build/release-linux-codecs .cache/dependency-sources
 ```
 
-The recipe requires the codec build dependencies listed in the Linux Dockerfile and Python 3.12 or later. It installs under `build/release-linux-codecs/install`, records source/configuration/library hashes and checks the ABI, codec discovery and FFmpeg license configuration. Supply `--ffmpeg-root build/release-linux-codecs/install` to the Linux packaging command to deploy it into the fresh stage. The final relocated Qt MP4 encode/decode checks must still pass; merely finding an encoder does not establish working export. This replacement is being validated and is not yet a verified Linux release artifact.
+The recipe requires the codec build dependencies listed in the Linux Dockerfile and Python 3.12 or later. It installs under `build/release-linux-codecs/install`, records source/configuration/library hashes and checks the ABI, codec discovery and FFmpeg license configuration. Supply `--ffmpeg-root build/release-linux-codecs/install` to the Linux packaging command to deploy it into the fresh stage. The final relocated Qt MP4 encode/decode checks must still pass; merely finding an encoder does not establish working export. The current Linux candidate passes the actual Qt H.264/AAC encode/decode checks with this replacement.
 
 The recipe preserves both source archives and rebuild inputs under `build/release-linux-codecs/dependency-sources`. OpenH264 is distributed under BSD-2-Clause, but Cisco's royalty coverage for its downloaded binary does not apply to this separately built/redistributed library; codec patent and distribution review remains a public-release requirement. [Cisco's OpenH264 FAQ](https://www.openh264.org/faq.html)
 
@@ -181,7 +181,7 @@ python3 scripts/collect_dependency_sources.py \
   --verify-only dist/0.75.0/dependency-sources/macos-arm64
 ```
 
-The collector produces an adjacent `<output-dir>.tar.gz` and `.tar.gz.sha256`, preserves existing destinations, checks actual SDK manifests and verifies pinned archive hashes. The current bundle passes those technical checks. It does not certify complete license compliance. Additional deployed libraries/modules require corresponding inventory review; macOS SDK manifests are not evidence for a Windows or Linux binary. Modified-library rebuilding/replacement has not yet been verified. See [the rebuild notes](DEPENDENCY-REBUILDING.txt) for supplied material, replacement paths and known limits.
+The collector produces an adjacent `<output-dir>.tar.gz` and `.tar.gz.sha256`, preserves existing destinations, checks actual SDK manifests and verifies pinned archive hashes. The current bundle passes those technical checks. It does not certify complete license compliance. The Linux bundle additionally includes the exact QtDeclarative source revision for deployed QtQml/QtQuick dependencies; its separate codec bundle includes the OpenH264/FFmpeg sources and build recipe. Windows source coverage remains pending its verified candidate. Modified-library rebuilding/replacement has not yet been verified. See [the rebuild notes](DEPENDENCY-REBUILDING.txt) for supplied material, replacement paths and known limits.
 
 Public distribution still requires final application terms, complete notice/source-delivery and library-replacement review, target-specific installation/signing acceptance, and clean-machine/tablet results. This work does not choose Toon Pro's application license, create an EULA or make a written source offer.
 

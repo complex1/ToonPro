@@ -670,6 +670,19 @@ if(BUILD_TESTING)
         # Windows runners, hiding assertion details from CTest and its logs.
         get_property(_toon_registered_tests DIRECTORY PROPERTY TESTS)
         set_property(TEST ${_toon_registered_tests} APPEND PROPERTY ENVIRONMENT "QT_FORCE_STDERR_LOGGING=1")
+        # Qt's Windows offscreen plugin uses FreeType rather than the native
+        # Windows font database. Without an explicit font directory every
+        # glyph uses fallback-box metrics, invalidating drawing/layout checks.
+        file(TO_CMAKE_PATH "$ENV{QT_QPA_FONTDIR}" _toon_test_font_dir)
+        if(NOT _toon_test_font_dir AND DEFINED ENV{WINDIR})
+            file(TO_CMAKE_PATH "$ENV{WINDIR}/Fonts" _toon_test_font_dir)
+        endif()
+        if(IS_DIRECTORY "${_toon_test_font_dir}")
+            set_property(TEST ${_toon_registered_tests} APPEND PROPERTY ENVIRONMENT
+                "QT_QPA_FONTDIR=${_toon_test_font_dir}")
+        else()
+            message(WARNING "Windows offscreen tests need installed fonts; set QT_QPA_FONTDIR to a font directory.")
+        endif()
     endif()
 endif()
 

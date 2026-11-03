@@ -7,7 +7,11 @@ Updated 3 November 2026. Current implementation: **0.75.0** Scene/Movie playback
 - [x] Add Release build configuration and capability metadata for macOS arm64/x86_64, Windows x86_64 and Ubuntu 24.04 x86_64.
 - [x] Package Qt/FFmpeg dependencies, notices, SHA-256 manifests and isolated runtime verification; provide optional Mac DMG/signing/notarization controls.
 - [x] Verify the macOS arm64 candidate's drawing/save/reopen, movie review, audio/video and 3D rendering from a relocated installation.
-- [x] Collect and verify the matching Mac SDK dependency source archives and rebuild/replacement instructions.
+- [x] Collect and verify matching Mac and Linux SDK dependency sources plus the Linux software-codec sources and build recipe.
+- [x] Pass all 247 Mac regression suites and 31 packaging-script checks after the save/export fixes.
+- [x] Verify the Linux candidate with software H.264/AAC in relocated offscreen and native XCB checks.
+- [ ] Complete Windows native CI after save-file and offscreen-font fixes; keep failed packages withheld.
+- [ ] Resolve intermittent Intel Mac AAC export crashes and validate on actual Intel hardware.
 - [ ] Complete all platform candidates and record final results in [release verification](release-0.75.0.md).
 - [ ] Test physical Huion input and real production projects on each supported operating system.
 - [ ] Validate clean-machine installation on supported OS baselines, including an actual Intel Mac and Windows compiler-runtime installation.

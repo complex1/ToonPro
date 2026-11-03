@@ -39,7 +39,7 @@ jobs:
           python-version: '3.12'
       - name: Restore pinned Qt SDK
         id: qt-sdk
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: .deps/Qt
           key: qt-6.10.3-${{ matrix.target }}-base-svg-multimedia-runtime-v2
@@ -53,12 +53,19 @@ jobs:
             libx11-xcb1 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
             libxcb-render-util0 libxcb-xinerama0 libxcb-xkb1 libxcb-xinput0 \
             libxkbcommon-x11-0 libdbus-1-3 libasound2t64 libpulse0 libnss3 libglib2.0-0t64 \
-            libxcomposite1 libxrandr2 libxdamage1 libxss1 libxtst6
+            libxcomposite1 libxrandr2 libxdamage1 libxss1 libxtst6 \
+            libgtk-3-0t64 libwayland-cursor0 libwayland-egl1 libxcb-shape0
       - name: Install pinned Qt SDK and Multimedia runtime dependencies
         if: steps.qt-sdk.outputs.cache-hit != 'true'
         run: |
           python -m pip install aqtinstall==3.3.0
           python -m aqt install-qt ${{ matrix.host }} desktop 6.10.3 ${{ matrix.arch }} --outputdir .deps/Qt --modules qtmultimedia --archives qtbase qtsvg qtmultimedia ${{ runner.os == 'Linux' && 'qtdeclarative icu' || '' }}
+      - name: Save verified Qt SDK before application checks
+        if: steps.qt-sdk.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .deps/Qt
+          key: qt-6.10.3-${{ matrix.target }}-base-svg-multimedia-runtime-v2
       - name: Install pinned Apple Silicon 3D renderer
         if: matrix.filament == 'ON'
         run: ./scripts/setup_filament.sh
@@ -95,7 +102,15 @@ jobs:
         run: |
           cmake -S . -B build -A x64 "-DCMAKE_PREFIX_PATH=${{ github.workspace }}/.deps/Qt/6.10.3/${{ matrix.qt_dir }}" "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" "-DVCPKG_OVERLAY_TRIPLETS=${{ github.workspace }}/.deps/triplets" -DVCPKG_TARGET_TRIPLET=toon-x64-windows -DTOON_ENABLE_FILAMENT=OFF -DBUILD_TESTING=ON
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build Windows diagnostic targets
+        if: runner.os == 'Windows'
+        run: >-
+          cmake --build build --config Release --parallel 4 --target
+          toon_drawing_template_library_tests toon_property_row_tests
+          toon_project_save_tests toon_cel_workflows_tests
+          toon_audio_export_tests toon_video_export_tests toon_vector_brush_storage_tests
       - name: Build with bounded parallelism
+        if: runner.os != 'Windows'
         run: cmake --build build --config Release --parallel 4
       - name: Build pinned Linux software video runtime
         if: success() && github.event_name == 'workflow_dispatch' && runner.os == 'Linux'
@@ -118,10 +133,18 @@ jobs:
         run: |
           $env:PATH = "${{ github.workspace }}\.deps\Qt\6.10.3\msvc2022_64\bin;$env:PATH"
           $env:QT_FORCE_STDERR_LOGGING = '1'
-          foreach ($suite in @('drawing_template_library', 'property_row', 'project_save', 'cel_workflows')) {
+          $diagnosticFailed = $false
+          foreach ($suite in @('drawing_template_library', 'property_row', 'project_save', 'cel_workflows', 'audio_export', 'video_export', 'vector_brush_storage')) {
             ctest --test-dir build -C Release --output-on-failure --parallel 1 --stop-on-failure -R ('^' + $suite + '$')
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            if ($LASTEXITCODE -ne 0) { $diagnosticFailed = $true }
+            if (Test-Path build/Testing/Temporary/LastTest.log) {
+              Copy-Item build/Testing/Temporary/LastTest.log "build/Testing/Temporary/diagnostic-$suite.log"
+            }
           }
+          if ($diagnosticFailed) { exit 1 }
+      - name: Build remaining Windows application and test targets
+        if: runner.os == 'Windows'
+        run: cmake --build build --config Release --parallel 4
       - name: Test on Windows
         if: runner.os == 'Windows'
         shell: pwsh

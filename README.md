@@ -2,7 +2,7 @@
 
 A native desktop workspace for a solo artist making hand-drawn anime. Built with **C++20, Qt 6 Widgets, and CMake** for macOS, Windows and Linux.
 
-This repository contains a native **drawing workspace with frame-by-frame animation, layer/property keyframes, vector path morphing and production-sheet exports**. 3D references, rest-skeleton editing, mesh binding, weight painting and FK/two-bone IK posing are available. Drawing exposures, property animation, 2D/3D camera keys and embedded audio clips share the shot timeline.
+This repository contains a native **drawing workspace with frame-by-frame animation, layer/property keyframes, vector path morphing and production-sheet exports**. Apple Silicon Mac builds also provide 3D references, rest-skeleton editing, mesh binding, weight painting and FK/two-bone IK posing. Drawing exposures, property animation, 2D/3D camera keys and embedded audio clips share the shot timeline.
 
 ## Desktop release candidates — 0.75.0
 

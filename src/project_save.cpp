@@ -3,7 +3,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QFutureWatcher>
-#include <QTemporaryFile>
+#include <QTemporaryDir>
 #include <QtConcurrentRun>
 #include <atomic>
 #include <cerrno>
@@ -17,8 +17,8 @@ namespace toon {
 struct ProjectSave::Job {
     std::atomic_bool cancelled{false};
     QString path,temporary,error;
+    std::unique_ptr<QTemporaryDir> staging;
     bool prepared=false;
-    ~Job(){if(!temporary.isEmpty())QFile::remove(temporary);}
 };
 namespace {
 bool publish(const QString &source,const QString &destination,QString *error){
@@ -43,6 +43,7 @@ ProjectSave::ProjectSave(QObject *parent):QObject(parent),m_watcher(new QFutureW
             else if(target.exists()&&target.isFile()&&!QFile::setPermissions(job->temporary,target.permissions()))job->error="Could not preserve the project file permissions.";
             else saved=publish(job->temporary,job->path,&job->error);
         }
+        job->staging.reset();
         m_busy=false;emit finished(saved,cancelled,job->path,cancelled?QString():job->error);
     });
 }
@@ -54,11 +55,11 @@ bool ProjectSave::start(Project snapshot,const QString &destination){
     m_watcher->setFuture(QtConcurrent::run([job,snapshot=std::move(snapshot)]{
         if(job->cancelled.load(std::memory_order_relaxed))return;
         const QFileInfo target(job->path);
-        QTemporaryFile temporary(target.absoluteDir().filePath(".toon-save-XXXXXX"));
-        if(!temporary.open()){job->error="Could not prepare project save: "+temporary.errorString();return;}
-        job->temporary=temporary.fileName();temporary.setAutoRemove(false);temporary.close();
-        // saveProject uses QSaveFile internally; the destination is an owned
-        // sibling temporary file until the main thread approves publication.
+        job->staging=std::make_unique<QTemporaryDir>(target.absoluteDir().filePath(".toon-save-XXXXXX"));
+        if(!job->staging->isValid()){job->error="Could not prepare project save: "+job->staging->errorString();return;}
+        job->temporary=job->staging->filePath("project.toonproj");
+        // Keep staging on the destination filesystem without holding a file
+        // handle that prevents QSaveFile's atomic replacement on Windows.
         job->prepared=saveProject(snapshot,job->temporary,&job->error,[job]{return job->cancelled.load(std::memory_order_relaxed);});
     }));
     return true;

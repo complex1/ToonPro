@@ -2,6 +2,7 @@
 #include "value_slider.h"
 #include "main_window.h"
 #include <QDoubleSpinBox>
+#include <QFontDatabase>
 #include <QLabel>
 #include <QLayout>
 #include <QLineEdit>
@@ -25,7 +26,12 @@ void layOut(PropertyRow &row, int width) {
 class PropertyRowTest : public QObject {
     Q_OBJECT
 private slots:
-    void initTestCase() { applyTheme(); }
+    void initTestCase() {
+        QVERIFY2(!QFontDatabase::families().isEmpty(),
+                 "UI layout checks require installed fonts; Windows offscreen needs QT_QPA_FONTDIR.");
+        applyTheme();
+        qInfo() << "Layout font:" << QApplication::font();
+    }
     void inlineControlsShareAnAlignedLabelBand() {
         auto *size = new ValueSlider("Size", 1, 4096, 12, 1, "px");
         PropertyRow sizeRow("Size", size);

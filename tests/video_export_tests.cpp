@@ -158,6 +158,25 @@ private slots:
         QVERIFY2(result.outcome == VideoExportOutcome::Completed, qPrintable(result.error));
         QCOMPARE(result.framesEncoded, 3); QVERIFY(hasMp4Container(readFile(path)));
     }
+    void newOutputPublishesWithoutReplacementAndCleansStaging() {
+        QTemporaryDir directory; QVERIFY(directory.isValid());
+        const auto path = directory.filePath("new.mp4");
+        const auto project = blankProject(); auto settings = videoExportDefaults(project);
+        settings.firstFrame = 0; settings.lastFrame = 2; settings.includeAudio = false;
+        settings.overwriteApproved = false;
+        VideoExport exporter; QSignalSpy finished(&exporter, &VideoExport::finished);
+        QVERIFY(exporter.start(project, settings, path));
+        QTRY_COMPARE_WITH_TIMEOUT(finished.size(), 1, 30000);
+        const auto result = qvariant_cast<VideoExportResult>(finished[0][0]);
+        QVERIFY2(result.outcome == VideoExportOutcome::Completed, qPrintable(result.error));
+        QCOMPARE(result.framesEncoded, 3);
+        const auto original = readFile(path); QVERIFY(hasMp4Container(original));
+        QCOMPARE(QDir(directory.path()).entryList(QDir::AllEntries | QDir::Hidden | QDir::NoDotAndDotDot), QStringList{"new.mp4"});
+        QVERIFY(exporter.start(project, settings, path));
+        QTRY_COMPARE_WITH_TIMEOUT(finished.size(), 2, 10000);
+        QCOMPARE(qvariant_cast<VideoExportResult>(finished[1][0]).outcome, VideoExportOutcome::Failed);
+        QCOMPARE(readFile(path), original);
+    }
     void longFractionalRangeEncodesEveryFrameWithoutChangingProject() {
         QTemporaryDir directory; QVERIFY(directory.isValid());
         auto project = blankProject(29.97); project.shots[0].durationFrames = 600;
@@ -436,6 +455,7 @@ private slots:
         const auto path = directory.filePath("cancel.mp4"); const QByteArray original("Keep this movie");
         if (existing) QVERIFY(writeFile(path, original));
         const auto project = blankProject(fractionalSingle ? 1.5 : 30); auto settings = videoExportDefaults(project);
+        settings.overwriteApproved = existing;
         if (fractionalSingle) settings.firstFrame = settings.lastFrame = 6; else settings.lastFrame = 179;
         VideoExport exporter; QSignalSpy finished(&exporter, &VideoExport::finished);
         bool receivedProgress = false;
@@ -450,7 +470,7 @@ private slots:
         QVERIFY2(result.outcome == VideoExportOutcome::Cancelled, qPrintable(result.error)); QVERIFY(!exporter.busy());
         if (afterProgress) { QVERIFY(receivedProgress); QVERIFY(result.framesEncoded > 0); }
         if (existing) QCOMPARE(readFile(path), original); else QVERIFY(!QFileInfo::exists(path));
-        QCOMPARE(QDir(directory.path()).entryList(QDir::Files | QDir::Hidden | QDir::NoDotAndDotDot), existing ? QStringList{"cancel.mp4"} : QStringList{});
+        QCOMPARE(QDir(directory.path()).entryList(QDir::AllEntries | QDir::Hidden | QDir::NoDotAndDotDot), existing ? QStringList{"cancel.mp4"} : QStringList{});
     }
     void destroyingActiveExporterCancelsAndPreservesDestination_data() {
         QTest::addColumn<bool>("fractionalSingle");

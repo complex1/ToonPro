@@ -19,6 +19,7 @@
 #include <QVideoFrame>
 #include <QtEndian>
 #include <QtTest>
+#include <atomic>
 #include <cmath>
 
 using namespace toon;
@@ -219,14 +220,23 @@ private slots:
         if (!VideoExport::availabilityError(false).isEmpty()) QSKIP("H.264 encoder unavailable");
         QTemporaryDir dir; const auto project = movie(); const auto path = dir.filePath("racing.mp4");
         auto settings = videoExportMovieDefaults(project); settings.overwriteApproved = false;
-        VideoExport exporter; QSignalSpy finished(&exporter, &VideoExport::finished); bool occupied = false;
+        VideoExport exporter; QSignalSpy finished(&exporter, &VideoExport::finished);
+        std::atomic_bool attempted{false}, occupied{false};
         connect(&exporter, &VideoExport::progress, this, [&](int completed, int, const QString &) {
-            if (completed > 0 && !occupied) { occupied = true; QVERIFY(write(path, "other writer")); }
-        });
+            if (completed == 0 && !attempted.exchange(true)) {
+                // Preparing-encoder progress follows the initial destination
+                // check and precedes encoding, independent of encoder speed.
+                // NewOnly also prevents this fixture from replacing the export.
+                QFile competingFile(path);
+                occupied.store(competingFile.open(QIODevice::WriteOnly | QIODevice::NewOnly)
+                    && competingFile.write("other writer") == 12);
+            }
+        }, Qt::DirectConnection);
         QVERIFY(exporter.start(project, settings, path)); QTRY_COMPARE_WITH_TIMEOUT(finished.size(), 1, 30000);
-        QVERIFY(occupied); QCOMPARE(qvariant_cast<VideoExportResult>(finished.first().first()).outcome, VideoExportOutcome::Failed);
+        QVERIFY(attempted.load()); QVERIFY(occupied.load());
+        QCOMPARE(qvariant_cast<VideoExportResult>(finished.first().first()).outcome, VideoExportOutcome::Failed);
         QCOMPARE(read(path), QByteArray("other writer"));
-        QCOMPARE(QDir(dir.path()).entryList(QDir::Files | QDir::Hidden | QDir::NoDotAndDotDot), QStringList{"racing.mp4"});
+        QCOMPARE(QDir(dir.path()).entryList(QDir::AllEntries | QDir::Hidden | QDir::NoDotAndDotDot), QStringList{"racing.mp4"});
     }
     void movieCancellationPreservesApprovedExistingFile() {
         if (!VideoExport::availabilityError(false).isEmpty()) QSKIP("H.264 encoder unavailable");
