@@ -25,6 +25,50 @@ def elf(path, machine=62):
 
 
 class PackageScriptTests(unittest.TestCase):
+    def test_sdk_notices_follow_deployed_qt_modules(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sdk, stage = root / "sdk", root / "stage"
+            (sdk / "sbom").mkdir(parents=True); (stage / "lib").mkdir(parents=True)
+            for module, libraries in {"qtbase": ["Core"], "qtsvg": ["Svg"], "qtmultimedia": ["Multimedia"],
+                                      "qtdeclarative": ["Qml", "Quick"], "qtcharts": ["Charts"]}.items():
+                (sdk / "sbom" / f"{module}-6.10.3.spdx.json").write_text(json.dumps({
+                    "files": [{"fileName": f"./lib/libQt6{name}.so.6.10.3"} for name in libraries]}))
+            for name in ["Core", "Quick", "Qml"]:
+                (stage / "lib" / f"libQt6{name}.so.6.10.3").write_bytes(b"runtime")
+            selected = package.sdk_notice_manifests(sdk, stage)
+            self.assertEqual({p.name.split("-")[0] for p, _ in selected},
+                             {"qtbase", "qtsvg", "qtmultimedia", "qtdeclarative"})
+            (sdk / "sbom/qtdeclarative-6.10.3.spdx.json").unlink()
+            with self.assertRaisesRegex(RuntimeError, "no SDK SPDX attribution.*Qml.*Quick"):
+                package.sdk_notice_manifests(sdk, stage)
+
+    def test_qt_library_matching_supports_native_layouts(self):
+        for path, expected in [("QtCore", "Core"), ("libQt6Quick.so.6.10.3", "Quick"),
+                               ("Qt6Multimedia.dll", "Multimedia"), ("libQt6Qml.6.dylib", "Qml")]:
+            self.assertEqual(package.qt_library_name(path), expected)
+        for path in ["QtCore.framework", "QtCore.prl", "Qt6CoreConfig.cmake", "libother.so"]:
+            self.assertIsNone(package.qt_library_name(path))
+
+    def test_icu_notice_requires_matching_version_and_verified_complete_text(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            stage, cache, destination = root / "stage", root / "cache", root / "licenses"
+            for path in [stage, cache, destination]: path.mkdir()
+            (stage / "libicuuc.so.73.2").write_bytes(b"library")
+            documents = [{"packages": [{"name": "ICU", "versionInfo": "73.2", "licenseConcluded": "NOASSERTION"}]}]
+            with self.assertRaisesRegex(RuntimeError, "version-matched"):
+                package.collect_icu_notice(stage, [], destination, cache)
+            cached = cache / "ICU-73.2-LICENSE.txt"
+            cached.write_bytes(b"truncated license")
+            with self.assertRaisesRegex(RuntimeError, "checksum"):
+                package.collect_icu_notice(stage, documents, destination, cache)
+            with mock.patch.dict(package.ICU_NOTICES, {"73.2": ("https://upstream.example/icu/LICENSE", package.digest(cached))}):
+                result = package.collect_icu_notice(stage, documents, destination, cache)
+            self.assertEqual(result["version"], "73.2")
+            self.assertEqual(result["libraries"], ["libicuuc.so.73.2"])
+            self.assertEqual((destination / cached.name).read_bytes(), cached.read_bytes())
+
     def test_cache_can_be_explicit_or_environment_configured(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -246,6 +290,62 @@ class PackageScriptTests(unittest.TestCase):
             commands = [call.args[0] for call in run.call_args_list]
             self.assertIn(["patchelf", "--set-rpath", "$ORIGIN", str(stage / "lib/libavcodec.so.61.1.2")], commands)
             self.assertIn(["patchelf", "--set-rpath", "$ORIGIN/../../lib", str(stage / "plugins/platforms/libqxcb.so")], commands)
+
+    def test_custom_ffmpeg_requires_abi_and_attribution_before_deployment(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            qt, runtime = root / "sdk", root / "runtime"
+            for component, abi in [("avcodec", 61), ("avformat", 61), ("avutil", 59), ("swresample", 5), ("swscale", 8)]:
+                elf(qt / "lib" / f"lib{component}.so.{abi}")
+                elf(runtime / "lib" / f"lib{component}.so.{abi}")
+            with self.assertRaisesRegex(RuntimeError, "attribution is missing"):
+                package.validate_ffmpeg_override(runtime, qt)
+            notices = runtime / "third-party"
+            (notices / "licenses").mkdir(parents=True)
+            (notices / "THIRD-PARTY-NOTICES.txt").write_text("FFmpeg and OpenH264")
+            (notices / "sources.json").write_text('{"version":"7.1.3"}')
+            with self.assertRaisesRegex(RuntimeError, "license texts"):
+                package.validate_ffmpeg_override(runtime, qt)
+            (notices / "licenses/LGPL.txt").write_text("fixture license")
+            self.assertEqual(package.validate_ffmpeg_override(runtime, qt), {"version": "7.1.3"})
+            (runtime / "lib/libavcodec.so.61").unlink()
+            with self.assertRaisesRegex(RuntimeError, "avcodec ABI"):
+                package.validate_ffmpeg_override(runtime, qt)
+
+    @unittest.skipIf(os.name == "nt", "Linux library deployment is tested on POSIX")
+    def test_custom_ffmpeg_replaces_only_new_staged_codec_files(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            stage, qt, runtime = root / "stage", root / "sdk", root / "runtime"
+            elf(stage / "bin/ToonPro"); elf(stage / "plugins/platforms/libqxcb.so")
+            for component, abi in [("avcodec", 61), ("avformat", 61), ("avutil", 59), ("swresample", 5), ("swscale", 8)]:
+                name = f"lib{component}.so.{abi}"
+                elf(qt / "lib" / name); elf(stage / "lib" / name); elf(runtime / "lib" / name)
+                with (runtime / "lib" / name).open("ab") as stream: stream.write(b"custom runtime")
+            elf(stage / "lib/libQt6Core.so.6")
+            elf(runtime / "lib/libopenh264.so.8")
+            notices = runtime / "third-party"
+            (notices / "licenses").mkdir(parents=True)
+            (notices / "THIRD-PARTY-NOTICES.txt").write_text("FFmpeg and OpenH264")
+            (notices / "sources.json").write_text('{"version":"7.1.3"}')
+            (notices / "licenses/LGPL.txt").write_text("fixture license")
+            sdk_hash = package.digest(qt / "lib/libavcodec.so.61")
+            with mock.patch.object(package.shutil, "which", return_value="tool"), \
+                 mock.patch.object(package, "linux_dependencies", return_value=[]), mock.patch.object(package, "run"):
+                package.prepare_linux(stage, qt, runtime)
+            self.assertEqual(package.digest(qt / "lib/libavcodec.so.61"), sdk_hash)
+            self.assertNotEqual(package.digest(stage / "lib/libavcodec.so.61"), sdk_hash)
+            self.assertTrue((stage / "lib/libQt6Core.so.6").is_file())
+            self.assertTrue((stage / "lib/libopenh264.so.8").is_file())
+
+    def test_custom_ffmpeg_option_is_linux_only(self):
+        with mock.patch.object(package.platform, "system", return_value="Darwin"), \
+             mock.patch.object(sys, "argv", ["package_desktop.py", "--qt-root", "sdk", "--output-dir", "never-created", "--ffmpeg-root", "custom"]), \
+             mock.patch.object(package, "run") as run, mock.patch("sys.stderr"):
+            with self.assertRaises(SystemExit) as error:
+                package.main()
+            self.assertEqual(error.exception.code, 2)
+            run.assert_not_called()
 
     def test_notary_rejection_is_recorded_and_never_treated_as_accepted(self):
         with tempfile.TemporaryDirectory() as temporary:

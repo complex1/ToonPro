@@ -44,6 +44,10 @@ void completeWidgetHelp(QWidget *widget)
     if (auto *tool = qobject_cast<QToolButton *>(button)) {
         if (auto *action = tool->defaultAction()) {
             label = plainLabel(action->text());
+            // Qt's built-in clear action intentionally has no text. Give the
+            // generated search-field button the same discoverable help as ours.
+            if (label.isEmpty() && action->objectName() == "_q_qlineeditclearaction")
+                label = "Clear text";
             if (button->toolTip().isEmpty()) button->setToolTip(action->toolTip());
         }
     }

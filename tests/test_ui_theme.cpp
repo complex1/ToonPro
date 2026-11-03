@@ -64,6 +64,16 @@ private slots:
         QCOMPARE(labeled.toolTip(), QString("Save brush"));
         QCOMPARE(labeled.accessibleName(), QString("Save brush"));
 
+        QLineEdit search;
+        search.setClearButtonEnabled(true);
+        search.setText("Character");
+        auto *clear = search.findChild<QToolButton *>();
+        QVERIFY(clear);
+        clear->ensurePolished();
+        QCOMPARE(clear->toolTip(), QString("Clear text"));
+        QCOMPARE(clear->accessibleName(), clear->toolTip());
+        QCOMPARE(clear->style()->styleHint(QStyle::SH_ToolTip_WakeUpDelay, nullptr, clear), 600);
+
         QDockWidget dock("Refs");
         dock.setProperty("panelLabel", "References");
         dock.ensurePolished();
@@ -152,8 +162,12 @@ private slots:
         for (auto *button : window.findChildren<QAbstractButton *>()) {
             button->ensurePolished();
             if (button->icon().isNull()) continue;
-            QVERIFY2(!button->toolTip().isEmpty(), qPrintable(button->objectName()));
-            QVERIFY2(!button->accessibleName().isEmpty(), qPrintable(button->objectName()));
+            QStringList ancestors;
+            for (auto *object = static_cast<QObject *>(button); object && object != &window; object = object->parent())
+                ancestors.append(QString("%1(%2)").arg(object->metaObject()->className(), object->objectName()));
+            const auto identity = ancestors.join(" <- ");
+            QVERIFY2(!button->toolTip().isEmpty(), qPrintable(identity));
+            QVERIFY2(!button->accessibleName().isEmpty(), qPrintable(identity));
         }
         auto *tabs = window.findChild<QTabBar *>("brushSettingsCategory");
         QVERIFY(tabs);

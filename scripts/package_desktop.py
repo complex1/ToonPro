@@ -21,6 +21,33 @@ from verify_package import binary_architecture, is_elf, is_macho, linux_dependen
 
 ROOT = Path(__file__).resolve().parents[1]
 SPDX_TAG = "v3.27.0"
+ICU_NOTICES = {
+    "73.2": ("https://raw.githubusercontent.com/unicode-org/icu/release-73-2/icu4c/LICENSE",
+             "f3005e195ff74d8812cc1f182a1c446fab678d70a10e3dada497585befee5416"),
+}
+FFMPEG_COMPONENTS = ("avcodec", "avformat", "avutil", "swresample", "swscale")
+
+
+def validate_ffmpeg_override(prefix: Path, qt_root: Path) -> dict:
+    libraries = prefix / "lib"
+    for component in FFMPEG_COMPONENTS:
+        aliases = [path for path in (qt_root / "lib").glob(f"lib{component}.so.*")
+                   if re.fullmatch(rf"lib{component}\.so\.[0-9]+", path.name)]
+        if len(aliases) != 1 or not (libraries / aliases[0].name).is_file():
+            raise RuntimeError(f"Custom FFmpeg must provide the SDK's {component} ABI library.")
+    notices = prefix / "third-party"
+    for name in ("THIRD-PARTY-NOTICES.txt", "sources.json"):
+        if not (notices / name).is_file():
+            raise RuntimeError(f"Custom FFmpeg attribution is missing: {name}")
+    if not list((notices / "licenses").glob("*")):
+        raise RuntimeError("Custom FFmpeg full license texts are missing.")
+    provenance = json.loads((notices / "sources.json").read_text(encoding="utf-8"))
+    if not isinstance(provenance, dict) or not provenance:
+        raise RuntimeError("Custom FFmpeg source/build provenance is empty.")
+    for path in notices.rglob("*"):
+        if path.is_symlink() and not path.resolve().is_relative_to(notices.resolve()):
+            raise RuntimeError("Custom FFmpeg attribution has an external symlink.")
+    return provenance
 
 
 def license_cache_directory(requested: Path | None = None) -> Path:
@@ -61,7 +88,7 @@ def copy_linux_library(source: Path, library_dir: Path, needed: str | None = Non
             alias.symlink_to(real.name)
 
 
-def prepare_linux(stage: Path, qt_root: Path) -> None:
+def prepare_linux(stage: Path, qt_root: Path, ffmpeg_root: Path | None = None) -> None:
     """Complete Qt's deployment, then remove SDK RPATHs from every ELF payload."""
     if not shutil.which("patchelf") or not shutil.which("readelf") or not shutil.which("ldd"):
         raise RuntimeError("Linux packaging requires patchelf, readelf (binutils), and ldd.")
@@ -69,12 +96,25 @@ def prepare_linux(stage: Path, qt_root: Path) -> None:
     library_dir.mkdir(exist_ok=True)
     # Qt 6.10 does not automatically deploy FFmpeg on Linux/X11. Copy the
     # matching SDK's runtime, never an unrelated system FFmpeg installation.
-    for pattern in ("libav*.so*", "libswresample.so*", "libswscale.so*"):
-        for source in sorted((qt_root / "lib").glob(pattern)):
+    runtime = (ffmpeg_root or qt_root) / "lib"
+    if ffmpeg_root:
+        validate_ffmpeg_override(ffmpeg_root, qt_root)
+        # This stage was created exclusively for this package. CMake may have
+        # copied SDK FFmpeg before the explicit override; remove only those
+        # freshly-staged codec files, never the SDK or previous packages.
+        for component in (*FFMPEG_COMPONENTS, "avfilter", "avdevice"):
+            for path in library_dir.glob(f"lib{component}.so*"):
+                if path.is_file() or path.is_symlink():
+                    path.unlink()
+    patterns = tuple(f"lib{component}.so*" for component in (*FFMPEG_COMPONENTS, "avfilter", "avdevice"))
+    if ffmpeg_root:
+        patterns += ("libopenh264.so*",)
+    for pattern in patterns:
+        for source in sorted(runtime.glob(pattern)):
             if source.is_file():
                 copy_linux_library(source, library_dir)
     environment = os.environ.copy()
-    environment["LD_LIBRARY_PATH"] = os.pathsep.join([str(library_dir), str(qt_root / "lib")])
+    environment["LD_LIBRARY_PATH"] = os.pathsep.join([str(library_dir), str(runtime), str(qt_root / "lib")])
     def patch_paths() -> None:
         for binary in stage.rglob("*"):
             if is_elf(binary):
@@ -197,7 +237,67 @@ def download_license(license_id: str, cache: Path) -> tuple[str, str]:
     return license_id, url
 
 
-def collect_notices(qt_root: Path, destination: Path, cache: Path) -> None:
+def qt_library_name(filename: str) -> str | None:
+    """Match Qt runtime libraries across framework, ELF and PE SDK layouts."""
+    match = re.fullmatch(r"(?:lib)?Qt6?([A-Z][A-Za-z0-9]*?)(?:\.so(?:\.[0-9.]+)?|\.dll|(?:\.[0-9.]+)?\.dylib)?", filename)
+    return match[1] if match else None
+
+
+def sdk_notice_manifests(qt_root: Path, stage: Path) -> list[tuple[Path, dict]]:
+    deployed = {name for path in stage.rglob("*") if path.is_file()
+                if (name := qt_library_name(path.name)) is not None}
+    selected, covered = [], set()
+    mandatory = {"qtbase", "qtsvg", "qtmultimedia"}
+    found = set()
+    for source in sorted((qt_root / "sbom").glob("*.spdx.json")):
+        if source.stat().st_size > 16 * 1024 * 1024:
+            raise RuntimeError(f"SDK manifest exceeds 16 MiB: {source.name}")
+        document = json.loads(source.read_text(encoding="utf-8"))
+        libraries = {name for entry in document.get("files", [])
+                     if (name := qt_library_name(Path(entry.get("fileName", "")).name)) is not None}
+        module = source.name.split("-", 1)[0]
+        if module in mandatory or libraries & deployed:
+            if module in found:
+                raise RuntimeError(f"Expected one official SPDX manifest for {module} in {qt_root / 'sbom'}")
+            selected.append((source, document))
+            found.add(module)
+            covered.update(libraries)
+    if mandatory - found:
+        raise RuntimeError("Missing required SDK SPDX manifests: " + ", ".join(sorted(mandatory - found)))
+    if deployed - covered:
+        raise RuntimeError("Deployed Qt libraries have no SDK SPDX attribution: " + ", ".join(sorted(deployed - covered)))
+    return selected
+
+
+def collect_icu_notice(stage: Path, documents: list[dict], destination: Path, cache: Path) -> dict | None:
+    deployed = sorted({path.name for path in stage.rglob("*") if path.is_file()
+                       and re.match(r"(?:lib)?icu(?:data|i18n|uc|io|dt|in)[0-9.]*\.(?:so|dylib|dll)", path.name)})
+    if not deployed:
+        return None
+    versions = {item.get("versionInfo", "") for document in documents for item in document.get("packages", [])
+                if item.get("name") == "ICU"}
+    if len(versions) != 1 or next(iter(versions)) not in ICU_NOTICES:
+        raise RuntimeError("Bundled ICU needs a reviewed, version-matched upstream license notice; SDK versions: " + ", ".join(sorted(versions)))
+    version = next(iter(versions))
+    url, expected = ICU_NOTICES[version]
+    name = f"ICU-{version}-LICENSE.txt"
+    cached = cache / name
+    if not cached.exists():
+        request = urllib.request.Request(url, headers={"User-Agent": "ToonPro-package-notices/1"})
+        with urllib.request.urlopen(request, timeout=30) as response:
+            data = response.read(512 * 1024 + 1)
+        if not data or len(data) > 512 * 1024 or hashlib.sha256(data).hexdigest() != expected:
+            raise RuntimeError("Upstream ICU notice did not match its reviewed checksum.")
+        temporary = cached.with_suffix(".download")
+        temporary.write_bytes(data)
+        temporary.replace(cached)
+    if digest(cached) != expected:
+        raise RuntimeError("Cached ICU notice did not match its reviewed checksum.")
+    shutil.copy2(cached, destination / name)
+    return {"component": "ICU", "version": version, "libraries": deployed, "file": name, "source": url, "sha256": expected}
+
+
+def collect_notices(qt_root: Path, destination: Path, cache: Path, stage: Path) -> None:
     destination.mkdir(parents=True)
     texts = destination / "licenses"
     texts.mkdir()
@@ -222,14 +322,8 @@ def collect_notices(qt_root: Path, destination: Path, cache: Path) -> None:
     ]
     sbom = destination / "sdk-sbom"
     sbom.mkdir()
-    for module in ("qtbase", "qtsvg", "qtmultimedia"):
-        matches = sorted((qt_root / "sbom").glob(f"{module}-*.spdx.json"))
-        if len(matches) != 1:
-            raise RuntimeError(f"Expected one official SPDX manifest for {module} in {qt_root / 'sbom'}")
-        source = matches[0]
-        if source.stat().st_size > 16 * 1024 * 1024:
-            raise RuntimeError(f"SDK manifest exceeds 16 MiB: {source.name}")
-        document = json.loads(source.read_text(encoding="utf-8"))
+    selected = sdk_notice_manifests(qt_root, stage)
+    for source, document in selected:
         shutil.copy2(source, sbom / source.name)
         manifests.append({"file": source.name, "sha256": digest(source)})
         for license_info in document.get("hasExtractedLicensingInfos", []):
@@ -256,13 +350,19 @@ def collect_notices(qt_root: Path, destination: Path, cache: Path) -> None:
         for license_id, url in pool.map(lambda name: download_license(name, cache), sorted(licenses - extracted.keys())):
             sources[license_id] = url
             shutil.copy2(cache / (license_id + ".txt"), texts / (license_id + ".txt"))
+    supplemental = []
+    icu = collect_icu_notice(stage, [document for _, document in selected], texts, cache)
+    if icu:
+        supplemental.append(icu)
+        attribution += ["Bundled ICU " + icu["version"], "The SDK leaves ICU's license unspecified; the complete version-matched upstream notice is included.",
+                        "Notice: licenses/" + icu["file"], "Source: " + icu["source"], ""]
     for source, name in ((ROOT / "resources/icons/lucide/LICENSE", "Lucide-LICENSE.txt"),
                          (ROOT / "resources/icons/lucide/NOTICE.md", "Lucide-NOTICE.md"),
                          (ROOT / "resources/scene3d/licenses/Filament-LICENSE.txt", "Filament-LICENSE.txt"),
                          (ROOT / "resources/scene3d/licenses/Filament-THIRD-PARTY-NOTICES.txt", "Filament-THIRD-PARTY-NOTICES.txt")):
         shutil.copy2(source, destination / name)
     (destination / "THIRD-PARTY-NOTICES.txt").write_text("\n".join(attribution), encoding="utf-8")
-    (destination / "sources.json").write_text(json.dumps({"sdkManifests": manifests, "licenseTextSources": sources,
+    (destination / "sources.json").write_text(json.dumps({"sdkManifests": manifests, "supplementalNotices": supplemental, "licenseTextSources": sources,
         "licenseTextSHA256": {path.name: digest(path) for path in sorted(texts.glob("*.txt"))}}, indent=2) + "\n", encoding="utf-8")
 
 
@@ -272,6 +372,7 @@ def main() -> int:
     parser.add_argument("--qt-root", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True, help="Fresh output folder; existing contents are never removed")
     parser.add_argument("--cache-dir", type=Path, help="Writable license-text cache root; also configurable with TOON_PACKAGE_CACHE")
+    parser.add_argument("--ffmpeg-root", type=Path, help="Linux-only FFmpeg runtime prefix with matching ABI libraries and third-party source/license evidence")
     parser.add_argument("--config", default="RelWithDebInfo")
     parser.add_argument("--skip-build", action="store_true")
     parser.add_argument("--require-3d", action="store_true")
@@ -285,18 +386,22 @@ def main() -> int:
         parser.error("This packaging workflow supports native macOS, Windows and Linux builds.")
     if (args.dmg or args.sign_identity or args.notarize_profile) and system != "Darwin":
         parser.error("DMG, Developer ID signing and notarization options require macOS.")
+    if args.ffmpeg_root and system != "Linux":
+        parser.error("Custom FFmpeg runtime deployment currently requires Linux.")
     if args.notarize_profile and not args.sign_identity:
         parser.error("Notarization requires --sign-identity; ad-hoc code cannot be notarized.")
     if args.sign_identity and not args.sign_identity.startswith("Developer ID Application:"):
         parser.error("Use a Developer ID Application identity for distribution outside the Mac App Store.")
     build = args.build_dir.resolve()
     qt_root = args.qt_root.resolve()
+    ffmpeg_root = args.ffmpeg_root.resolve() if args.ffmpeg_root else None
     output = args.output_dir.resolve()
     if output.exists() and any(output.iterdir()):
         parser.error("Output folder is not empty. Choose a new destination; existing packages are preserved.")
     if not (build / "CMakeCache.txt").is_file():
         parser.error("Configure the build before packaging.")
     cache = license_cache_directory(args.cache_dir)
+    ffmpeg_provenance = validate_ffmpeg_override(ffmpeg_root, qt_root) if ffmpeg_root else None
     if not args.skip_build:
         run(["cmake", "--build", str(build), "--config", args.config, "--target", "ToonPro", "--parallel", "4"])
     output.mkdir(parents=True, exist_ok=True)
@@ -324,13 +429,21 @@ def main() -> int:
         if system == "Darwin":
             relocate_macos_offscreen(copied_plugin, qt_root)
     if system == "Linux":
-        prepare_linux(stage, qt_root)
+        prepare_linux(stage, qt_root, ffmpeg_root)
     notices = app / "Contents/Resources/third-party" if app.exists() else stage / "third-party"
-    collect_notices(qt_root, notices, cache)
+    collect_notices(qt_root, notices, cache, stage)
+    if ffmpeg_root:
+        shutil.copytree(ffmpeg_root / "third-party", notices / "ffmpeg-runtime")
+        with (notices / "THIRD-PARTY-NOTICES.txt").open("a", encoding="utf-8") as text:
+            text.write("\nFFmpeg runtime override\nThe deployed FFmpeg/OpenH264 runtime is built separately from the SDK. "
+                       "Its complete source, build and license evidence is in ffmpeg-runtime/. "
+                       "The Qt SDK manifests describe the original SDK runtime.\n")
     if system == "Darwin":
         sign_macos(app, args.sign_identity)
     verification = [sys.executable, str(ROOT / "scripts/verify_package.py"), "--stage", str(stage),
                     "--report-dir", str(output / "verification"), "--forbid-path", str(qt_root), "--forbid-path", str(build)]
+    if ffmpeg_root:
+        verification += ["--forbid-path", str(ffmpeg_root)]
     if args.require_3d:
         verification.append("--require-3d")
     if args.skip_native_smoke:
@@ -391,6 +504,7 @@ def main() -> int:
                 "signature": signature, "notarized": notarized, "published": False,
                 "releaseChannel": "candidate", "publicReleaseReady": False, "releaseBlockers": blockers,
                 "runtimeVerified": True, "nativeRuntimeVerified": not args.skip_native_smoke, "capabilities": capabilities,
+                "ffmpegRuntime": {"provider": "custom" if ffmpeg_root else "qt-sdk", "provenance": ffmpeg_provenance},
                 "artifacts": [{"file": path.name, "sha256": digest(path), "bytes": path.stat().st_size} for path in artifacts],
                 "verification": "verification/package-verification.json"}
     (output / "package.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")

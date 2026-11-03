@@ -1,6 +1,6 @@
 # Desktop packaging and verification
 
-The current release candidate is **Toon Pro 0.75.0**, using **Qt 6.10.3**. Candidates are for private testing. Packaging creates local artifacts and reports; it does not publish a release, upload to a store, or install over an existing Toon Pro session. `package.json` deliberately records `published: false`, `releaseChannel: "candidate"` and `publicReleaseReady: false`.
+The current release candidate is **Toon Pro 0.75.0**, using **Qt 6.10.3**. Candidates are test builds, not signed production releases. Packaging creates local artifacts and reports; it does not publish a release, upload to a store, or install over an existing Toon Pro session. `package.json` deliberately records `published: false`, `releaseChannel: "candidate"` and `publicReleaseReady: false`.
 
 The scripts stage the native application, Qt libraries/plugins, matching FFmpeg libraries, dependency notices and build-capability metadata. They relocate that installation into a temporary directory and run the app without its development SDK environment. Distribution archives and checksums are created after verification passes.
 
@@ -101,7 +101,7 @@ xvfb-run -a -s "-screen 0 1600x1200x24" \
 
 Packaging explicitly copies the matching SDK's FFmpeg runtime, normalizes ELF runtime paths to the package, resolves its dependency closure and creates `ToonPro.sh`. Extract the `.tar.gz` and launch through that script. Qt and FFmpeg must resolve inside the package; remaining OS libraries are listed in the verification report. This is a portable directory, not an AppImage, `.deb` or `.rpm` installer. The desktop backend is X11/XCB; Wayland desktops need XWayland. Xvfb verifies the XCB runtime but does not establish real display, audio-device or tablet behavior. Other distributions and older glibc versions require separate verification.
 
-## Signing and private CI
+## Signing and candidate CI
 
 Mac builds default to ad-hoc signing. When an existing Developer ID Application certificate and notarytool keychain profile are available, the script supports:
 
@@ -117,7 +117,7 @@ python3 scripts/package_desktop.py \
 
 These options are macOS-only. `--notarize-profile` requires `--sign-identity`, uploads the newly created application archive and optional DMG to Apple, checks acceptance, staples tickets and validates them. Secrets remain in the existing keychain profile. This path is implemented but has not been exercised for the current candidate; no suitable signing identity has been provided. Signing/notarization does not publish the app.
 
-The GitHub workflow builds/tests macOS arm64, macOS x86_64, Windows x86_64 and Linux x86_64. Distribution artifacts are produced only by a successful manual `workflow_dispatch`; push/PR runs perform tests. Diagnostic artifacts can be uploaded on any workflow run. **For the requested private delivery, use a private repository before uploading source or triggering any workflow.** No public upload is authorized by this packaging document. The workflow does not create a GitHub Release; its artifact retention is 30 days for candidates and 14 days for diagnostics.
+The GitHub workflow builds/tests macOS arm64, macOS x86_64, Windows x86_64 and Linux x86_64. Distribution artifacts are produced after successful tests by a manual `workflow_dispatch`, or a push to `codex/release-candidate-*` (Windows only). Other push/PR runs perform tests. Diagnostic artifacts can be uploaded on any workflow run. The artist authorized public source and test downloads in `complex1/ToonPro`. Repository visibility also controls artifact visibility; use a private repository when private downloads are required. The workflow does not create a GitHub Release; its artifact retention is 30 days for candidates and 14 days for diagnostics.
 
 ## Runtime checks and reports
 
