@@ -57,6 +57,33 @@ private slots:
         accessors[0]=a;j["accessors"]=accessors;primitives[0]=p;mesh["primitives"]=primitives;meshes[0]=mesh;j["meshes"]=meshes;QString error;auto result=importModel3D(save(dir,j),&error);QVERIFY2(!result,qPrintable(issue));QVERIFY(!error.isEmpty());}
     void externalResourcesAndTexture(){QTemporaryDir dir;QByteArray buffer;auto j=triangle(buffer);for(float f:{0.f,0.f,1.f,0.f,0.f,1.f})put(buffer,f);QFile bin(dir.filePath("mesh.bin"));QVERIFY(bin.open(QIODevice::WriteOnly));bin.write(buffer);bin.close();j["buffers"]=QJsonArray{QJsonObject{{"byteLength",buffer.size()},{"uri","mesh.bin"}}};j["bufferViews"]=QJsonArray{QJsonObject{{"buffer",0},{"byteLength",36}},QJsonObject{{"buffer",0},{"byteOffset",36},{"byteLength",24}}};auto accessors=j["accessors"].toArray();accessors<<QJsonObject{{"bufferView",1},{"componentType",5126},{"count",3},{"type","VEC2"}};j["accessors"]=accessors;
         j["meshes"]=QJsonArray{QJsonObject{{"primitives",QJsonArray{QJsonObject{{"attributes",QJsonObject{{"POSITION",0},{"TEXCOORD_0",1}}},{"material",0}}}}}};QImage image(2,2,QImage::Format_RGBA8888);image.fill(QColor(255,0,0,128));QVERIFY(image.save(dir.filePath("texture.png")));j["images"]=QJsonArray{QJsonObject{{"uri","texture.png"}}};j["textures"]=QJsonArray{QJsonObject{{"source",0}}};j["materials"]=QJsonArray{QJsonObject{{"alphaMode","MASK"},{"doubleSided",true},{"pbrMetallicRoughness",QJsonObject{{"baseColorTexture",QJsonObject{{"index",0}}},{"baseColorFactor",QJsonArray{.5,1,1,1}}}}}};QString e;auto a=importModel3D(save(dir,j),&e);QVERIFY2(a,qPrintable(e));QCOMPARE(a->meshes[0].alphaCutoff,.5f);QVERIFY(a->meshes[0].doubleSided);QCOMPARE(a->meshes[0].baseColorTexture.size(),QSize(2,2));auto bytes=serializeModel3D(*a);auto decoded=deserializeModel3D(bytes,&e);QVERIFY2(decoded,qPrintable(e));QCOMPARE(serializeModel3D(*decoded),bytes);QCOMPARE(decoded->meshes[0].baseColorTexture.pixelColor(0,0),QColor(255,0,0,128));}
+    void externalResourcePathsStayInsideCanonicalSourceFolder() {
+        QTemporaryDir directory; QVERIFY(directory.isValid());
+        QDir root(directory.path());
+        QVERIFY(root.mkpath("models/nested"));
+        QVERIFY(root.mkpath("models-other"));
+        QByteArray buffer; const auto original = triangle(buffer);
+        for (const auto *name : {"models/mesh.bin", "models/nested/space mesh.bin", "models-other/mesh.bin"}) {
+            QFile file(directory.filePath(QString::fromLatin1(name)));
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            QCOMPARE(file.write(buffer), buffer.size());
+        }
+        for (const auto *uri : {"mesh.bin", "nested/space%20mesh.bin", "nested/../mesh.bin"}) {
+            auto json = original;
+            json["buffers"] = QJsonArray{QJsonObject{{"byteLength", buffer.size()}, {"uri", uri}}};
+            QString error;
+            auto model = importModel3D(save(directory, json, "models/model.gltf"), &error);
+            QVERIFY2(model, qPrintable(QString::fromLatin1(uri) + ": " + error));
+            QCOMPARE(model->meshes.first().positions.size(), 3);
+        }
+        for (const auto *uri : {"../models-other/mesh.bin", "..%2Fmodels-other/mesh.bin"}) {
+            auto json = original;
+            json["buffers"] = QJsonArray{QJsonObject{{"byteLength", buffer.size()}, {"uri", uri}}};
+            QString error;
+            QVERIFY(!importModel3D(save(directory, json, "models/model.gltf"), &error));
+            QVERIFY2(error.contains("inside its source folder"), qPrintable(error));
+        }
+    }
     void corruptModelBytes(){auto a=builtInModels3D()[0];auto bytes=serializeModel3D(*a);QString e;auto damaged=bytes;damaged[damaged.size()-1]^=1;QVERIFY(!deserializeModel3D(damaged,&e));QVERIFY(e.contains("checksum"));QVERIFY(!deserializeModel3D(bytes.left(40),&e));QVERIFY(!deserializeModel3D(bytes+"x",&e));
         // A correctly checksummed payload still cannot request an unbounded name allocation.
         auto payload=bytes.mid(40);qToLittleEndian(quint32(0xffffffff),payload.data());auto forged=QByteArray("TOON3D01",8)+QCryptographicHash::hash(payload,QCryptographicHash::Sha256)+payload;QVERIFY(!deserializeModel3D(forged,&e));}

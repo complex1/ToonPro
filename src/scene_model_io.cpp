@@ -66,7 +66,19 @@ public:
     QByteArray uri(const QString &text) {
         ensure(!text.isEmpty(),"Missing model resource URI.");QByteArray bytes;
         if(text.startsWith("data:")) {const int comma=text.indexOf(',');ensure(comma>0&&text.left(comma).endsWith(";base64"),"Only base64 data resources are supported.");auto r=QByteArray::fromBase64Encoding(text.mid(comma+1).toLatin1(),QByteArray::AbortOnBase64DecodingErrors);ensure(bool(r),"Invalid base64 model resource.");bytes=r.decoded;}
-        else {QUrl u(text);ensure(u.isRelative()&&u.scheme().isEmpty()&&!u.hasQuery()&&!u.hasFragment(),"Model resources must be local relative files.");auto relative=QUrl::fromPercentEncoding(text.toUtf8());ensure(!QDir::isAbsolutePath(relative)&&!relative.contains('\\'),"Invalid model resource path.");const auto root=QFileInfo(basePath).canonicalFilePath();const auto path=QFileInfo(QDir(basePath).filePath(relative)).canonicalFilePath();ensure(!path.isEmpty()&&path.startsWith(root+QDir::separator()),"Model resource must remain inside its source folder.");bytes=readFile(path);}
+        else {
+            QUrl u(text);
+            ensure(u.isRelative()&&u.scheme().isEmpty()&&!u.hasQuery()&&!u.hasFragment(),"Model resources must be local relative files.");
+            const auto relative=QUrl::fromPercentEncoding(text.toUtf8());
+            ensure(!QDir::isAbsolutePath(relative)&&!relative.contains('\\'),"Invalid model resource path.");
+            const auto root=QFileInfo(basePath).canonicalFilePath();
+            const auto path=QFileInfo(QDir(basePath).filePath(relative)).canonicalFilePath();
+            // QFileInfo canonical paths use '/' on every platform, including
+            // Windows. Keep the directory boundary when excluding siblings.
+            const auto prefix=root.endsWith('/')?root:root+'/';
+            ensure(!root.isEmpty()&&!path.isEmpty()&&path.startsWith(prefix),"Model resource must remain inside its source folder.");
+            bytes=readFile(path);
+        }
         resourceBytes+=bytes.size();ensure(resourceBytes<=maxModel3DBytes,"Model and external resources exceed 128 MiB.");return bytes;
     }
     void loadBuffers(){auto a=json.value("buffers").toArray();ensure(a.size()<=256,"Too many model buffers.");for(int i=0;i<a.size();++i){auto o=indexed(a,i,"buffer");int size=integer(o,"byteLength",1,int(maxModel3DBytes));ensure(size>0,"Missing buffer size.");QByteArray b;

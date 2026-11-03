@@ -48,24 +48,25 @@ QAudioFormat exportAudioFormat() {
 }
 constexpr qint64 streamLeadUSecs = 250000;
 constexpr int audioChunkSamples = 2048;
-constexpr int minimumAacSamples = 1024;
+constexpr int minimumAacSamples = 2 * 1024;
 constexpr int stallTimeoutMSecs = 60000;
-constexpr qint64 singleFrameBufferLimit = 80 * 1024 * 1024;
+constexpr qint64 shortClipBufferLimit = 80 * 1024 * 1024;
 
 // Qt 6.10 stores the requested encoder FPS in an int internally. A fractional
-// single frame therefore gets the wrong inferred duration. Buffer only this
-// bounded case so its finalized MP4 timing can be corrected before publishing.
-class SingleFrameBuffer final : public QBuffer {
+// single frame therefore gets the wrong inferred duration. Very short AAC also
+// needs encoder look-ahead that must not extend the selected playback range.
+// Buffer only these bounded cases for final timing correction before publishing.
+class ShortClipBuffer final : public QBuffer {
 public:
     bool failed() const { return m_failed; }
     bool seek(qint64 position) override {
-        if (position < 0 || position > singleFrameBufferLimit) return reject();
+        if (position < 0 || position > shortClipBufferLimit) return reject();
         return QBuffer::seek(position);
     }
 protected:
     qint64 writeData(const char *data, qint64 length) override {
-        if (m_failed || length < 0 || length > singleFrameBufferLimit
-            || pos() > singleFrameBufferLimit - length) {
+        if (m_failed || length < 0 || length > shortClipBufferLimit
+            || pos() > shortClipBufferLimit - length) {
             reject(); return -1;
         }
         return QBuffer::writeData(data, length);
@@ -73,7 +74,7 @@ protected:
 private:
     bool reject() {
         m_failed = true;
-        setErrorString("The single-frame video exceeded its 80 MiB encoding limit.");
+        setErrorString("The short video exceeded its 80 MiB encoding limit.");
         return false;
     }
     bool m_failed = false;
@@ -120,10 +121,11 @@ public slots:
         if (!m_output->open(QIODevice::WriteOnly)) {
             finishWithoutRecorder(VideoExportOutcome::Failed, "Could not open the export destination: " + m_output->errorString()); return;
         }
-        if (m_totalFrames == 1 && m_project.fps != std::floor(m_project.fps)) {
-            m_memoryOutput = std::make_unique<SingleFrameBuffer>();
+        if ((m_totalFrames == 1 && m_project.fps != std::floor(m_project.fps))
+            || (m_settings.includeAudio && m_totalSamples < minimumAacSamples)) {
+            m_memoryOutput = std::make_unique<ShortClipBuffer>();
             if (!m_memoryOutput->open(QIODevice::ReadWrite)) {
-                finishWithoutRecorder(VideoExportOutcome::Failed, "Could not prepare the single-frame video buffer."); return;
+                finishWithoutRecorder(VideoExportOutcome::Failed, "Could not prepare the short video buffer."); return;
             }
         }
         m_session = std::make_unique<QMediaCaptureSession>();
@@ -299,9 +301,11 @@ private:
             if (bytes.size() != count * audioBytesPerSampleFrame) {
                 requestStop(VideoExportOutcome::Failed, "The audio mix ended unexpectedly."); return;
             }
-            // Media Foundation AAC can drain without producing a packet when
-            // the entire input is shorter than its 1024-sample output block.
-            // Supply only a bounded silent tail, never audio beyond the range.
+            // Windows AAC can drain without any packet even for one complete
+            // 1024-sample block. Two blocks provide its required look-ahead.
+            // Only this short-input case gets an explicit silent tail; the MP4
+            // edit duration below removes it from presentation. Never read
+            // source audio beyond the artist's selected frame range.
             if (m_totalSamples < minimumAacSamples)
                 bytes.append(QByteArray((minimumAacSamples - count) * audioBytesPerSampleFrame, '\0'));
             m_pendingAudio = QAudioBuffer(bytes, m_audioFormat, m_sentSamples * 1000000 / audioSampleRate);
@@ -346,7 +350,7 @@ private:
                 || !m_output || encodedSize <= 0) {
                 m_outcome = VideoExportOutcome::Failed;
                 m_error = "The encoder did not produce a complete MP4 file.";
-            } else if (m_memoryOutput && !writeCorrectedSingleFrame()) {
+            } else if (m_memoryOutput && !writeFinalizedShortClip()) {
                 // The helper sets a failure/cancellation result and never commits.
             }
             // Copying a bounded file can still take time on a slow destination.
@@ -391,14 +395,21 @@ private:
         emit finished({m_outcome, m_path, m_error, m_sentFrames});
     }
 
-    bool writeCorrectedSingleFrame() {
+    bool writeFinalizedShortClip() {
         if (m_memoryOutput->failed()) {
             m_outcome = VideoExportOutcome::Failed; m_error = m_memoryOutput->errorString(); return false;
         }
         QString error;
-        if (!correctSingleFrameMp4Timing(&m_memoryOutput->buffer(), m_project.fps, &error)) {
+        if (m_totalFrames == 1 && m_project.fps != std::floor(m_project.fps)
+            && !correctSingleFrameMp4Timing(&m_memoryOutput->buffer(), m_project.fps, &error)) {
             m_outcome = VideoExportOutcome::Failed;
             m_error = "Could not finalize single-frame video timing: " + error;
+            return false;
+        }
+        if (m_settings.includeAudio && m_totalSamples < minimumAacSamples
+            && !trimShortMp4AudioPresentation(&m_memoryOutput->buffer(), m_totalSamples, audioSampleRate, &error)) {
+            m_outcome = VideoExportOutcome::Failed;
+            m_error = "Could not finalize short-clip audio: " + error;
             return false;
         }
         const auto &bytes = m_memoryOutput->buffer();
@@ -424,7 +435,7 @@ private:
     std::shared_ptr<std::atomic_bool> m_cancelled;
     std::unique_ptr<QTemporaryDir> m_stagingDirectory;
     std::unique_ptr<QSaveFile> m_output;
-    std::unique_ptr<SingleFrameBuffer> m_memoryOutput;
+    std::unique_ptr<ShortClipBuffer> m_memoryOutput;
     std::unique_ptr<QMediaCaptureSession> m_session;
     std::unique_ptr<QMediaRecorder> m_recorder;
     std::unique_ptr<QVideoFrameInput> m_videoInput;

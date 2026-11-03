@@ -89,6 +89,81 @@ public:
         return patch(movieHeader.timescale, movieTimescale) && patch(movieHeader.duration, movieDuration);
     }
 
+    bool prepareAudioTrim(qint64 sampleFrames, int sampleRate) {
+        if (m_bytes.size() < 32 || m_bytes.size() > maximumFileSize)
+            return fail("The short MP4 has an invalid or unsupported size.");
+        QVector<Box> top, movie;
+        Box ftyp, moov, mvhd;
+        if (!children(0, m_bytes.size(), top) || !one(top, tag('f','t','y','p'), ftyp)
+            || !one(top, tag('m','o','o','v'), moov)) return false;
+        if (moov.end - moov.begin > 1024 * 1024 || ftyp.size() < 8 || (ftyp.size() - 8) % 4)
+            return fail("The short MP4 metadata is malformed or too large.");
+        bool hasMedia = false;
+        for (const auto &box : top) {
+            hasMedia |= box.type == tag('m','d','a','t') && box.size() > 0;
+            if (box.type == tag('m','o','o','f') || box.type == tag('s','i','d','x')
+                || box.type == tag('m','f','r','a'))
+                return fail("Fragmented MP4 timing is not supported by this finalizer.");
+        }
+        if (!hasMedia) return fail("The MP4 contains no media data.");
+        if (!children(moov.payload, moov.end, movie) || !one(movie, tag('m','v','h','d'), mvhd)) return false;
+        TimedHeader movieHeader;
+        if (!timedHeader(mvhd, true, movieHeader)) return false;
+        Track video, audio;
+        int videos = 0, audios = 0;
+        for (const auto &box : movie) {
+            if (box.type == tag('m','v','e','x')) return fail("Fragmented MP4 timing is unsupported.");
+            if (box.type != tag('t','r','a','k')) continue;
+            Track track;
+            if (!readTrack(box, track)) return false;
+            if (track.video) { video = track; ++videos; } else { audio = track; ++audios; }
+        }
+        if (videos != 1 || audios != 1 || !video.length)
+            return fail("The short MP4 must contain complete video and audio tracks.");
+        QVector<Box> trackBoxes, mediaBoxes, editBoxes, infoBoxes, samples;
+        Box mdia, mdhd, edts, elst, minf, stbl, stsz;
+        if (!children(audio.box.payload, audio.box.end, trackBoxes)
+            || !one(trackBoxes, tag('m','d','i','a'), mdia)
+            || !one(trackBoxes, tag('e','d','t','s'), edts)
+            || !children(mdia.payload, mdia.end, mediaBoxes)
+            || !one(mediaBoxes, tag('m','d','h','d'), mdhd)
+            || !children(edts.payload, edts.end, editBoxes)
+            || !one(editBoxes, tag('e','l','s','t'), elst)
+            || !one(mediaBoxes, tag('m','i','n','f'), minf)
+            || !children(minf.payload, minf.end, infoBoxes)
+            || !one(infoBoxes, tag('s','t','b','l'), stbl)
+            || !children(stbl.payload, stbl.end, samples)
+            || !one(samples, tag('s','t','s','z'), stsz)) return false;
+        TimedHeader mediaHeader;
+        if (!timedHeader(mdhd, false, mediaHeader) || mediaHeader.scale != quint32(sampleRate))
+            return fail("The MP4 audio sample rate differs from the selected audio range.");
+        int v;
+        if (!version(stsz, v, false) || !flagsZero(stsz)) return false;
+        if (stsz.size() < 12 || !u32(stsz.payload + 8))
+            return fail("The MP4 audio track contains no encoded samples.");
+        const quint32 fixedSize = u32(stsz.payload + 4), sampleCount = u32(stsz.payload + 8);
+        if (quint64(stsz.size()) != 12 + (fixedSize ? 0 : quint64(sampleCount) * 4))
+            return fail("The MP4 audio sample-size table is malformed.");
+        if (!version(elst, v) || !flagsZero(elst)) return false;
+        if (elst.size() != (v ? 28 : 20) || u32(elst.payload + 4) != 1)
+            return fail("The short MP4 audio requires one ordinary playback edit.");
+        const qsizetype entry = elst.payload + 8;
+        const Field duration{entry, v ? 8 : 4};
+        const Field mediaTime{entry + (v ? 8 : 4), v ? 8 : 4};
+        const auto start = value(mediaTime);
+        const auto signedLimit = v ? quint64(std::numeric_limits<qint64>::max())
+                                  : quint64(std::numeric_limits<qint32>::max());
+        if (start > signedLimit || u32(entry + (v ? 16 : 8)) != 0x00010000
+            || start > mediaHeader.length || quint64(sampleFrames) > mediaHeader.length - start)
+            return fail("The MP4 audio edit cannot retain the complete selected sample range.");
+        // Round up by at most one movie tick; never cut the last source sample.
+        const quint64 length = (quint64(sampleFrames) * movieHeader.scale + sampleRate - 1) / sampleRate;
+        if (length > audio.length || length > value(duration))
+            return fail("The encoded MP4 audio is shorter than the selected sample range.");
+        return patch(duration, length) && patch(audio.duration, length)
+            && patch(movieHeader.duration, qMax(video.length, length));
+    }
+
 private:
     bool fail(const QString &message) { if (error.isEmpty()) error = message; return false; }
     quint32 u32(qsizetype position) const { return qFromBigEndian<quint32>(m_bytes.constData() + position); }
@@ -283,6 +358,27 @@ bool correctSingleFrameMp4Timing(QByteArray *bytes, double fps, QString *error) 
     }
     // Validation and overflow checks are complete. Changing only fixed-width
     // fields keeps every atom size, media byte and chunk offset unchanged.
+    char *data = bytes->data();
+    for (const auto &patch : correction.patches) {
+        if (patch.field.width == 4) qToBigEndian(quint32(patch.value), data + patch.field.position);
+        else qToBigEndian(patch.value, data + patch.field.position);
+    }
+    return true;
+}
+
+bool trimShortMp4AudioPresentation(QByteArray *bytes, qint64 sampleFrames, int sampleRate, QString *error) {
+    if (error) error->clear();
+    if (!bytes || sampleRate < 8000 || sampleRate > 384000 || sampleFrames <= 0 || sampleFrames > sampleRate) {
+        if (error) *error = "Short audio timing needs a valid buffer and at most one second of audio samples.";
+        return false;
+    }
+    TimingCorrection correction(*bytes);
+    if (!correction.prepareAudioTrim(sampleFrames, sampleRate)) {
+        if (error) *error = correction.error;
+        return false;
+    }
+    // Only edit/track/movie presentation durations change. Audio priming, media
+    // durations, compressed payloads and all chunk offsets remain untouched.
     char *data = bytes->data();
     for (const auto &patch : correction.patches) {
         if (patch.field.width == 4) qToBigEndian(quint32(patch.value), data + patch.field.position);

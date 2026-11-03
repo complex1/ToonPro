@@ -250,6 +250,12 @@ private slots:
         QTest::newRow("60-single") << 60.0 << 1;
         QTest::newRow("120-single") << 120.0 << 1;
         QTest::newRow("120-two-frames") << 120.0 << 2;
+        QTest::newRow("46.875-one-block") << 46.875 << 1;
+        QTest::newRow("29.97-single") << 29.97 << 1;
+        QTest::newRow("24-single") << 24.0 << 1;
+        QTest::newRow("120-five-frames") << 120.0 << 5;
+        QTest::newRow("23.4375-two-blocks") << 23.4375 << 1;
+        QTest::newRow("24-two-frames") << 24.0 << 2;
     }
     void shortExportsKeepAudibleStereo() {
         QFETCH(double, fps); QFETCH(int, frames);
@@ -261,8 +267,11 @@ private slots:
         auto settings = videoExportDefaults(project); settings.firstFrame = 6;
         settings.lastFrame = settings.firstFrame + frames - 1; settings.includeAudio = true;
         const auto sourceSamples = videoExportSampleCount(project, settings);
-        QVERIFY(sourceSamples > 0 && sourceSamples < 1024);
-        const auto path = directory.filePath("short-stereo.mp4");
+        QVERIFY(sourceSamples > 0 && sourceSamples <= 4000);
+        const auto retained = qEnvironmentVariable("TOON_VIDEO_TEST_OUTPUT");
+        const auto path = retained.isEmpty() ? directory.filePath("short-stereo.mp4")
+            : QFileInfo(retained).absoluteFilePath() + ".short-" + QTest::currentDataTag() + ".mp4";
+        QVERIFY(QDir().mkpath(QFileInfo(path).absolutePath()));
         VideoExport exporter; QSignalSpy finished(&exporter, &VideoExport::finished);
         QVERIFY(exporter.start(project, settings, path));
         QTRY_COMPARE_WITH_TIMEOUT(finished.size(), 1, 30000);
@@ -275,8 +284,10 @@ private slots:
         format.setSampleRate(audioSampleRate); format.setChannelConfig(QAudioFormat::ChannelConfigStereo);
         format.setSampleFormat(QAudioFormat::Int16); decoder.setAudioFormat(format);
         QByteArray decoded; QString decodeError; QStringList packets; bool done = false;
+        qint64 firstSampleTime = -1;
         connect(&decoder, &QAudioDecoder::bufferReady, this, [&] {
             const auto buffer = decoder.read();
+            if (decoded.isEmpty()) firstSampleTime = buffer.startTime();
             packets.append(QString("%1us/%2frames").arg(buffer.startTime()).arg(buffer.frameCount()));
             if (buffer.format() != format) { decodeError = "Unexpected decoded audio format"; return; }
             decoded.append(buffer.constData<char>(), buffer.byteCount());
@@ -290,14 +301,29 @@ private slots:
         const auto decodedSamples = decoded.size() / audioBytesPerSampleFrame;
         const auto audioDetail = QString("%1 decoded / %2 source samples; packets [%3]")
             .arg(decodedSamples).arg(sourceSamples).arg(packets.join(", "));
+        if (!retained.isEmpty()) {
+            QFile pcm(path + ".decoded-s16le-stereo.pcm");
+            QVERIFY(pcm.open(QIODevice::WriteOnly)); QCOMPARE(pcm.write(decoded), decoded.size());
+            QFile detail(path + ".audio.txt"); QVERIFY(detail.open(QIODevice::WriteOnly));
+            const auto text = audioDetail.toUtf8(); QCOMPARE(detail.write(text), text.size());
+        }
         QVERIFY2(decodedSamples >= sourceSamples, qPrintable(audioDetail));
-        for (int channel : {0, 1})
+        QVERIFY2(firstSampleTime >= 0 && firstSampleTime <= (1000000 + audioSampleRate - 1) / audioSampleRate,
+            qPrintable("The first selected sample is delayed: " + audioDetail));
+        for (int channel : {0, 1}) {
             QVERIFY2(rms(decoded, channel, 0, double(sourceSamples) / audioSampleRate) > 500,
                 qPrintable(QString("Short export lost audible channel %1; %2").arg(channel).arg(audioDetail)));
+            const double duration = double(sourceSamples) / audioSampleRate;
+            QVERIFY2(rms(decoded, channel, 0, duration / 3) > 500,
+                qPrintable(QString("Short export lost the onset of channel %1; %2").arg(channel).arg(audioDetail)));
+            QVERIFY2(rms(decoded, channel, duration * 2 / 3, duration) > 500,
+                qPrintable(QString("Short export lost the end of channel %1; %2").arg(channel).arg(audioDetail)));
+        }
 
         // Decoders may expose full AAC packets beyond the MP4 edit duration.
-        // Check the presented duration independently, with the same bounded
-        // AAC tail allowance as the existing fractional-frame regression.
+        // The explicitly padded short path must present exactly the selection,
+        // rounded by at most one millisecond. Longer unmodified inputs retain
+        // the existing ordinary AAC trailing-packet allowance.
         QMediaPlayer reader; QString loadError;
         connect(&reader, &QMediaPlayer::errorOccurred, this,
             [&](QMediaPlayer::Error, const QString &message) { loadError = message; });
@@ -307,7 +333,8 @@ private slots:
         QVERIFY2(loadError.isEmpty(), qPrintable(loadError));
         const auto expectedMS = qRound64(1000.0 * frames / fps);
         QVERIFY(reader.duration() >= expectedMS - 1);
-        QVERIFY2(reader.duration() <= expectedMS + 24,
+        const auto latestMS = expectedMS + (sourceSamples < 2048 ? 1 : 24);
+        QVERIFY2(reader.duration() <= latestMS,
             qPrintable(QString("Short export duration %1ms exceeds %2ms plus AAC padding")
                 .arg(reader.duration()).arg(expectedMS)));
     }

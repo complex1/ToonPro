@@ -1,0 +1,110 @@
+name: Windows media diagnostic probe
+
+on:
+  push:
+    branches: ['codex/media-probe-*']
+  workflow_dispatch:
+
+# Diagnostic evidence only: this workflow cannot package or publish a build.
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-media-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: windows-2022
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Restore pinned Qt SDK
+        id: qt-sdk
+        uses: actions/cache/restore@v4
+        with:
+          path: .deps/Qt
+          key: qt-6.10.3-windows-x86_64-base-svg-multimedia-runtime-v2
+      - name: Install pinned Qt SDK
+        if: steps.qt-sdk.outputs.cache-hit != 'true'
+        run: |
+          python -m pip install aqtinstall==3.3.0
+          python -m aqt install-qt windows desktop 6.10.3 win64_msvc2022_64 --outputdir .deps/Qt --modules qtmultimedia --archives qtbase qtsvg qtmultimedia
+      - name: Save verified Qt SDK
+        if: steps.qt-sdk.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .deps/Qt
+          key: qt-6.10.3-windows-x86_64-base-svg-multimedia-runtime-v2
+      - name: Install static zlib with the MSVC shared runtime
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force .deps/triplets | Out-Null
+          @'
+          set(VCPKG_TARGET_ARCHITECTURE x64)
+          set(VCPKG_CRT_LINKAGE dynamic)
+          set(VCPKG_LIBRARY_LINKAGE static)
+          '@ | Set-Content .deps/triplets/toon-x64-windows.cmake
+          & "$env:VCPKG_INSTALLATION_ROOT/vcpkg.exe" install zlib:toon-x64-windows --overlay-triplets="${{ github.workspace }}/.deps/triplets"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Configure diagnostic target
+        shell: pwsh
+        run: |
+          cmake -S . -B build -A x64 "-DCMAKE_PREFIX_PATH=${{ github.workspace }}/.deps/Qt/6.10.3/msvc2022_64" "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" "-DVCPKG_OVERLAY_TRIPLETS=${{ github.workspace }}/.deps/triplets" -DVCPKG_TARGET_TRIPLET=toon-x64-windows -DTOON_ENABLE_FILAMENT=OFF -DBUILD_TESTING=ON
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build isolated production exporter and tests
+        id: build-probe
+        run: cmake --build build --config Release --parallel 4 --target toon_video_export_probe toon_scene_assets_tests toon_catalog_recipe_refinements_tests
+      - name: Test real media encoding and decoding
+        id: media
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $env:PATH = "${{ github.workspace }}\.deps\Qt\6.10.3\msvc2022_64\bin;$env:PATH"
+          $env:QT_FORCE_STDERR_LOGGING = '1'
+          $env:QT_QPA_FONTDIR = "$env:WINDIR\Fonts"
+          $env:QT_LOGGING_RULES = 'qt.multimedia.ffmpeg.audioencoder.debug=true;qt.multimedia.ffmpeg.encoder.debug=true'
+          New-Item -ItemType Directory -Force build/media-probe | Out-Null
+          $env:TOON_VIDEO_TEST_OUTPUT = "${{ github.workspace }}\build\media-probe\clip.mp4"
+          & ./build/Release/toon_video_export_probe.exe -platform offscreen -o build/media-probe/qt-test.txt,txt 2>&1 | Tee-Object -FilePath build/media-probe/encoder.log
+          $probeExitCode = $LASTEXITCODE
+          Get-Content build/media-probe/qt-test.txt
+          exit $probeExitCode
+      - name: Check scene resource paths and brush recipes
+        id: resources
+        if: always() && steps.build-probe.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $env:PATH = "${{ github.workspace }}\.deps\Qt\6.10.3\msvc2022_64\bin;$env:PATH"
+          $env:QT_FORCE_STDERR_LOGGING = '1'
+          New-Item -ItemType Directory -Force build/media-probe | Out-Null
+          $env:TOON_RECIPE_DIFF_OUTPUT = "${{ github.workspace }}\build\media-probe\catalog"
+          ctest --test-dir build -C Release --output-on-failure -R '^(scene_assets|catalog_recipe_refinements)$' 2>&1 | Tee-Object -FilePath build/media-probe/resource-tests.txt
+          exit $LASTEXITCODE
+      - name: Report actual diagnostic outcomes
+        if: always()
+        shell: pwsh
+        run: |
+          @'
+          | Diagnostic | Actual outcome |
+          | --- | --- |
+          | Build | ${{ steps.build-probe.outcome }} |
+          | Media encode/decode | ${{ steps.media.outcome }} |
+          | Resource paths/brush recipes | ${{ steps.resources.outcome }} |
+          '@ | Add-Content $env:GITHUB_STEP_SUMMARY
+          if ('${{ steps.build-probe.outcome }}' -ne 'success' -or '${{ steps.media.outcome }}' -ne 'success' -or '${{ steps.resources.outcome }}' -ne 'success') { exit 1 }
+      - name: Retain diagnostic media and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ToonPro-Windows-media-probe
+          path: |
+            build/media-probe/**
+            build/Testing/Temporary/**
+            build/build-capabilities-*.json
+          if-no-files-found: warn
+          retention-days: 14

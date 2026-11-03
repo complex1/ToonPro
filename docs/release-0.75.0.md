@@ -39,3 +39,11 @@ The historical archive is `dist/0.75.0/linux-x86_64/ToonPro-0.75.0-linux-x86_64.
 ## Remaining acceptance
 
 Windows full-suite/package checks and Intel blockers must be resolved before offering those downloads. Physical Huion feel, production-project testing, baseline OS installations, signing/notarization, application distribution terms and final dependency/replacement review remain open. No public production-readiness claim is made. Use the [acceptance checklist](release-acceptance.md) for hands-on testing.
+
+## Focused Windows follow-up prepared
+
+The next native probe tests a bounded two-block feed for very short AAC inputs and an MP4 presentation-duration correction that preserves encoder priming and the selected source range. Missing audio fails before publishing the destination. Four Mac media suites pass; strengthened cases cover audible stereo onset/end, near-zero decoded start timestamps, tight short presentation duration and the 1024/2000/2048/4000-sample boundaries. These checks do not establish native Windows success.
+
+External model resources now compare Qt canonical paths with the same slash convention on every platform, retaining sibling-folder escape rejection. The scene suite passes on Mac. Scrub scheduling now samples elapsed time once and has deterministic checks on either side of the 30 ms boundary; three affected Mac suites, 11 Retina checks and 80 repeated deadline cases pass. Original brush settings, shape, masks and alpha remain exact; a compressed reference verified against all 112 immutable original hashes permits only tightly bounded RGB rounding variation in colored stamps. The revised catalog suite passes on Mac; actual Windows deviations will be captured for review.
+
+The isolated Windows probe compiles the production exporter and runs real encode/decode plus resource/recipe checks, retaining MP4, PCM and diagnostic logs. A final guard uses actual step outcomes, and this workflow cannot package or publish an application. Full Windows validation and packaged-runtime checks are still required after the probe passes.

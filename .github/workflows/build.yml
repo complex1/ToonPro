@@ -2,6 +2,7 @@ name: Desktop release candidates
 
 on:
   push:
+    branches-ignore: ['codex/media-probe-*']
     paths:
       - 'src/**'
       - 'include/**'

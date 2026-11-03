@@ -374,6 +374,13 @@ if(BUILD_TESTING)
         add_test(NAME ${video_suite} COMMAND toon_${video_suite}_tests -platform offscreen)
         set_tests_properties(${video_suite} PROPERTIES TIMEOUT 180)
     endforeach()
+    # Focused codec diagnostics compile the production exporter and its full
+    # regression suite without the unrelated workspace/UI translation units.
+    # This target is never part of the application or the default test build.
+    qt_add_executable(toon_video_export_probe EXCLUDE_FROM_ALL
+        tests/video_export_tests.cpp src/video_export.cpp src/video_export.h)
+    target_link_libraries(toon_video_export_probe PRIVATE
+        toon_core Qt6::Widgets Qt6::Multimedia Qt6::Test)
     foreach(audio_suite audio audio_storage audio_finishing)
         qt_add_executable(toon_${audio_suite}_tests tests/${audio_suite}_tests.cpp)
         target_link_libraries(toon_${audio_suite}_tests PRIVATE toon_core Qt6::Widgets Qt6::Test)
