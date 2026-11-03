@@ -7,7 +7,7 @@ Updated 4 November 2026. The current release scope is **Windows and macOS**; Lin
 | Platform | Result | Package |
 | --- | --- | --- |
 | Apple Silicon Mac | Verified Release build, ad-hoc signed; native Cocoa and offscreen 2× checks pass, including 3D and media export. Mounted DMG installation-copy checks pass. | `dist/0.75.0/macos-arm64/` ZIP and DMG |
-| Windows x86_64 | App and all test targets compile. All seven focused Windows suites pass, including short AAC export. The complete 246-suite run is in progress. | Withheld until full tests and packaged runtime pass |
+| Windows x86_64 | App and all test targets compile. Latest full run: **242/246 suites pass**. Short AAC export, one brush snapshot, audio-scrub timing and external 3D resource paths still fail. | Withheld until full tests and packaged runtime pass |
 | Intel Mac | Cross-compiled; intermittent SIGILL during AAC export under Rosetta, including a copied DMG installation. Many checks pass, but this does not resolve the crash. | Withheld; original logs preserved |
 
 3D rendering currently ships only on Apple Silicon Mac. Other targets report it unavailable. Mac deployment target is 13.0. These targets do not imply testing on every supported OS release.
@@ -18,7 +18,8 @@ Updated 4 November 2026. The current release scope is **Windows and macOS**; Lin
 - Packaging: **36/36 Python tests** pass (`build/release-075-windows-font-env-tests.log`).
 - Each packaged smoke run performs 20 checks: project save/reopen, drawings/Undo, icons and brush resources, Movie review, WAV export, actual H.264/AAC export and decode, and supported 3D rendering or its explicit unavailable state.
 - Mac final DMG copy: native Cocoa, all 20 checks, strict signature verification and no SDK/Homebrew library loads. ZIP integrity and matching executable checks pass. Evidence: `dist/0.75.0/macos-arm64/verification/dmg-installed-native/`.
-- Windows first full run: 195/246 suites passed. Later diagnostics confirmed the font and save fixes and exposed dropped audio on a 59.94 FPS single-frame clip with the Windows AAC encoder. A bounded silent tail for inputs shorter than one AAC block preserves the selected source range. All seven diagnostics now pass on native Windows, including the short-AAC regressions; [run 41692948278](https://github.com/complex1/ToonPro/actions/runs/41692948278) is running the full suite. Original failure logs remain under `build/release-075-windows-run*.log`.
+- Windows first full run: 195/246 suites passed. [Run 41692948278](https://github.com/complex1/ToonPro/actions/runs/41692948278) improves this to **242/246** after font/save fixes. Six of seven diagnostic suites pass. Padding very short audio to one AAC block does **not** resolve the Windows encoder's missing audio track; five short-audio cases still fail. The other remaining failures are the `painted-pebble` macOS snapshot hash, an audio-scrub test observing four grains instead of three, and valid external 3D resources rejected by the source-folder check. No Windows package was produced. Full assertions are preserved in `build/release-075-windows-run5.log` and the run's diagnostic artifact.
+- An earlier intermediate report incorrectly interpreted GitHub's `continue-on-error` step conclusion as a passing diagnostic result. The full job log and explicit packaging guard are authoritative; the failed candidate was withheld.
 
 ## Current artifact hashes
 

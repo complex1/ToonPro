@@ -12,7 +12,7 @@ The scripts stage the native application, Qt libraries/plugins, matching FFmpeg 
 | --- | --- | --- | --- |
 | macOS arm64, deployment target 13.0 | ZIP and optional DMG | Filament 1.78.0 / Metal | 0.75.0 package passed all 20 checks in offscreen 2× and native Cocoa modes. A copy from the mounted DMG also passed the native checks. |
 | macOS x86_64, deployment target 13.0 | ZIP and optional DMG | Unavailable in this build | Cross-compiled; intermittent AAC export crashes under Rosetta. Artifact withheld pending diagnosis and actual Intel acceptance. |
-| Windows x86_64, MSVC 2022 | Portable ZIP | Unavailable in this build | Application and all test targets compile in native Windows CI. All seven focused suites pass after save/font/short-AAC fixes. Full 246-suite validation is running; packages remain withheld. |
+| Windows x86_64, MSVC 2022 | Portable ZIP | Unavailable in this build | Application and all test targets compile in native Windows CI. Latest full run: 242/246 suites pass; six of seven diagnostics pass. Short AAC export, a brush snapshot, audio-scrub timing and external resource paths remain unresolved. No Windows package was produced. |
 
 These are build targets and recorded results, not a claim of testing every OS version. The verified Apple Silicon artifacts are in `dist/0.75.0/macos-arm64/`. Their exact sizes, hashes, capabilities and checks are in `package.json`, `SHA256SUMS` and `verification/package-verification.json`. The current Mac candidate has an **ad-hoc signature**, with no Developer ID signature or notarization. Clean-machine installation and physical Huion acceptance remain separate checks.
 
