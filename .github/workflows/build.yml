@@ -128,7 +128,12 @@ jobs:
           fi
           xvfb-run -a -s "-screen 0 1600x1200x24" ctest --test-dir build -C Release --output-on-failure --parallel 2
       - name: Diagnose Windows save and workspace flows
+        id: windows-diagnostics
         if: runner.os == 'Windows'
+        # Continue collecting the full suite's evidence after a diagnostic
+        # failure. The explicit gate below still makes the job fail and
+        # prevents packaging; no failed check is ignored for distribution.
+        continue-on-error: true
         shell: pwsh
         run: |
           $env:PATH = "${{ github.workspace }}\.deps\Qt\6.10.3\msvc2022_64\bin;$env:PATH"
@@ -153,6 +158,12 @@ jobs:
           $env:QT_FORCE_STDERR_LOGGING = '1'
           ctest --test-dir build -C Release --output-on-failure --parallel 2
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Require successful Windows diagnostics before packaging
+        if: always() && runner.os == 'Windows' && steps.windows-diagnostics.outcome == 'failure'
+        shell: pwsh
+        run: |
+          Write-Error 'Windows diagnostics failed. Full-suite results were collected, but this candidate cannot be packaged.'
+          exit 1
       - name: Check packaging scripts
         run: python -m unittest discover -s tests -p test_packaging_scripts.py
       # Packages are produced only after tests, through a deliberate manual

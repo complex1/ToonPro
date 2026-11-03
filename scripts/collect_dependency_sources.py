@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path, PurePosixPath
 import shutil
 import sys
@@ -72,9 +73,10 @@ def download_source(cache: Path, name: str, revision: str, expected: str) -> tup
     url = f"https://codeload.github.com/{owner}/{name}/tar.gz/{reference}"
     if not path.exists() and not path.is_symlink():
         request = urllib.request.Request(url, headers={"User-Agent": "ToonPro-dependency-sources/1"})
-        with tempfile.NamedTemporaryFile(dir=cache, suffix=".download", delete=False) as temporary:
-            temporary_path = Path(temporary.name)
-            try:
+        temporary_path = None
+        try:
+            with tempfile.NamedTemporaryFile(dir=cache, suffix=".download", delete=False) as temporary:
+                temporary_path = Path(temporary.name)
                 with urllib.request.urlopen(request, timeout=60) as response:
                     if not response.geturl().startswith("https://"):
                         raise RuntimeError("Source download redirected away from HTTPS")
@@ -84,10 +86,17 @@ def download_source(cache: Path, name: str, revision: str, expected: str) -> tup
                         if size > MAX_ARCHIVE_BYTES:
                             raise RuntimeError("Source archive exceeds download limit")
                         temporary.write(block)
-                temporary.flush()
-                validate_archive(temporary_path, name, revision, expected)
-                temporary_path.replace(path)
-            finally:
+            # Windows prevents renaming/removing a NamedTemporaryFile while its
+            # handle is open. Close it before validation, publication or cleanup.
+            validate_archive(temporary_path, name, revision, expected)
+            try:
+                # The cache and temporary file share a filesystem. Publish only
+                # if absent, then validate any file another collector won with.
+                os.link(temporary_path, path)
+            except FileExistsError:
+                pass
+        finally:
+            if temporary_path is not None:
                 temporary_path.unlink(missing_ok=True)
     validate_archive(path, name, revision, expected)
     return path, url

@@ -8,7 +8,7 @@ Updated 3 November 2026. Current implementation: **0.75.0** Scene/Movie playback
 - [x] Package Qt/FFmpeg dependencies, notices, SHA-256 manifests and isolated runtime verification; provide optional Mac DMG/signing/notarization controls.
 - [x] Verify the macOS arm64 candidate's drawing/save/reopen, movie review, audio/video and 3D rendering from a relocated installation.
 - [x] Collect and verify matching Mac and Linux SDK dependency sources plus the Linux software-codec sources and build recipe.
-- [x] Pass all 247 Mac regression suites and 31 packaging-script checks after the save/export fixes.
+- [x] Pass all 247 Mac regression suites and 36 packaging/source-script checks after the save/export fixes.
 - [x] Verify the Linux candidate with software H.264/AAC in relocated offscreen and native XCB checks.
 - [ ] Complete Windows native CI after save-file and offscreen-font fixes; keep failed packages withheld.
 - [ ] Resolve intermittent Intel Mac AAC export crashes and validate on actual Intel hardware.

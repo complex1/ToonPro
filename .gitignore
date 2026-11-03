@@ -4,6 +4,8 @@
 /dist/
 /.cache/
 *.user
+__pycache__/
+*.py[cod]
 .DS_Store
 /aqtinstall.log
 

@@ -1,11 +1,14 @@
 """Unit checks for packaging boundaries; native runtime smokes run separately."""
 import importlib.util
+import hashlib
+import io
 import json
 import os
 from pathlib import Path
 import struct
 import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
 from unittest import mock
@@ -55,6 +58,77 @@ def pe_runtime(path, imports=(), delayed=()):
 
 
 class PackageScriptTests(unittest.TestCase):
+    def source_archive(self):
+        stream = io.BytesIO()
+        with tarfile.open(fileobj=stream, mode="w:gz") as archive:
+            for index in range(20):
+                data = b"source fixture\n"
+                info = tarfile.TarInfo(f"fixture-revision/source-{index}.cpp")
+                info.size = len(data)
+                archive.addfile(info, io.BytesIO(data))
+        data = stream.getvalue()
+        return data, hashlib.sha256(data).hexdigest()
+
+    def source_response(self, data):
+        response = io.BytesIO(data)
+        response.geturl = lambda: "https://upstream.example/fixture.tar.gz"
+        return response
+
+    def test_source_download_closes_handle_before_validation_and_publication(self):
+        data, expected = self.source_archive()
+        with tempfile.TemporaryDirectory() as temporary:
+            cache = Path(temporary)
+            handles = []
+            factory, validate = tempfile.NamedTemporaryFile, sources.validate_archive
+            def create_file(*args, **kwargs):
+                handle = factory(*args, **kwargs)
+                handles.append(handle)
+                return handle
+            def validate_closed(*args):
+                self.assertTrue(handles and all(handle.closed for handle in handles))
+                return validate(*args)
+            with mock.patch.object(sources.urllib.request, "urlopen", return_value=self.source_response(data)) as download, \
+                 mock.patch.object(sources.tempfile, "NamedTemporaryFile", side_effect=create_file), \
+                 mock.patch.object(sources, "validate_archive", side_effect=validate_closed):
+                path, url = sources.download_source(cache, "fixture", "revision", expected)
+                self.assertEqual(path.read_bytes(), data)
+                self.assertTrue(url.startswith("https://"))
+                self.assertEqual(list(cache.iterdir()), [path])
+                self.assertEqual(sources.download_source(cache, "fixture", "revision", expected)[0], path)
+                download.assert_called_once()
+
+    def test_source_download_failures_clean_temporary_files(self):
+        data, expected = self.source_archive()
+        for failure in ("checksum", "read", "size"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temporary:
+                cache = Path(temporary)
+                response = self.source_response(data)
+                if failure == "read":
+                    response.read = mock.Mock(side_effect=OSError("download interrupted"))
+                with mock.patch.object(sources.urllib.request, "urlopen", return_value=response), \
+                     mock.patch.object(sources, "MAX_ARCHIVE_BYTES", 4 if failure == "size" else sources.MAX_ARCHIVE_BYTES):
+                    with self.assertRaises((RuntimeError, OSError)):
+                        sources.download_source(cache, "fixture", "revision", "0" * 64 if failure == "checksum" else expected)
+                self.assertEqual(list(cache.iterdir()), [])
+
+    def test_source_download_never_replaces_existing_or_competing_cache_file(self):
+        data, expected = self.source_archive()
+        for competing in (False, True):
+            with self.subTest(competing=competing), tempfile.TemporaryDirectory() as temporary:
+                cache = Path(temporary)
+                destination = cache / "fixture-revision.tar.gz"
+                def download(*args, **kwargs):
+                    destination.write_bytes(b"preserve competing cache file")
+                    return self.source_response(data)
+                if not competing:
+                    destination.write_bytes(b"preserve existing cache file")
+                with mock.patch.object(sources.urllib.request, "urlopen", side_effect=download) as request:
+                    with self.assertRaisesRegex(RuntimeError, "SHA-256 mismatch"):
+                        sources.download_source(cache, "fixture", "revision", expected)
+                self.assertEqual(destination.read_bytes(), b"preserve competing cache file" if competing else b"preserve existing cache file")
+                self.assertEqual(request.call_count, int(competing))
+                self.assertEqual(list(cache.iterdir()), [destination])
+
     def test_linux_codec_metadata_keeps_build_provenance_and_final_hashes_separate(self):
         with tempfile.TemporaryDirectory() as temporary:
             stage = Path(temporary)
@@ -361,6 +435,33 @@ class PackageScriptTests(unittest.TestCase):
             self.assertEqual(verify.linux_dependencies(Path("ToonPro"), {}), [
                 {"name": "libQt6Core.so.6", "path": "/sdk/lib/libQt6Core.so.6"},
                 {"name": "libmissing.so", "path": None}])
+
+    def test_windows_offscreen_uses_os_fonts_and_removes_sdk_overrides(self):
+        for key in ("SystemRoot", "SYSTEMROOT", "systemroot"):
+            with self.subTest(key=key), mock.patch.object(verify.platform, "system", return_value="Windows"), \
+                 mock.patch.dict(os.environ, {key: r"D:\OperatingSystem", "QT_QPA_FONTDIR": r"E:\Qt\fonts",
+                     "QT_PLUGIN_PATH": r"E:\Qt\plugins", "QT_QPA_PLATFORM": "minimal",
+                     "PATH": r"E:\Qt\bin", "TOON_UNRELATED": "preserved"}, clear=True):
+                environment = verify.clean_environment(True, True)
+            self.assertEqual(environment["QT_QPA_FONTDIR"], str(Path(r"D:\OperatingSystem") / "Fonts"))
+            self.assertEqual(environment["PATH"], os.pathsep.join([
+                str(Path(r"D:\OperatingSystem") / "System32"), r"D:\OperatingSystem"]))
+            self.assertEqual(environment["QT_QPA_PLATFORM"], "offscreen")
+            self.assertEqual(environment["QT_SCALE_FACTOR"], "2")
+            self.assertNotIn("QT_PLUGIN_PATH", environment)
+            self.assertNotIn(r"E:\Qt", "\n".join(environment.values()))
+            self.assertEqual(environment["TOON_UNRELATED"], "preserved")
+
+    def test_windows_native_does_not_inherit_offscreen_or_font_overrides(self):
+        with mock.patch.object(verify.platform, "system", return_value="Windows"), \
+             mock.patch.dict(os.environ, {"SYSTEMROOT": r"D:\OperatingSystem",
+                 "QT_QPA_PLATFORM": "offscreen", "QT_QPA_FONTDIR": r"E:\Qt\fonts",
+                 "QT_SCALE_FACTOR": "4"}, clear=True):
+            environment = verify.clean_environment(False, False)
+        self.assertNotIn("QT_QPA_FONTDIR", environment)
+        self.assertNotIn("QT_QPA_PLATFORM", environment)
+        self.assertNotIn("QT_SCALE_FACTOR", environment)
+        self.assertEqual(environment["QT_MEDIA_BACKEND"], "ffmpeg")
 
     def test_clean_environment_cannot_inherit_loader_injection(self):
         with mock.patch.dict(os.environ, {"LD_PRELOAD": "/bad/preload.so", "LD_LIBRARY_PATH": "/sdk/lib",

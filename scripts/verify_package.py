@@ -258,8 +258,13 @@ def clean_environment(offscreen: bool, high_dpi: bool) -> dict[str, str]:
                    if not key.startswith(("QT_", "QML", "DYLD_", "LD_"))
                    and key not in {"QTDIR", "Qt6_DIR", "CMAKE_PREFIX_PATH"}}
     if platform.system() == "Windows":
-        windows = environment.get("SystemRoot", r"C:\Windows")
+        windows = next((value for key, value in environment.items()
+                        if key.casefold() == "systemroot"), r"C:\Windows")
         environment["PATH"] = os.pathsep.join([str(Path(windows) / "System32"), windows])
+        if offscreen:
+            # Offscreen has no Windows font discovery. Use only OS fonts,
+            # never an inherited Qt SDK font-directory override.
+            environment["QT_QPA_FONTDIR"] = str(Path(windows) / "Fonts")
     else:
         environment["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin"
         if platform.system() == "Darwin":

@@ -48,6 +48,7 @@ QAudioFormat exportAudioFormat() {
 }
 constexpr qint64 streamLeadUSecs = 250000;
 constexpr int audioChunkSamples = 2048;
+constexpr int minimumAacSamples = 1024;
 constexpr int stallTimeoutMSecs = 60000;
 constexpr qint64 singleFrameBufferLimit = 80 * 1024 * 1024;
 
@@ -294,15 +295,21 @@ private:
             const auto count = std::min<qint64>(audioChunkSamples, m_totalSamples - m_sentSamples);
             // AudioMixStream intentionally produces silence forever for live playback;
             // this explicit cap gives offline export exactly the selected sample range.
-            const auto bytes = m_mix->read(count * audioBytesPerSampleFrame);
+            auto bytes = m_mix->read(count * audioBytesPerSampleFrame);
             if (bytes.size() != count * audioBytesPerSampleFrame) {
                 requestStop(VideoExportOutcome::Failed, "The audio mix ended unexpectedly."); return;
             }
+            // Media Foundation AAC can drain without producing a packet when
+            // the entire input is shorter than its 1024-sample output block.
+            // Supply only a bounded silent tail, never audio beyond the range.
+            if (m_totalSamples < minimumAacSamples)
+                bytes.append(QByteArray((minimumAacSamples - count) * audioBytesPerSampleFrame, '\0'));
             m_pendingAudio = QAudioBuffer(bytes, m_audioFormat, m_sentSamples * 1000000 / audioSampleRate);
             if (!m_pendingAudio.isValid()) { requestStop(VideoExportOutcome::Failed, "Could not prepare audio for the encoder."); return; }
         }
         if (!m_audioInput->sendAudioBuffer(m_pendingAudio)) { m_audioReady = false; return; }
-        m_sentSamples += m_pendingAudio.frameCount();
+        // Count selected source samples, excluding any encoder-only silence.
+        m_sentSamples += std::min<qint64>(m_pendingAudio.frameCount(), m_totalSamples - m_sentSamples);
         m_pendingAudio = {};
         m_activity.restart();
     }
