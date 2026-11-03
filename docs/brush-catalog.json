@@ -1,0 +1,4385 @@
+{
+  "title": "Original anime brush catalog",
+  "date": "2026-10-31",
+  "status": "200 built-in catalog defaults; artistic and physical Huion acceptance pending",
+  "baseline": "Toon Pro 0.49.0",
+  "builtin_recipe_revision": 4,
+  "planned_count": 200,
+  "pilot_count": 32,
+  "capability_definitions": {
+    "multi-tip": "Tip sets with deterministic random, ordered and no-immediate-repeat selection",
+    "anchors": "Per-tip root/baseline anchors and orientation constraints",
+    "large-tip": "Painting beyond the current 256 px nominal limit with bounded caching and benchmarks",
+    "distribution": "Independent radial/angular spray distribution controls",
+    "segment-repeat": "Length-aware fitted repeats and stable phase along a path",
+    "ribbon": "Continuous path-deformed segments with joined ends",
+    "color-pattern": "Full-color tiled pattern painting rather than alpha modulation",
+    "perspective-pattern": "Pattern mapping over an explicit perspective plane",
+    "tone": "Independent tone frequency, density, angle and export-aware scaling",
+    "color-stamp-tint": "Opt-in tint/color variation for source-colored RGBA stamps",
+    "speed": "Validated speed sensor with event-rate-independent response"
+  },
+  "brushes": [
+    {
+      "id": "planned/clean-contour",
+      "name": "Clean Contour",
+      "family": "Line art and ink",
+      "behavior": "Pen",
+      "purpose": "Steady outer contours for character cleanup",
+      "dynamics": "Pressure size; pressure flow; optional stabilization",
+      "tags": [
+        "Line art and ink",
+        "Pen"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/clean-contour",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/tapered-hairline",
+      "name": "Tapered Hairline",
+      "family": "Line art and ink",
+      "behavior": "Pen",
+      "purpose": "Fine to broad hair contours with controlled ends",
+      "dynamics": "Pressure size; pressure flow; optional stabilization",
+      "tags": [
+        "Line art and ink",
+        "Pen"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/tapered-hairline",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/fine-facial-detail",
+      "name": "Fine Facial Detail",
+      "family": "Line art and ink",
+      "behavior": "Pen",
+      "purpose": "Small eyes noses and mouth marks",
+      "dynamics": "Pressure size; pressure flow; optional stabilization",
+      "tags": [
+        "Line art and ink",
+        "Pen"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/fine-facial-detail",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/cloth-crease",
+      "name": "Cloth Crease",
+      "family": "Line art and ink",
+      "behavior": "Pen",
+      "purpose": "Controlled thin folds with firm starts",
+      "dynamics": "Pressure size; pressure flow; optional stabilization",
+      "tags": [
+        "Line art and ink",
+        "Pen"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/cloth-crease",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/dry-manga-nib",
+      "name": "Dry Manga Nib",
+      "family": "Line art and ink",
+      "behavior": "Ink",
+      "purpose": "Broken edges for expressive ink accents",
+      "dynamics": "Pressure size; pressure flow; optional stabilization",
+      "tags": [
+        "Line art and ink",
+        "Ink"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/dry-manga-nib",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/bold-silhouette",
+      "name": "Bold Silhouette",
+      "family": "Line art and ink",
+      "behavior": "Ink",
+      "purpose": "Opaque shapes and large ink accents",
+      "dynamics": "Pressure size; pressure flow; optional stabilization",
+      "tags": [
+        "Line art and ink",
+        "Ink"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/bold-silhouette",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/delicate-eyelash",
+      "name": "Delicate Eyelash",
+      "family": "Line art and ink",
+      "behavior": "Pen",
+      "purpose": "Fine tapered lashes and short flicks",
+      "dynamics": "Pressure size; pressure flow; optional stabilization",
+      "tags": [
+        "Line art and ink",
+        "Pen"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/delicate-eyelash",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/hair-ribbon-ink",
+      "name": "Hair Ribbon Ink",
+      "family": "Line art and ink",
+      "behavior": "Ink",
+      "purpose": "Broad flat hair highlights and dark strands",
+      "dynamics": "Pressure size; pressure flow; optional stabilization",
+      "tags": [
+        "Line art and ink",
+        "Ink"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/hair-ribbon-ink",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/brush-letter-ink",
+      "name": "Brush Letter Ink",
+      "family": "Line art and ink",
+      "behavior": "Ink",
+      "purpose": "Expressive pressure nib for hand lettering",
+      "dynamics": "Pressure size; pressure flow; optional stabilization",
+      "tags": [
+        "Line art and ink",
+        "Ink"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/brush-letter-ink",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/round-detail-mono",
+      "name": "Round Detail Mono",
+      "family": "Line art and ink",
+      "behavior": "Pen",
+      "purpose": "Consistent width for props and small details",
+      "dynamics": "Fixed size; constant opacity; optional stabilization",
+      "tags": [
+        "Line art and ink",
+        "Pen"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/round-detail-mono",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/angular-prop-ink",
+      "name": "Angular Prop Ink",
+      "family": "Line art and ink",
+      "behavior": "Ink",
+      "purpose": "Square-ended marks for mechanical props",
+      "dynamics": "Pressure size; pressure flow; optional stabilization",
+      "tags": [
+        "Line art and ink",
+        "Ink"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/angular-prop-ink",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/rough-contour",
+      "name": "Rough Contour",
+      "family": "Line art and ink",
+      "behavior": "Ink",
+      "purpose": "Controlled edge breakup on rough characters",
+      "dynamics": "Pressure size; pressure flow; optional stabilization",
+      "tags": [
+        "Line art and ink",
+        "Ink"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/rough-contour",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/fine-scratch-ink",
+      "name": "Fine Scratch Ink",
+      "family": "Line art and ink",
+      "behavior": "Ink",
+      "purpose": "Thin scratch marks inside dark shapes",
+      "dynamics": "Pressure size; pressure flow; optional stabilization",
+      "tags": [
+        "Line art and ink",
+        "Ink"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/fine-scratch-ink",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/foliage-ink",
+      "name": "Foliage Ink",
+      "family": "Line art and ink",
+      "behavior": "Ink",
+      "purpose": "Directional broken strokes for leaf outlines",
+      "dynamics": "Pressure size; pressure flow; optional stabilization",
+      "tags": [
+        "Line art and ink",
+        "Ink"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/foliage-ink",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/fabric-edge-ink",
+      "name": "Fabric Edge Ink",
+      "family": "Line art and ink",
+      "behavior": "Ink",
+      "purpose": "Dry narrow marks for frayed seams",
+      "dynamics": "Pressure size; pressure flow; optional stabilization",
+      "tags": [
+        "Line art and ink",
+        "Ink"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/fabric-edge-ink",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/calligraphic-accent",
+      "name": "Calligraphic Accent",
+      "family": "Line art and ink",
+      "behavior": "Ink",
+      "purpose": "Flat-angle thick and thin accents",
+      "dynamics": "Pressure size; pressure flow; optional stabilization",
+      "tags": [
+        "Line art and ink",
+        "Ink"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/calligraphic-accent",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/heavy-brush-accent",
+      "name": "Heavy Brush Accent",
+      "family": "Line art and ink",
+      "behavior": "Ink",
+      "purpose": "Weighted strokes for emphasis and impact",
+      "dynamics": "Pressure size; pressure flow; optional stabilization",
+      "tags": [
+        "Line art and ink",
+        "Ink"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/heavy-brush-accent",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/dry-edge-highlight",
+      "name": "Dry Edge Highlight",
+      "family": "Line art and ink",
+      "behavior": "Ink",
+      "purpose": "Foreground-colored broken highlight lines",
+      "dynamics": "Pressure size; pressure flow; optional stabilization",
+      "tags": [
+        "Line art and ink",
+        "Ink"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/dry-edge-highlight",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/construction-lead",
+      "name": "Construction Lead",
+      "family": "Sketch and dry media",
+      "behavior": "Pencil",
+      "purpose": "Light construction lines that build gradually",
+      "dynamics": "Pressure flow; pressure size; grain",
+      "tags": [
+        "Sketch and dry media",
+        "Pencil"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/construction-lead",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/rough-layout-pencil",
+      "name": "Rough Layout Pencil",
+      "family": "Sketch and dry media",
+      "behavior": "Pencil",
+      "purpose": "Broad grain for thumbnail layouts",
+      "dynamics": "Pressure flow; pressure size; grain",
+      "tags": [
+        "Sketch and dry media",
+        "Pencil"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/rough-layout-pencil",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/fine-layout-pencil",
+      "name": "Fine Layout Pencil",
+      "family": "Sketch and dry media",
+      "behavior": "Pencil",
+      "purpose": "Precise grain for perspective layouts",
+      "dynamics": "Pressure flow; pressure size; grain",
+      "tags": [
+        "Sketch and dry media",
+        "Pencil"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/fine-layout-pencil",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/soft-graphite-side",
+      "name": "Soft Graphite Side",
+      "family": "Sketch and dry media",
+      "behavior": "Pencil",
+      "purpose": "Broad tilt-responsive pencil shading",
+      "dynamics": "Tilt-responsive broad shading; pressure flow; grain",
+      "tags": [
+        "Sketch and dry media",
+        "Pencil"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/soft-graphite-side",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/broken-graphite",
+      "name": "Broken Graphite",
+      "family": "Sketch and dry media",
+      "behavior": "Pencil",
+      "purpose": "Interrupted grain for rough shading",
+      "dynamics": "Pressure flow; pressure size; grain",
+      "tags": [
+        "Sketch and dry media",
+        "Pencil"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/broken-graphite",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/graphite-hatching",
+      "name": "Graphite Hatching",
+      "family": "Sketch and dry media",
+      "behavior": "Pencil",
+      "purpose": "Fine repeated cross shading by hand",
+      "dynamics": "Pressure flow; pressure size; grain",
+      "tags": [
+        "Sketch and dry media",
+        "Pencil"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/graphite-hatching",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/powder-charcoal",
+      "name": "Powder Charcoal",
+      "family": "Sketch and dry media",
+      "behavior": "Dry paint",
+      "purpose": "Soft powdery shadow masses",
+      "dynamics": "Pressure flow; pressure size; grain",
+      "tags": [
+        "Sketch and dry media",
+        "Dry paint"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/powder-charcoal",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/charcoal-edge",
+      "name": "Charcoal Edge",
+      "family": "Sketch and dry media",
+      "behavior": "Dry paint",
+      "purpose": "Sharp broken charcoal edges",
+      "dynamics": "Pressure flow; pressure size; grain",
+      "tags": [
+        "Sketch and dry media",
+        "Dry paint"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/charcoal-edge",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/chalk-block",
+      "name": "Chalk Block",
+      "family": "Sketch and dry media",
+      "behavior": "Dry paint",
+      "purpose": "Flat matte shapes with grain",
+      "dynamics": "Pressure flow; pressure size; grain",
+      "tags": [
+        "Sketch and dry media",
+        "Dry paint"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/chalk-block",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/chalk-detail",
+      "name": "Chalk Detail",
+      "family": "Sketch and dry media",
+      "behavior": "Dry paint",
+      "purpose": "Small chalk accents and highlights",
+      "dynamics": "Pressure flow; pressure size; grain",
+      "tags": [
+        "Sketch and dry media",
+        "Dry paint"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/chalk-detail",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/dry-pastel",
+      "name": "Dry Pastel",
+      "family": "Sketch and dry media",
+      "behavior": "Dry paint",
+      "purpose": "Layered grain for painterly background accents",
+      "dynamics": "Pressure flow; pressure size; grain",
+      "tags": [
+        "Sketch and dry media",
+        "Dry paint"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/dry-pastel",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/cont-accent",
+      "name": "Conté Accent",
+      "family": "Sketch and dry media",
+      "behavior": "Dry paint",
+      "purpose": "Dense narrow dry marks for structure",
+      "dynamics": "Pressure flow; pressure size; grain",
+      "tags": [
+        "Sketch and dry media",
+        "Dry paint"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/cont-accent",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/velvet-shade",
+      "name": "Velvet Shade",
+      "family": "Soft paint and spray",
+      "behavior": "Soft paint",
+      "purpose": "Smooth low-flow shading without visible stamp edges",
+      "dynamics": "Pressure flow; bounded scatter; size variation",
+      "tags": [
+        "Soft paint and spray",
+        "Soft paint",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/velvet-shade",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/edge-glaze",
+      "name": "Edge Glaze",
+      "family": "Soft paint and spray",
+      "behavior": "Soft paint",
+      "purpose": "Soft glazing placed by the artist along an edge or within a selection",
+      "dynamics": "Pressure flow; bounded scatter; size variation",
+      "tags": [
+        "Soft paint and spray",
+        "Soft paint",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/edge-glaze",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/fine-aerosol",
+      "name": "Fine Aerosol",
+      "family": "Soft paint and spray",
+      "behavior": "Airbrush",
+      "purpose": "Fine mist with gradual stationary buildup",
+      "dynamics": "Pressure flow; bounded scatter; size variation",
+      "tags": [
+        "Soft paint and spray",
+        "Airbrush",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/fine-aerosol",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/granular-spray",
+      "name": "Granular Spray",
+      "family": "Soft paint and spray",
+      "behavior": "Spray",
+      "purpose": "Separated small grain with restrained density",
+      "dynamics": "Pressure flow; bounded scatter; size variation",
+      "tags": [
+        "Soft paint and spray",
+        "Spray",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/granular-spray",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/soft-oval",
+      "name": "Soft Oval",
+      "family": "Soft paint and spray",
+      "behavior": "Soft paint",
+      "purpose": "Directional elongated soft shading",
+      "dynamics": "Pressure flow; bounded scatter; size variation",
+      "tags": [
+        "Soft paint and spray",
+        "Soft paint",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/soft-oval",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/broad-light-wash",
+      "name": "Broad Light Wash",
+      "family": "Soft paint and spray",
+      "behavior": "Soft paint",
+      "purpose": "Transparent light masses built with overlapping strokes",
+      "dynamics": "Pressure flow; bounded scatter; size variation",
+      "tags": [
+        "Soft paint and spray",
+        "Soft paint",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/broad-light-wash",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/soft-rim-light",
+      "name": "Soft Rim Light",
+      "family": "Soft paint and spray",
+      "behavior": "Soft paint",
+      "purpose": "Small soft highlight accents along edges",
+      "dynamics": "Pressure flow; bounded scatter; size variation",
+      "tags": [
+        "Soft paint and spray",
+        "Soft paint",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/soft-rim-light",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/dense-airbrush",
+      "name": "Dense Airbrush",
+      "family": "Soft paint and spray",
+      "behavior": "Airbrush",
+      "purpose": "Faster buildup for blocked soft shadows",
+      "dynamics": "Pressure flow; bounded scatter; size variation",
+      "tags": [
+        "Soft paint and spray",
+        "Airbrush",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/dense-airbrush",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/dusty-spray",
+      "name": "Dusty Spray",
+      "family": "Soft paint and spray",
+      "behavior": "Spray",
+      "purpose": "Uneven dry particles with soft aggregate edges",
+      "dynamics": "Pressure flow; bounded scatter; size variation",
+      "tags": [
+        "Soft paint and spray",
+        "Spray",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/dusty-spray",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/coarse-spatter",
+      "name": "Coarse Spatter",
+      "family": "Soft paint and spray",
+      "behavior": "Spray",
+      "purpose": "Opaque irregular paint flecks",
+      "dynamics": "Pressure flow; bounded scatter; size variation",
+      "tags": [
+        "Soft paint and spray",
+        "Spray",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/coarse-spatter",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/needle-spatter",
+      "name": "Needle Spatter",
+      "family": "Soft paint and spray",
+      "behavior": "Spray",
+      "purpose": "Thin directional flecks for energetic marks",
+      "dynamics": "Pressure flow; bounded scatter; size variation",
+      "tags": [
+        "Soft paint and spray",
+        "Spray",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/needle-spatter",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/fine-pollen",
+      "name": "Fine Pollen",
+      "family": "Soft paint and spray",
+      "behavior": "Spray",
+      "purpose": "Sparse small particles for backlit atmosphere",
+      "dynamics": "Pressure flow; bounded scatter; size variation",
+      "tags": [
+        "Soft paint and spray",
+        "Spray",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/fine-pollen",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/soft-grain-glaze",
+      "name": "Soft Grain Glaze",
+      "family": "Soft paint and spray",
+      "behavior": "Soft paint",
+      "purpose": "Low contrast grain inside soft paint",
+      "dynamics": "Pressure flow; bounded scatter; size variation",
+      "tags": [
+        "Soft paint and spray",
+        "Soft paint",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/soft-grain-glaze",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/clustered-aerosol",
+      "name": "Clustered Aerosol",
+      "family": "Soft paint and spray",
+      "behavior": "Spray",
+      "purpose": "Particle density controlled by a radial distribution",
+      "dynamics": "Pressure flow; bounded scatter; size variation",
+      "tags": [
+        "Soft paint and spray",
+        "Spray",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "distribution"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 4,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/clustered-aerosol",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/short-grass-tuft",
+      "name": "Short Grass Tuft",
+      "family": "Grass and ground cover",
+      "behavior": "Stamp",
+      "purpose": "One compact upright grass silhouette",
+      "dynamics": "Per-dab size, angle and subtle color variation; pressure flow",
+      "tags": [
+        "Grass and ground cover",
+        "Stamp",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/short-grass-tuft",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/wind-grass",
+      "name": "Wind Grass",
+      "family": "Grass and ground cover",
+      "behavior": "Stamp",
+      "purpose": "One leaning grass tuft for directional placement",
+      "dynamics": "Per-dab size, angle and subtle color variation; pressure flow",
+      "tags": [
+        "Grass and ground cover",
+        "Stamp",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/wind-grass",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/clover-patch",
+      "name": "Clover Patch",
+      "family": "Grass and ground cover",
+      "behavior": "Stamp",
+      "purpose": "Small rounded ground-cover cluster",
+      "dynamics": "Per-dab size, angle and subtle color variation; pressure flow",
+      "tags": [
+        "Grass and ground cover",
+        "Stamp",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/clover-patch",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/moss-fringe",
+      "name": "Moss Fringe",
+      "family": "Grass and ground cover",
+      "behavior": "Texture brush",
+      "purpose": "Irregular edge for moss on stone or walls",
+      "dynamics": "Per-dab size, angle and subtle color variation; pressure flow",
+      "tags": [
+        "Grass and ground cover",
+        "Texture brush",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/moss-fringe",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/meadow-tuft-set",
+      "name": "Meadow Tuft Set",
+      "family": "Grass and ground cover",
+      "behavior": "Multi-tip",
+      "purpose": "Alternate several rooted grass silhouettes",
+      "dynamics": "Pressure size; bounded rotation; subtle color variation",
+      "tags": [
+        "Grass and ground cover",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip",
+        "anchors"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/meadow-tuft-set",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/tall-grass-set",
+      "name": "Tall Grass Set",
+      "family": "Grass and ground cover",
+      "behavior": "Multi-tip",
+      "purpose": "Tall grass with varied blades and coherent baseline",
+      "dynamics": "Pressure size; bounded rotation; subtle color variation",
+      "tags": [
+        "Grass and ground cover",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip",
+        "anchors"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/tall-grass-set",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/dry-grass-set",
+      "name": "Dry Grass Set",
+      "family": "Grass and ground cover",
+      "behavior": "Multi-tip",
+      "purpose": "Sparse dry stems in several silhouettes",
+      "dynamics": "Pressure size; bounded rotation; subtle color variation",
+      "tags": [
+        "Grass and ground cover",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip",
+        "anchors"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/dry-grass-set",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/reed-bed",
+      "name": "Reed Bed",
+      "family": "Grass and ground cover",
+      "behavior": "Multi-tip",
+      "purpose": "Upright wetland reeds with varied heads",
+      "dynamics": "Pressure size; bounded rotation; subtle color variation",
+      "tags": [
+        "Grass and ground cover",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip",
+        "anchors"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/reed-bed",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/wildflower-scatter",
+      "name": "Wildflower Scatter",
+      "family": "Grass and ground cover",
+      "behavior": "Multi-tip",
+      "purpose": "Several monochrome flower and stem tips",
+      "dynamics": "Pressure size; bounded rotation; subtle color variation",
+      "tags": [
+        "Grass and ground cover",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/wildflower-scatter",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/dandelion-heads",
+      "name": "Dandelion Heads",
+      "family": "Grass and ground cover",
+      "behavior": "Multi-tip",
+      "purpose": "Different seed-head shapes placed with bounded rotation",
+      "dynamics": "Pressure size; bounded rotation; subtle color variation",
+      "tags": [
+        "Grass and ground cover",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/dandelion-heads",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/fern-ground-cover",
+      "name": "Fern Ground Cover",
+      "family": "Grass and ground cover",
+      "behavior": "Multi-tip",
+      "purpose": "Several low fern silhouettes",
+      "dynamics": "Pressure size; bounded rotation; subtle color variation",
+      "tags": [
+        "Grass and ground cover",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/fern-ground-cover",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/weed-cracks",
+      "name": "Weed Cracks",
+      "family": "Grass and ground cover",
+      "behavior": "Multi-tip",
+      "purpose": "Small weeds rooted along pavement cracks",
+      "dynamics": "Pressure size; bounded rotation; subtle color variation",
+      "tags": [
+        "Grass and ground cover",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip",
+        "anchors"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/weed-cracks",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/leaf-litter",
+      "name": "Leaf Litter",
+      "family": "Grass and ground cover",
+      "behavior": "Multi-tip",
+      "purpose": "Several fallen leaf shapes with restrained color variation",
+      "dynamics": "Pressure size; bounded rotation; subtle color variation",
+      "tags": [
+        "Grass and ground cover",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/leaf-litter",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/ground-vine",
+      "name": "Ground Vine",
+      "family": "Grass and ground cover",
+      "behavior": "Ribbon",
+      "purpose": "Connected vine with leaf rhythm along a curve",
+      "dynamics": "Pressure size; bounded rotation; subtle color variation",
+      "tags": [
+        "Grass and ground cover",
+        "Ribbon",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "ribbon",
+        "multi-tip"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/ground-vine",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/snow-grass-fringe",
+      "name": "Snow Grass Fringe",
+      "family": "Grass and ground cover",
+      "behavior": "Multi-tip",
+      "purpose": "Grass protruding through a broken snow edge",
+      "dynamics": "Pressure size; bounded rotation; subtle color variation",
+      "tags": [
+        "Grass and ground cover",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip",
+        "anchors"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/snow-grass-fringe",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/trampled-grass",
+      "name": "Trampled Grass",
+      "family": "Grass and ground cover",
+      "behavior": "Multi-tip",
+      "purpose": "Low bent grass shapes for paths",
+      "dynamics": "Pressure size; bounded rotation; subtle color variation",
+      "tags": [
+        "Grass and ground cover",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip",
+        "anchors"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/trampled-grass",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/broadleaf-cluster",
+      "name": "Broadleaf Cluster",
+      "family": "Trees and foliage",
+      "behavior": "Stamp",
+      "purpose": "Single leaf cluster for building tree crowns",
+      "dynamics": "Per-dab size, angle and subtle color variation; pressure flow",
+      "tags": [
+        "Trees and foliage",
+        "Stamp",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/broadleaf-cluster",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/conifer-branch",
+      "name": "Conifer Branch",
+      "family": "Trees and foliage",
+      "behavior": "Stamp",
+      "purpose": "Single needle branch for layered conifers",
+      "dynamics": "Per-dab size, angle and subtle color variation; pressure flow",
+      "tags": [
+        "Trees and foliage",
+        "Stamp",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/conifer-branch",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/distant-canopy",
+      "name": "Distant Canopy",
+      "family": "Trees and foliage",
+      "behavior": "Stamp",
+      "purpose": "Small canopy silhouette for background tree masses",
+      "dynamics": "Per-dab size, angle and subtle color variation; pressure flow",
+      "tags": [
+        "Trees and foliage",
+        "Stamp",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/distant-canopy",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/bare-twig",
+      "name": "Bare Twig",
+      "family": "Trees and foliage",
+      "behavior": "Stamp",
+      "purpose": "One irregular branching twig for manual placement",
+      "dynamics": "Per-dab size, angle and subtle color variation; pressure flow",
+      "tags": [
+        "Trees and foliage",
+        "Stamp",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/bare-twig",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/broadleaf-crown-set",
+      "name": "Broadleaf Crown Set",
+      "family": "Trees and foliage",
+      "behavior": "Multi-tip",
+      "purpose": "Multiple large crown silhouettes for tree variety",
+      "dynamics": "Pressure size; restrained angle; stroke color variation",
+      "tags": [
+        "Trees and foliage",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip",
+        "large-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/broadleaf-crown-set",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/conifer-crown-set",
+      "name": "Conifer Crown Set",
+      "family": "Trees and foliage",
+      "behavior": "Multi-tip",
+      "purpose": "Large conifers with varied outlines and ground anchors",
+      "dynamics": "Pressure size; restrained angle; stroke color variation",
+      "tags": [
+        "Trees and foliage",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip",
+        "large-tip",
+        "anchors"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/conifer-crown-set",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/bare-tree-set",
+      "name": "Bare Tree Set",
+      "family": "Trees and foliage",
+      "behavior": "Multi-tip",
+      "purpose": "Large leafless silhouettes with different branching",
+      "dynamics": "Pressure size; restrained angle; stroke color variation",
+      "tags": [
+        "Trees and foliage",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip",
+        "large-tip",
+        "anchors"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/bare-tree-set",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/bamboo-leaf-set",
+      "name": "Bamboo Leaf Set",
+      "family": "Trees and foliage",
+      "behavior": "Multi-tip",
+      "purpose": "Different narrow leaf fans along branches",
+      "dynamics": "Pressure size; restrained angle; stroke color variation",
+      "tags": [
+        "Trees and foliage",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/bamboo-leaf-set",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/bamboo-trunks",
+      "name": "Bamboo Trunks",
+      "family": "Trees and foliage",
+      "behavior": "Repeat",
+      "purpose": "Upright segmented stalks aligned to a baseline",
+      "dynamics": "Pressure size; restrained angle; stroke color variation",
+      "tags": [
+        "Trees and foliage",
+        "Repeat",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "anchors",
+        "segment-repeat"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/bamboo-trunks",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/palm-frond-set",
+      "name": "Palm Frond Set",
+      "family": "Trees and foliage",
+      "behavior": "Multi-tip",
+      "purpose": "Several curved palm frond shapes",
+      "dynamics": "Pressure size; restrained angle; stroke color variation",
+      "tags": [
+        "Trees and foliage",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/palm-frond-set",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/shrub-cluster-set",
+      "name": "Shrub Cluster Set",
+      "family": "Trees and foliage",
+      "behavior": "Multi-tip",
+      "purpose": "Varied bush silhouettes for planted borders",
+      "dynamics": "Pressure size; restrained angle; stroke color variation",
+      "tags": [
+        "Trees and foliage",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip",
+        "anchors"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/shrub-cluster-set",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/hedge-edge",
+      "name": "Hedge Edge",
+      "family": "Trees and foliage",
+      "behavior": "Multi-tip",
+      "purpose": "Uneven foliage along a controlled border",
+      "dynamics": "Pressure size; restrained angle; stroke color variation",
+      "tags": [
+        "Trees and foliage",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/hedge-edge",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/cherry-blossom-cluster",
+      "name": "Cherry Blossom Cluster",
+      "family": "Trees and foliage",
+      "behavior": "Multi-tip",
+      "purpose": "Several monochrome blossom clusters",
+      "dynamics": "Pressure size; restrained angle; stroke color variation",
+      "tags": [
+        "Trees and foliage",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/cherry-blossom-cluster",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/autumn-canopy",
+      "name": "Autumn Canopy",
+      "family": "Trees and foliage",
+      "behavior": "Multi-tip",
+      "purpose": "Varied leaf clusters with warm bounded color jitter",
+      "dynamics": "Pressure size; restrained angle; stroke color variation",
+      "tags": [
+        "Trees and foliage",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/autumn-canopy",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/vine-leaves",
+      "name": "Vine Leaves",
+      "family": "Trees and foliage",
+      "behavior": "Stamp",
+      "purpose": "Small leaf stamps that follow stroke direction",
+      "dynamics": "Per-dab size, angle and subtle color variation; pressure flow",
+      "tags": [
+        "Trees and foliage",
+        "Stamp",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/vine-leaves",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/hanging-ivy",
+      "name": "Hanging Ivy",
+      "family": "Trees and foliage",
+      "behavior": "Ribbon",
+      "purpose": "Joined stems and leaf sets following curved strokes",
+      "dynamics": "Pressure size; restrained angle; stroke color variation",
+      "tags": [
+        "Trees and foliage",
+        "Ribbon",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "ribbon",
+        "multi-tip"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/hanging-ivy",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/distant-forest-strip",
+      "name": "Distant Forest Strip",
+      "family": "Trees and foliage",
+      "behavior": "Repeat",
+      "purpose": "Wide forest silhouette assembled from multiple anchored tips",
+      "dynamics": "Pressure size; restrained angle; stroke color variation",
+      "tags": [
+        "Trees and foliage",
+        "Repeat",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip",
+        "anchors",
+        "large-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/distant-forest-strip",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/bark-edge",
+      "name": "Bark Edge",
+      "family": "Trees and foliage",
+      "behavior": "Texture brush",
+      "purpose": "Broken vertical marks for bark details",
+      "dynamics": "Per-dab size, angle and subtle color variation; pressure flow",
+      "tags": [
+        "Trees and foliage",
+        "Texture brush",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/bark-edge",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/cloud-edge-soft",
+      "name": "Cloud Edge Soft",
+      "family": "Clouds and atmosphere",
+      "behavior": "Soft stamp",
+      "purpose": "Small irregular soft edge for hand-built clouds",
+      "dynamics": "Pressure flow; soft overlap; bounded size variation",
+      "tags": [
+        "Clouds and atmosphere",
+        "Soft stamp",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/cloud-edge-soft",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/wispy-cloud",
+      "name": "Wispy Cloud",
+      "family": "Clouds and atmosphere",
+      "behavior": "Soft stamp",
+      "purpose": "Single elongated wispy cloud mark",
+      "dynamics": "Pressure flow; soft overlap; bounded size variation",
+      "tags": [
+        "Clouds and atmosphere",
+        "Soft stamp",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/wispy-cloud",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/ground-mist",
+      "name": "Ground Mist",
+      "family": "Clouds and atmosphere",
+      "behavior": "Soft paint",
+      "purpose": "Low-flow soft fog painted in layers",
+      "dynamics": "Pressure flow; soft overlap; bounded size variation",
+      "tags": [
+        "Clouds and atmosphere",
+        "Soft paint",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/ground-mist",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/cumulus-mass-set",
+      "name": "Cumulus Mass Set",
+      "family": "Clouds and atmosphere",
+      "behavior": "Multi-tip",
+      "purpose": "Large varied cloud masses with broad soft interiors",
+      "dynamics": "Pressure flow; soft overlap; bounded size variation",
+      "tags": [
+        "Clouds and atmosphere",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip",
+        "large-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/cumulus-mass-set",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/cumulus-edge-set",
+      "name": "Cumulus Edge Set",
+      "family": "Clouds and atmosphere",
+      "behavior": "Multi-tip",
+      "purpose": "Different scalloped cloud edges for shaping masses",
+      "dynamics": "Pressure flow; soft overlap; bounded size variation",
+      "tags": [
+        "Clouds and atmosphere",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/cumulus-edge-set",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/towering-cloud-set",
+      "name": "Towering Cloud Set",
+      "family": "Clouds and atmosphere",
+      "behavior": "Multi-tip",
+      "purpose": "Large vertical cloud forms for dramatic skies",
+      "dynamics": "Pressure flow; soft overlap; bounded size variation",
+      "tags": [
+        "Clouds and atmosphere",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip",
+        "large-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/towering-cloud-set",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/thin-cloud-veil",
+      "name": "Thin Cloud Veil",
+      "family": "Clouds and atmosphere",
+      "behavior": "Soft stamp",
+      "purpose": "Broad translucent cloud sheet",
+      "dynamics": "Pressure flow; soft overlap; bounded size variation",
+      "tags": [
+        "Clouds and atmosphere",
+        "Soft stamp",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "large-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/thin-cloud-veil",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/wind-streak-cloud",
+      "name": "Wind Streak Cloud",
+      "family": "Clouds and atmosphere",
+      "behavior": "Multi-tip",
+      "purpose": "Elongated broken cloud strips",
+      "dynamics": "Pressure flow; soft overlap; bounded size variation",
+      "tags": [
+        "Clouds and atmosphere",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip",
+        "large-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/wind-streak-cloud",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/sunlit-cloud-rim",
+      "name": "Sunlit Cloud Rim",
+      "family": "Clouds and atmosphere",
+      "behavior": "Soft stamp",
+      "purpose": "Small irregular highlights with controlled softness",
+      "dynamics": "Pressure flow; soft overlap; bounded size variation",
+      "tags": [
+        "Clouds and atmosphere",
+        "Soft stamp",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/sunlit-cloud-rim",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/storm-underside",
+      "name": "Storm Underside",
+      "family": "Clouds and atmosphere",
+      "behavior": "Multi-tip",
+      "purpose": "Broken darker cloud bases with wide silhouettes",
+      "dynamics": "Pressure flow; soft overlap; bounded size variation",
+      "tags": [
+        "Clouds and atmosphere",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip",
+        "large-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/storm-underside",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/smoke-puff-set",
+      "name": "Smoke Puff Set",
+      "family": "Clouds and atmosphere",
+      "behavior": "Multi-tip",
+      "purpose": "Varied smoke shapes with soft overlaps",
+      "dynamics": "Pressure flow; soft overlap; bounded size variation",
+      "tags": [
+        "Clouds and atmosphere",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/smoke-puff-set",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/smoke-trail",
+      "name": "Smoke Trail",
+      "family": "Clouds and atmosphere",
+      "behavior": "Ribbon",
+      "purpose": "Connected deforming smoke segments along a curve",
+      "dynamics": "Pressure flow; soft overlap; bounded size variation",
+      "tags": [
+        "Clouds and atmosphere",
+        "Ribbon",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "ribbon",
+        "multi-tip"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/smoke-trail",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/dust-haze",
+      "name": "Dust Haze",
+      "family": "Clouds and atmosphere",
+      "behavior": "Soft paint",
+      "purpose": "Soft grain for atmospheric depth near ground",
+      "dynamics": "Pressure flow; soft overlap; bounded size variation",
+      "tags": [
+        "Clouds and atmosphere",
+        "Soft paint",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/dust-haze",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/mountain-haze",
+      "name": "Mountain Haze",
+      "family": "Clouds and atmosphere",
+      "behavior": "Soft paint",
+      "purpose": "Broad soft value veil behind distant mountains",
+      "dynamics": "Pressure flow; soft overlap; bounded size variation",
+      "tags": [
+        "Clouds and atmosphere",
+        "Soft paint",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/mountain-haze",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/stone-grain",
+      "name": "Stone Grain",
+      "family": "Ground rock and terrain",
+      "behavior": "Texture brush",
+      "purpose": "Small irregular stone surface texture",
+      "dynamics": "Pressure flow; grain; bounded tip-size variation",
+      "tags": [
+        "Ground rock and terrain",
+        "Texture brush",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/stone-grain",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/sand-speckle",
+      "name": "Sand Speckle",
+      "family": "Ground rock and terrain",
+      "behavior": "Spray",
+      "purpose": "Fine uneven particles for sand",
+      "dynamics": "Pressure flow; grain; bounded tip-size variation",
+      "tags": [
+        "Ground rock and terrain",
+        "Spray",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/sand-speckle",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/rock-silhouette-set",
+      "name": "Rock Silhouette Set",
+      "family": "Ground rock and terrain",
+      "behavior": "Multi-tip",
+      "purpose": "Several solid rock forms for small terrain features",
+      "dynamics": "Pressure flow; grain; bounded tip-size variation",
+      "tags": [
+        "Ground rock and terrain",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip",
+        "anchors"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/rock-silhouette-set",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/boulder-set",
+      "name": "Boulder Set",
+      "family": "Ground rock and terrain",
+      "behavior": "Multi-tip",
+      "purpose": "Large distinct rock masses with varied outlines",
+      "dynamics": "Pressure flow; grain; bounded tip-size variation",
+      "tags": [
+        "Ground rock and terrain",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip",
+        "large-tip",
+        "anchors"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/boulder-set",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/gravel-scatter",
+      "name": "Gravel Scatter",
+      "family": "Ground rock and terrain",
+      "behavior": "Multi-tip",
+      "purpose": "Several small pebble silhouettes",
+      "dynamics": "Pressure flow; grain; bounded tip-size variation",
+      "tags": [
+        "Ground rock and terrain",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/gravel-scatter",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/scree-edge",
+      "name": "Scree Edge",
+      "family": "Ground rock and terrain",
+      "behavior": "Multi-tip",
+      "purpose": "Angular fragments for broken slope edges",
+      "dynamics": "Pressure flow; grain; bounded tip-size variation",
+      "tags": [
+        "Ground rock and terrain",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/scree-edge",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/soil-grain",
+      "name": "Soil Grain",
+      "family": "Ground rock and terrain",
+      "behavior": "Texture brush",
+      "purpose": "Coarse granular coverage with stable texture phase",
+      "dynamics": "Pressure flow; grain; bounded tip-size variation",
+      "tags": [
+        "Ground rock and terrain",
+        "Texture brush",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/soil-grain",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/cracked-earth",
+      "name": "Cracked Earth",
+      "family": "Ground rock and terrain",
+      "behavior": "Texture brush",
+      "purpose": "Seamless crack lines on transparency",
+      "dynamics": "Pressure flow; canvas-anchored line pattern; pressure size",
+      "tags": [
+        "Ground rock and terrain",
+        "Texture brush",
+        "Dynamic",
+        "Pattern",
+        "Line-only"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/cracked-earth",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/mud-speckles",
+      "name": "Mud Speckles",
+      "family": "Ground rock and terrain",
+      "behavior": "Spray",
+      "purpose": "Soft-edged irregular dark specks",
+      "dynamics": "Pressure flow; grain; bounded tip-size variation",
+      "tags": [
+        "Ground rock and terrain",
+        "Spray",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/mud-speckles",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/rock-strata",
+      "name": "Rock Strata",
+      "family": "Ground rock and terrain",
+      "behavior": "Texture brush",
+      "purpose": "Wavy stone-strata lines on transparency",
+      "dynamics": "Pressure flow; canvas-anchored line pattern; pressure size",
+      "tags": [
+        "Ground rock and terrain",
+        "Texture brush",
+        "Dynamic",
+        "Pattern",
+        "Line-only"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/rock-strata",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/cliff-facet",
+      "name": "Cliff Facet",
+      "family": "Ground rock and terrain",
+      "behavior": "Stamp",
+      "purpose": "Angular plane marks for manually shaped cliffs",
+      "dynamics": "Pressure flow; grain; bounded tip-size variation",
+      "tags": [
+        "Ground rock and terrain",
+        "Stamp",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/cliff-facet",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/mountain-ridge-set",
+      "name": "Mountain Ridge Set",
+      "family": "Ground rock and terrain",
+      "behavior": "Multi-tip",
+      "purpose": "Large distant ridge silhouettes",
+      "dynamics": "Pressure flow; grain; bounded tip-size variation",
+      "tags": [
+        "Ground rock and terrain",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip",
+        "large-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/mountain-ridge-set",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/snow-crust",
+      "name": "Snow Crust",
+      "family": "Ground rock and terrain",
+      "behavior": "Texture brush",
+      "purpose": "Broken white grain for surface snow",
+      "dynamics": "Pressure flow; grain; bounded tip-size variation",
+      "tags": [
+        "Ground rock and terrain",
+        "Texture brush",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/snow-crust",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/pebble-edge",
+      "name": "Pebble Edge",
+      "family": "Ground rock and terrain",
+      "behavior": "Multi-tip",
+      "purpose": "Several pebbles arranged along a controlled edge",
+      "dynamics": "Pressure flow; grain; bounded tip-size variation",
+      "tags": [
+        "Ground rock and terrain",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip",
+        "anchors"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/pebble-edge",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/plaster-grain",
+      "name": "Plaster Grain",
+      "family": "Walls and construction surfaces",
+      "behavior": "Texture brush",
+      "purpose": "Fine unobtrusive surface grain for walls",
+      "dynamics": "Pressure flow; canvas-anchored texture",
+      "tags": [
+        "Walls and construction surfaces",
+        "Texture brush"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/plaster-grain",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/brick-surface",
+      "name": "Brick Surface",
+      "family": "Walls and construction surfaces",
+      "behavior": "Texture brush",
+      "purpose": "Brick outlines on transparency with fixed artwork phase",
+      "dynamics": "Pressure flow; canvas-anchored line pattern",
+      "tags": [
+        "Walls and construction surfaces",
+        "Texture brush",
+        "Pattern",
+        "Line-only"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/brick-surface",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/wood-grain",
+      "name": "Wood Grain",
+      "family": "Walls and construction surfaces",
+      "behavior": "Texture brush",
+      "purpose": "Directional wood-grain lines on transparency",
+      "dynamics": "Pressure flow; canvas-anchored line pattern",
+      "tags": [
+        "Walls and construction surfaces",
+        "Texture brush",
+        "Pattern",
+        "Line-only"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/wood-grain",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/rough-concrete",
+      "name": "Rough Concrete",
+      "family": "Walls and construction surfaces",
+      "behavior": "Texture brush",
+      "purpose": "Coarse concrete pores and irregular speckle",
+      "dynamics": "Pressure flow; canvas-anchored texture",
+      "tags": [
+        "Walls and construction surfaces",
+        "Texture brush"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/rough-concrete",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/smooth-concrete",
+      "name": "Smooth Concrete",
+      "family": "Walls and construction surfaces",
+      "behavior": "Texture brush",
+      "purpose": "Subtle concrete tone variation",
+      "dynamics": "Pressure flow; canvas-anchored texture",
+      "tags": [
+        "Walls and construction surfaces",
+        "Texture brush"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/smooth-concrete",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/stone-block-surface",
+      "name": "Stone Block Surface",
+      "family": "Walls and construction surfaces",
+      "behavior": "Texture brush",
+      "purpose": "Irregular stone-block outlines on transparency",
+      "dynamics": "Pressure flow; canvas-anchored line pattern",
+      "tags": [
+        "Walls and construction surfaces",
+        "Texture brush",
+        "Pattern",
+        "Line-only"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/stone-block-surface",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/roof-tile-surface",
+      "name": "Roof Tile Surface",
+      "family": "Walls and construction surfaces",
+      "behavior": "Texture brush",
+      "purpose": "Repeating roof-tile outlines on transparency",
+      "dynamics": "Pressure flow; canvas-anchored line pattern",
+      "tags": [
+        "Walls and construction surfaces",
+        "Texture brush",
+        "Pattern",
+        "Line-only"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/roof-tile-surface",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/asphalt-grain",
+      "name": "Asphalt Grain",
+      "family": "Walls and construction surfaces",
+      "behavior": "Texture brush",
+      "purpose": "Granular road texture with controlled contrast",
+      "dynamics": "Pressure flow; canvas-anchored texture",
+      "tags": [
+        "Walls and construction surfaces",
+        "Texture brush"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/asphalt-grain",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/stucco-wall",
+      "name": "Stucco Wall",
+      "family": "Walls and construction surfaces",
+      "behavior": "Texture brush",
+      "purpose": "Pebbled plaster grain",
+      "dynamics": "Pressure flow; canvas-anchored texture",
+      "tags": [
+        "Walls and construction surfaces",
+        "Texture brush"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/stucco-wall",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/peeling-paint",
+      "name": "Peeling Paint",
+      "family": "Walls and construction surfaces",
+      "behavior": "Stamp",
+      "purpose": "Irregular chips for weathering an existing surface",
+      "dynamics": "Pressure flow; canvas-anchored texture",
+      "tags": [
+        "Walls and construction surfaces",
+        "Stamp"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/peeling-paint",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/wall-cracks",
+      "name": "Wall Cracks",
+      "family": "Walls and construction surfaces",
+      "behavior": "Stamp",
+      "purpose": "Broken crack shapes for manual placement",
+      "dynamics": "Pressure flow; canvas-anchored texture",
+      "tags": [
+        "Walls and construction surfaces",
+        "Stamp"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/wall-cracks",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/water-stains",
+      "name": "Water Stains",
+      "family": "Walls and construction surfaces",
+      "behavior": "Stamp",
+      "purpose": "Uneven vertical staining masks",
+      "dynamics": "Pressure flow; canvas-anchored texture",
+      "tags": [
+        "Walls and construction surfaces",
+        "Stamp"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/water-stains",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/rust-flecks",
+      "name": "Rust Flecks",
+      "family": "Walls and construction surfaces",
+      "behavior": "Spray",
+      "purpose": "Small irregular corrosion coverage",
+      "dynamics": "Pressure flow; canvas-anchored texture",
+      "tags": [
+        "Walls and construction surfaces",
+        "Spray"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/rust-flecks",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/paint-roller-grain",
+      "name": "Paint Roller Grain",
+      "family": "Walls and construction surfaces",
+      "behavior": "Texture brush",
+      "purpose": "Broad mottled dry surface coverage",
+      "dynamics": "Pressure flow; canvas-anchored texture",
+      "tags": [
+        "Walls and construction surfaces",
+        "Texture brush"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/paint-roller-grain",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/fabric-weave",
+      "name": "Fabric Weave",
+      "family": "Walls and construction surfaces",
+      "behavior": "Texture brush",
+      "purpose": "Fine woven textile lines on transparency",
+      "dynamics": "Pressure flow; canvas-anchored line pattern",
+      "tags": [
+        "Walls and construction surfaces",
+        "Texture brush",
+        "Pattern",
+        "Line-only"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/fabric-weave",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/tatami-surface",
+      "name": "Tatami Surface",
+      "family": "Walls and construction surfaces",
+      "behavior": "Texture brush",
+      "purpose": "Woven mat lines on transparency with stable repeats",
+      "dynamics": "Pressure flow; canvas-anchored line pattern",
+      "tags": [
+        "Walls and construction surfaces",
+        "Texture brush",
+        "Pattern",
+        "Line-only"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/tatami-surface",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/window-row",
+      "name": "Window Row",
+      "family": "Architecture and repeating details",
+      "behavior": "Repeat",
+      "purpose": "Even repeated window modules on a straight baseline",
+      "dynamics": "Ordered spacing; upright orientation; fixed phase",
+      "tags": [
+        "Architecture and repeating details",
+        "Repeat",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "segment-repeat",
+        "anchors"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/window-row",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/apartment-window-grid",
+      "name": "Apartment Window Grid",
+      "family": "Architecture and repeating details",
+      "behavior": "Pattern painter",
+      "purpose": "Regular two-dimensional facade layout",
+      "dynamics": "Ordered spacing; upright orientation; fixed phase",
+      "tags": [
+        "Architecture and repeating details",
+        "Pattern painter"
+      ],
+      "required_engine_extensions": [
+        "color-pattern",
+        "anchors"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/apartment-window-grid",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/balcony-row",
+      "name": "Balcony Row",
+      "family": "Architecture and repeating details",
+      "behavior": "Repeat",
+      "purpose": "Distinct balcony modules with controlled spacing",
+      "dynamics": "Ordered spacing; upright orientation; fixed phase",
+      "tags": [
+        "Architecture and repeating details",
+        "Repeat",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip",
+        "segment-repeat",
+        "anchors"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/balcony-row",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/fence-posts",
+      "name": "Fence Posts",
+      "family": "Architecture and repeating details",
+      "behavior": "Repeat",
+      "purpose": "Upright posts positioned along a drawn route",
+      "dynamics": "Ordered spacing; upright orientation; fixed phase",
+      "tags": [
+        "Architecture and repeating details",
+        "Repeat",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "anchors",
+        "segment-repeat"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/fence-posts",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/roof-tile-border",
+      "name": "Roof Tile Border",
+      "family": "Architecture and repeating details",
+      "behavior": "Ribbon",
+      "purpose": "Joined tile segments following a curved edge",
+      "dynamics": "Ordered spacing; upright orientation; fixed phase",
+      "tags": [
+        "Architecture and repeating details",
+        "Ribbon"
+      ],
+      "required_engine_extensions": [
+        "ribbon",
+        "multi-tip"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/roof-tile-border",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/brick-perspective-wall",
+      "name": "Brick Perspective Wall",
+      "family": "Architecture and repeating details",
+      "behavior": "Pattern painter",
+      "purpose": "Mortar rows aligned to a perspective plane",
+      "dynamics": "Ordered spacing; upright orientation; fixed phase",
+      "tags": [
+        "Architecture and repeating details",
+        "Pattern painter"
+      ],
+      "required_engine_extensions": [
+        "perspective-pattern"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 4,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/brick-perspective-wall",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/stone-perspective-path",
+      "name": "Stone Perspective Path",
+      "family": "Architecture and repeating details",
+      "behavior": "Pattern painter",
+      "purpose": "Stone pattern scaled over a ground plane",
+      "dynamics": "Ordered spacing; upright orientation; fixed phase",
+      "tags": [
+        "Architecture and repeating details",
+        "Pattern painter"
+      ],
+      "required_engine_extensions": [
+        "perspective-pattern"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 4,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/stone-perspective-path",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/shopfront-modules",
+      "name": "Shopfront Modules",
+      "family": "Architecture and repeating details",
+      "behavior": "Repeat",
+      "purpose": "Different upright storefront silhouettes in sequence",
+      "dynamics": "Ordered spacing; upright orientation; fixed phase",
+      "tags": [
+        "Architecture and repeating details",
+        "Repeat",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip",
+        "anchors",
+        "segment-repeat"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/shopfront-modules",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/utility-insulators",
+      "name": "Utility Insulators",
+      "family": "Architecture and repeating details",
+      "behavior": "Repeat",
+      "purpose": "Small repeated pole fittings on straight lines",
+      "dynamics": "Ordered spacing; upright orientation; fixed phase",
+      "tags": [
+        "Architecture and repeating details",
+        "Repeat",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "segment-repeat",
+        "anchors"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/utility-insulators",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/railings-and-bars",
+      "name": "Railings and Bars",
+      "family": "Architecture and repeating details",
+      "behavior": "Repeat",
+      "purpose": "Fitted repeated rail and support segments",
+      "dynamics": "Ordered spacing; upright orientation; fixed phase",
+      "tags": [
+        "Architecture and repeating details",
+        "Repeat",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "segment-repeat",
+        "anchors"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/railings-and-bars",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/cable-bundle",
+      "name": "Cable Bundle",
+      "family": "Architecture and repeating details",
+      "behavior": "Ribbon",
+      "purpose": "Continuous multiple cable lines with clean bends",
+      "dynamics": "Ordered spacing; upright orientation; fixed phase",
+      "tags": [
+        "Architecture and repeating details",
+        "Ribbon"
+      ],
+      "required_engine_extensions": [
+        "ribbon"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/cable-bundle",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/roofline-modules",
+      "name": "Roofline Modules",
+      "family": "Architecture and repeating details",
+      "behavior": "Repeat",
+      "purpose": "Different roof silhouettes sharing a baseline",
+      "dynamics": "Ordered spacing; upright orientation; fixed phase",
+      "tags": [
+        "Architecture and repeating details",
+        "Repeat",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip",
+        "anchors",
+        "segment-repeat"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/roofline-modules",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/calm-ripples",
+      "name": "Calm Ripples",
+      "family": "Water and reflections",
+      "behavior": "Stamp",
+      "purpose": "Single flattened ripple tip for manual layering",
+      "dynamics": "Direction-preserving tips; pressure flow; bounded scatter",
+      "tags": [
+        "Water and reflections",
+        "Stamp"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/calm-ripples",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/broken-reflection",
+      "name": "Broken Reflection",
+      "family": "Water and reflections",
+      "behavior": "Texture brush",
+      "purpose": "Horizontal broken highlight marks",
+      "dynamics": "Direction-preserving tips; pressure flow; bounded scatter",
+      "tags": [
+        "Water and reflections",
+        "Texture brush"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/broken-reflection",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/foam-flecks",
+      "name": "Foam Flecks",
+      "family": "Water and reflections",
+      "behavior": "Spray",
+      "purpose": "Small irregular white particles",
+      "dynamics": "Direction-preserving tips; pressure flow; bounded scatter",
+      "tags": [
+        "Water and reflections",
+        "Spray"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/foam-flecks",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/ripple-set",
+      "name": "Ripple Set",
+      "family": "Water and reflections",
+      "behavior": "Multi-tip",
+      "purpose": "Multiple flattened ripple silhouettes",
+      "dynamics": "Direction-preserving tips; pressure flow; bounded scatter",
+      "tags": [
+        "Water and reflections",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/ripple-set",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/rain-ring-set",
+      "name": "Rain Ring Set",
+      "family": "Water and reflections",
+      "behavior": "Multi-tip",
+      "purpose": "Different elliptical rain-ring stages",
+      "dynamics": "Direction-preserving tips; pressure flow; bounded scatter",
+      "tags": [
+        "Water and reflections",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/rain-ring-set",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/wave-crest-set",
+      "name": "Wave Crest Set",
+      "family": "Water and reflections",
+      "behavior": "Multi-tip",
+      "purpose": "Several irregular wave tops with consistent direction",
+      "dynamics": "Direction-preserving tips; pressure flow; bounded scatter",
+      "tags": [
+        "Water and reflections",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/wave-crest-set",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/shore-foam-edge",
+      "name": "Shore Foam Edge",
+      "family": "Water and reflections",
+      "behavior": "Ribbon",
+      "purpose": "Connected foam shapes along a curving shore",
+      "dynamics": "Direction-preserving tips; pressure flow; bounded scatter",
+      "tags": [
+        "Water and reflections",
+        "Ribbon"
+      ],
+      "required_engine_extensions": [
+        "ribbon",
+        "multi-tip"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/shore-foam-edge",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/surf-spray",
+      "name": "Surf Spray",
+      "family": "Water and reflections",
+      "behavior": "Spray",
+      "purpose": "Directional fine droplets for breaking waves",
+      "dynamics": "Direction-preserving tips; pressure flow; bounded scatter",
+      "tags": [
+        "Water and reflections",
+        "Spray"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/surf-spray",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/splash-crown-set",
+      "name": "Splash Crown Set",
+      "family": "Water and reflections",
+      "behavior": "Multi-tip",
+      "purpose": "Several distinct splash crowns",
+      "dynamics": "Direction-preserving tips; pressure flow; bounded scatter",
+      "tags": [
+        "Water and reflections",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/splash-crown-set",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/droplet-set",
+      "name": "Droplet Set",
+      "family": "Water and reflections",
+      "behavior": "Multi-tip",
+      "purpose": "Separate drops with bounded scale and orientation",
+      "dynamics": "Direction-preserving tips; pressure flow; bounded scatter",
+      "tags": [
+        "Water and reflections",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/droplet-set",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/caustic-surface",
+      "name": "Caustic Surface",
+      "family": "Water and reflections",
+      "behavior": "Texture brush",
+      "purpose": "Fixed monochrome caustic tile for flat water surfaces",
+      "dynamics": "Direction-preserving tips; pressure flow; bounded scatter",
+      "tags": [
+        "Water and reflections",
+        "Texture brush"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/caustic-surface",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/stream-highlight",
+      "name": "Stream Highlight",
+      "family": "Water and reflections",
+      "behavior": "Ribbon",
+      "purpose": "Connected irregular highlights following water flow",
+      "dynamics": "Direction-preserving tips; pressure flow; bounded scatter",
+      "tags": [
+        "Water and reflections",
+        "Ribbon"
+      ],
+      "required_engine_extensions": [
+        "ribbon",
+        "multi-tip"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/stream-highlight",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/parallel-hatch",
+      "name": "Parallel Hatch",
+      "family": "Manga tones and hatching",
+      "behavior": "Stamp",
+      "purpose": "Single directional hatch tip for freehand shading",
+      "dynamics": "Fixed or direction-following tip angle; pressure flow",
+      "tags": [
+        "Manga tones and hatching",
+        "Stamp"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/parallel-hatch",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/stipple-shadow",
+      "name": "Stipple Shadow",
+      "family": "Manga tones and hatching",
+      "behavior": "Spray",
+      "purpose": "Controlled irregular dots for hand-built shadow",
+      "dynamics": "Controlled scatter/count; pressure flow; seeded irregular dots",
+      "tags": [
+        "Manga tones and hatching",
+        "Spray"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": true,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/stipple-shadow",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/fine-dot-tone",
+      "name": "Fine Dot Tone",
+      "family": "Manga tones and hatching",
+      "behavior": "Tone",
+      "purpose": "Regular fine dots with editable density and frequency",
+      "dynamics": "Stable artwork phase; deliberate pattern angle",
+      "tags": [
+        "Manga tones and hatching",
+        "Tone"
+      ],
+      "required_engine_extensions": [
+        "tone"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/fine-dot-tone",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/coarse-dot-tone",
+      "name": "Coarse Dot Tone",
+      "family": "Manga tones and hatching",
+      "behavior": "Tone",
+      "purpose": "Large dots with independent density and frequency",
+      "dynamics": "Stable artwork phase; deliberate pattern angle",
+      "tags": [
+        "Manga tones and hatching",
+        "Tone"
+      ],
+      "required_engine_extensions": [
+        "tone"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/coarse-dot-tone",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/line-tone",
+      "name": "Line Tone",
+      "family": "Manga tones and hatching",
+      "behavior": "Tone",
+      "purpose": "Parallel tone lines with controlled spacing and thickness",
+      "dynamics": "Stable artwork phase; deliberate pattern angle",
+      "tags": [
+        "Manga tones and hatching",
+        "Tone"
+      ],
+      "required_engine_extensions": [
+        "tone"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/line-tone",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/cross-tone",
+      "name": "Cross Tone",
+      "family": "Manga tones and hatching",
+      "behavior": "Tone",
+      "purpose": "Crossed lines with predictable coverage",
+      "dynamics": "Stable artwork phase; deliberate pattern angle",
+      "tags": [
+        "Manga tones and hatching",
+        "Tone"
+      ],
+      "required_engine_extensions": [
+        "tone"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/cross-tone",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/diamond-tone",
+      "name": "Diamond Tone",
+      "family": "Manga tones and hatching",
+      "behavior": "Tone",
+      "purpose": "Repeated diamond screen pattern",
+      "dynamics": "Stable artwork phase; deliberate pattern angle",
+      "tags": [
+        "Manga tones and hatching",
+        "Tone"
+      ],
+      "required_engine_extensions": [
+        "tone"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/diamond-tone",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/noise-tone",
+      "name": "Noise Tone",
+      "family": "Manga tones and hatching",
+      "behavior": "Tone",
+      "purpose": "Seeded irregular tone with controlled coverage",
+      "dynamics": "Stable artwork phase; deliberate pattern angle",
+      "tags": [
+        "Manga tones and hatching",
+        "Tone"
+      ],
+      "required_engine_extensions": [
+        "tone"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/noise-tone",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/tone-fade",
+      "name": "Tone Fade",
+      "family": "Manga tones and hatching",
+      "behavior": "Tone",
+      "purpose": "Regular dot tone with a controlled density gradient",
+      "dynamics": "Stable artwork phase; deliberate pattern angle",
+      "tags": [
+        "Manga tones and hatching",
+        "Tone"
+      ],
+      "required_engine_extensions": [
+        "tone"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/tone-fade",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/crosshatch-tile",
+      "name": "Crosshatch Tile",
+      "family": "Manga tones and hatching",
+      "behavior": "Texture brush",
+      "purpose": "Fixed crosshatch lines on transparency",
+      "dynamics": "Pressure flow; canvas-anchored line pattern",
+      "tags": [
+        "Manga tones and hatching",
+        "Texture brush",
+        "Pattern",
+        "Line-only"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/crosshatch-tile",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/engraved-shade",
+      "name": "Engraved Shade",
+      "family": "Manga tones and hatching",
+      "behavior": "Texture brush",
+      "purpose": "Broken etched lines on transparency",
+      "dynamics": "Pressure flow; canvas-anchored line pattern",
+      "tags": [
+        "Manga tones and hatching",
+        "Texture brush",
+        "Pattern",
+        "Line-only"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/engraved-shade",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/curved-hatch-band",
+      "name": "Curved Hatch Band",
+      "family": "Manga tones and hatching",
+      "behavior": "Ribbon",
+      "purpose": "Hatch segments that deform continuously around form",
+      "dynamics": "Stable artwork phase; deliberate pattern angle",
+      "tags": [
+        "Manga tones and hatching",
+        "Ribbon"
+      ],
+      "required_engine_extensions": [
+        "ribbon"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/curved-hatch-band",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/action-streak",
+      "name": "Action Streak",
+      "family": "Manga effects and decoration",
+      "behavior": "Stamp",
+      "purpose": "Single tapered motion accent placed by hand",
+      "dynamics": "Controlled direction; spacing; original motifs",
+      "tags": [
+        "Manga effects and decoration",
+        "Stamp"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/action-streak",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/impact-fleck",
+      "name": "Impact Fleck",
+      "family": "Manga effects and decoration",
+      "behavior": "Spray",
+      "purpose": "Angular opaque flecks around an impact",
+      "dynamics": "Controlled direction; spacing; original motifs",
+      "tags": [
+        "Manga effects and decoration",
+        "Spray"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/impact-fleck",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/dry-speed-texture",
+      "name": "Dry Speed Texture",
+      "family": "Manga effects and decoration",
+      "behavior": "Texture brush",
+      "purpose": "Directional scratch lines on transparency for speed backgrounds",
+      "dynamics": "Pressure flow; canvas-anchored line pattern",
+      "tags": [
+        "Manga effects and decoration",
+        "Texture brush",
+        "Pattern",
+        "Line-only"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/dry-speed-texture",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/rain-hatching",
+      "name": "Rain Hatching",
+      "family": "Manga effects and decoration",
+      "behavior": "Stamp",
+      "purpose": "Repeated slanted lines with modest size variation",
+      "dynamics": "Controlled direction; spacing; original motifs",
+      "tags": [
+        "Manga effects and decoration",
+        "Stamp"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/rain-hatching",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/spark-cross",
+      "name": "Spark Cross",
+      "family": "Manga effects and decoration",
+      "behavior": "Stamp",
+      "purpose": "Small cross-shaped highlight stamp",
+      "dynamics": "Controlled direction; spacing; original motifs",
+      "tags": [
+        "Manga effects and decoration",
+        "Stamp"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/spark-cross",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/star-scatter-set",
+      "name": "Star Scatter Set",
+      "family": "Manga effects and decoration",
+      "behavior": "Multi-tip",
+      "purpose": "Different star shapes in bounded random sizes",
+      "dynamics": "Controlled direction; spacing; original motifs",
+      "tags": [
+        "Manga effects and decoration",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/star-scatter-set",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/petal-screen",
+      "name": "Petal Screen",
+      "family": "Manga effects and decoration",
+      "behavior": "Multi-tip",
+      "purpose": "Several decorative petal silhouettes",
+      "dynamics": "Controlled direction; spacing; original motifs",
+      "tags": [
+        "Manga effects and decoration",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/petal-screen",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/flower-screen",
+      "name": "Flower Screen",
+      "family": "Manga effects and decoration",
+      "behavior": "Texture brush",
+      "purpose": "Flat repeating monochrome flower texture",
+      "dynamics": "Controlled direction; spacing; original motifs",
+      "tags": [
+        "Manga effects and decoration",
+        "Texture brush"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/flower-screen",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/rope-border",
+      "name": "Rope Border",
+      "family": "Manga effects and decoration",
+      "behavior": "Ribbon",
+      "purpose": "Joined rope segments along curved strokes",
+      "dynamics": "Controlled direction; spacing; original motifs",
+      "tags": [
+        "Manga effects and decoration",
+        "Ribbon"
+      ],
+      "required_engine_extensions": [
+        "ribbon"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/rope-border",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/chain-border",
+      "name": "Chain Border",
+      "family": "Manga effects and decoration",
+      "behavior": "Ribbon",
+      "purpose": "Alternating links with continuous curved joints",
+      "dynamics": "Controlled direction; spacing; original motifs",
+      "tags": [
+        "Manga effects and decoration",
+        "Ribbon"
+      ],
+      "required_engine_extensions": [
+        "ribbon",
+        "multi-tip"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/chain-border",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/fine-rain",
+      "name": "Fine Rain",
+      "family": "Weather and particles",
+      "behavior": "Spray",
+      "purpose": "Sparse elongated drops following a fixed angle",
+      "dynamics": "Scatter; pressure density; bounded size and opacity",
+      "tags": [
+        "Weather and particles",
+        "Spray"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/fine-rain",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/heavy-rain",
+      "name": "Heavy Rain",
+      "family": "Weather and particles",
+      "behavior": "Spray",
+      "purpose": "Broader more opaque rain streaks",
+      "dynamics": "Scatter; pressure density; bounded size and opacity",
+      "tags": [
+        "Weather and particles",
+        "Spray"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/heavy-rain",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/snow-flurry",
+      "name": "Snow Flurry",
+      "family": "Weather and particles",
+      "behavior": "Spray",
+      "purpose": "Soft particles with varied sizes",
+      "dynamics": "Scatter; pressure density; bounded size and opacity",
+      "tags": [
+        "Weather and particles",
+        "Spray"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/snow-flurry",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/snowflake-set",
+      "name": "Snowflake Set",
+      "family": "Weather and particles",
+      "behavior": "Multi-tip",
+      "purpose": "Different original crystalline silhouettes",
+      "dynamics": "Scatter; pressure density; bounded size and opacity",
+      "tags": [
+        "Weather and particles",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/snowflake-set",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/ember-drift",
+      "name": "Ember Drift",
+      "family": "Weather and particles",
+      "behavior": "Spray",
+      "purpose": "Small warm foreground-color flecks",
+      "dynamics": "Scatter; pressure density; bounded size and opacity",
+      "tags": [
+        "Weather and particles",
+        "Spray"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/ember-drift",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/ash-drift",
+      "name": "Ash Drift",
+      "family": "Weather and particles",
+      "behavior": "Spray",
+      "purpose": "Irregular muted particles with variable opacity",
+      "dynamics": "Scatter; pressure density; bounded size and opacity",
+      "tags": [
+        "Weather and particles",
+        "Spray"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/ash-drift",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/dust-motes",
+      "name": "Dust Motes",
+      "family": "Weather and particles",
+      "behavior": "Spray",
+      "purpose": "Sparse low-opacity particles",
+      "dynamics": "Scatter; pressure density; bounded size and opacity",
+      "tags": [
+        "Weather and particles",
+        "Spray"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/dust-motes",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/firefly-glow",
+      "name": "Firefly Glow",
+      "family": "Weather and particles",
+      "behavior": "Airbrush",
+      "purpose": "Small soft light particles",
+      "dynamics": "Scatter; pressure density; bounded size and opacity",
+      "tags": [
+        "Weather and particles",
+        "Airbrush"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/firefly-glow",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/falling-petals",
+      "name": "Falling Petals",
+      "family": "Weather and particles",
+      "behavior": "Multi-tip",
+      "purpose": "Several petal poses with restrained rotation",
+      "dynamics": "Scatter; pressure density; bounded size and opacity",
+      "tags": [
+        "Weather and particles",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/falling-petals",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/debris-spray",
+      "name": "Debris Spray",
+      "family": "Weather and particles",
+      "behavior": "Multi-tip",
+      "purpose": "Different small fragments with controlled scatter",
+      "dynamics": "Scatter; pressure density; bounded size and opacity",
+      "tags": [
+        "Weather and particles",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/debris-spray",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/distant-bird-flock",
+      "name": "Distant Bird Flock",
+      "family": "Dynamic subject systems",
+      "behavior": "Multi-tip",
+      "purpose": "Different wing poses with small size changes and upright orientation",
+      "dynamics": "Deterministic tip choice; bounded size; orientation constraints",
+      "tags": [
+        "Dynamic subject systems",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/distant-bird-flock",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/soaring-bird-flock",
+      "name": "Soaring Bird Flock",
+      "family": "Dynamic subject systems",
+      "behavior": "Multi-tip",
+      "purpose": "Different gliding silhouettes with gentle rotation",
+      "dynamics": "Deterministic tip choice; bounded size; orientation constraints",
+      "tags": [
+        "Dynamic subject systems",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/soaring-bird-flock",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/perched-bird-row",
+      "name": "Perched Bird Row",
+      "family": "Dynamic subject systems",
+      "behavior": "Multi-tip",
+      "purpose": "Upright bird poses rooted to a branch or ledge",
+      "dynamics": "Deterministic tip choice; bounded size; orientation constraints",
+      "tags": [
+        "Dynamic subject systems",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip",
+        "anchors"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/perched-bird-row",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/butterfly-drift",
+      "name": "Butterfly Drift",
+      "family": "Dynamic subject systems",
+      "behavior": "Multi-tip",
+      "purpose": "Different wing shapes with constrained color variation",
+      "dynamics": "Deterministic tip choice; bounded size; orientation constraints",
+      "tags": [
+        "Dynamic subject systems",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/butterfly-drift",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/fish-school",
+      "name": "Fish School",
+      "family": "Dynamic subject systems",
+      "behavior": "Multi-tip",
+      "purpose": "Several silhouettes aligned to travel direction",
+      "dynamics": "Deterministic tip choice; bounded size; orientation constraints",
+      "tags": [
+        "Dynamic subject systems",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/fish-school",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/feather-drift",
+      "name": "Feather Drift",
+      "family": "Dynamic subject systems",
+      "behavior": "Multi-tip",
+      "purpose": "Different feather silhouettes following motion",
+      "dynamics": "Deterministic tip choice; bounded size; orientation constraints",
+      "tags": [
+        "Dynamic subject systems",
+        "Multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/feather-drift",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/skyline-builder",
+      "name": "Skyline Builder",
+      "family": "Dynamic subject systems",
+      "behavior": "Repeat",
+      "purpose": "Different building silhouettes sharing an upright ground line",
+      "dynamics": "Deterministic tip choice; bounded size; orientation constraints",
+      "tags": [
+        "Dynamic subject systems",
+        "Repeat",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip",
+        "anchors",
+        "segment-repeat",
+        "large-tip"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/skyline-builder",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/house-row-builder",
+      "name": "House Row Builder",
+      "family": "Dynamic subject systems",
+      "behavior": "Repeat",
+      "purpose": "Different house shapes with consistent foundations",
+      "dynamics": "Deterministic tip choice; bounded size; orientation constraints",
+      "tags": [
+        "Dynamic subject systems",
+        "Repeat",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip",
+        "anchors",
+        "segment-repeat"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/house-row-builder",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/forest-builder",
+      "name": "Forest Builder",
+      "family": "Dynamic subject systems",
+      "behavior": "Repeat",
+      "purpose": "Tree species and sizes varied without tilting trunks",
+      "dynamics": "Deterministic tip choice; bounded size; orientation constraints",
+      "tags": [
+        "Dynamic subject systems",
+        "Repeat",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip",
+        "anchors",
+        "large-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/forest-builder",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/seasonal-foliage-tint",
+      "name": "Seasonal Foliage Tint",
+      "family": "Dynamic subject systems",
+      "behavior": "Colored multi-tip",
+      "purpose": "Shaded RGBA leaves with bounded tint variation",
+      "dynamics": "Deterministic tip choice; bounded size; orientation constraints",
+      "tags": [
+        "Dynamic subject systems",
+        "Colored multi-tip",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "multi-tip",
+        "color-stamp-tint"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 4,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/seasonal-foliage-tint",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/ribbon-ornament",
+      "name": "Ribbon Ornament",
+      "family": "Dynamic subject systems",
+      "behavior": "Ribbon",
+      "purpose": "Ordered decorative segments following a curved stroke",
+      "dynamics": "Deterministic tip choice; bounded size; orientation constraints",
+      "tags": [
+        "Dynamic subject systems",
+        "Ribbon",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "ribbon",
+        "multi-tip"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 3,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/ribbon-ornament",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/speed-responding-ink",
+      "name": "Speed Responding Ink",
+      "family": "Dynamic subject systems",
+      "behavior": "Pen",
+      "purpose": "Stroke size and flow respond to drawing speed",
+      "dynamics": "Single tip; drawing speed controls size and flow",
+      "tags": [
+        "Dynamic subject systems",
+        "Pen",
+        "Dynamic"
+      ],
+      "required_engine_extensions": [
+        "speed"
+      ],
+      "engine_support": "implemented-in-0.49.0",
+      "wave": 4,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/speed-responding-ink",
+      "implemented_in": ""
+    },
+    {
+      "id": "planned/painted-leaf-cluster",
+      "name": "Painted Leaf Cluster",
+      "family": "Painted color stamps",
+      "behavior": "Colored stamp",
+      "purpose": "Small procedurally illustrated leaf cluster retaining original colors",
+      "dynamics": "Preserve source colors; per-dab size and rotation; pressure opacity",
+      "tags": [
+        "Painted color stamps",
+        "Colored stamp"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/painted-leaf-cluster",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/painted-flower",
+      "name": "Painted Flower",
+      "family": "Painted color stamps",
+      "behavior": "Colored stamp",
+      "purpose": "One painted flower retaining original colors",
+      "dynamics": "Preserve source colors; per-dab size and rotation; pressure opacity",
+      "tags": [
+        "Painted color stamps",
+        "Colored stamp"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/painted-flower",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/painted-pebble",
+      "name": "Painted Pebble",
+      "family": "Painted color stamps",
+      "behavior": "Colored stamp",
+      "purpose": "One shaded pebble retaining original colors",
+      "dynamics": "Preserve source colors; per-dab size and rotation; pressure opacity",
+      "tags": [
+        "Painted color stamps",
+        "Colored stamp"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/painted-pebble",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/painted-branch",
+      "name": "Painted Branch",
+      "family": "Painted color stamps",
+      "behavior": "Colored stamp",
+      "purpose": "Small painted branch with clean transparent edges",
+      "dynamics": "Preserve source colors; per-dab size and rotation; pressure opacity",
+      "tags": [
+        "Painted color stamps",
+        "Colored stamp"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/painted-branch",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/painted-moss-patch",
+      "name": "Painted Moss Patch",
+      "family": "Painted color stamps",
+      "behavior": "Colored stamp",
+      "purpose": "Small shaded moss patch",
+      "dynamics": "Preserve source colors; per-dab size and rotation; pressure opacity",
+      "tags": [
+        "Painted color stamps",
+        "Colored stamp"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/painted-moss-patch",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/painted-cloud",
+      "name": "Painted Cloud",
+      "family": "Painted color stamps",
+      "behavior": "Colored stamp",
+      "purpose": "Large painted cloud mass retaining original colors",
+      "dynamics": "Preserve source colors; controlled size and opacity",
+      "tags": [
+        "Painted color stamps",
+        "Colored stamp"
+      ],
+      "required_engine_extensions": [
+        "large-tip"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/painted-cloud",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/painted-tree",
+      "name": "Painted Tree",
+      "family": "Painted color stamps",
+      "behavior": "Colored stamp",
+      "purpose": "Large painted tree with a ground anchor",
+      "dynamics": "Preserve source colors; controlled size and opacity",
+      "tags": [
+        "Painted color stamps",
+        "Colored stamp"
+      ],
+      "required_engine_extensions": [
+        "large-tip",
+        "anchors"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/painted-tree",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/painted-building",
+      "name": "Painted Building",
+      "family": "Painted color stamps",
+      "behavior": "Colored stamp",
+      "purpose": "Large painted facade with upright placement",
+      "dynamics": "Preserve source colors; controlled size and opacity",
+      "tags": [
+        "Painted color stamps",
+        "Colored stamp"
+      ],
+      "required_engine_extensions": [
+        "large-tip",
+        "anchors"
+      ],
+      "engine_support": "native-advanced-engine",
+      "wave": 2,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/painted-building",
+      "implemented_in": "0.45.0"
+    },
+    {
+      "id": "planned/painted-water-foam",
+      "name": "Painted Water Foam",
+      "family": "Painted color stamps",
+      "behavior": "Colored stamp",
+      "purpose": "Small colored foam cluster",
+      "dynamics": "Preserve source colors; per-dab size and rotation; pressure opacity",
+      "tags": [
+        "Painted color stamps",
+        "Colored stamp"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/painted-water-foam",
+      "implemented_in": "0.42.0"
+    },
+    {
+      "id": "planned/painted-ground-patch",
+      "name": "Painted Ground Patch",
+      "family": "Painted color stamps",
+      "behavior": "Colored stamp",
+      "purpose": "Small earth and grass patch for distant detail",
+      "dynamics": "Preserve source colors; per-dab size and rotation; pressure opacity",
+      "tags": [
+        "Painted color stamps",
+        "Colored stamp"
+      ],
+      "required_engine_extensions": [],
+      "engine_support": "existing-engine",
+      "wave": 1,
+      "pilot": false,
+      "status": "built-in",
+      "asset_status": "authored-procedural",
+      "runtime_id": "builtin/catalog/painted-ground-patch",
+      "implemented_in": "0.42.0"
+    }
+  ],
+  "installed_count": 200,
+  "total_builtin_count": 219,
+  "acceptance": "Automated rendering, storage and UI checks; physical Huion and real-artwork review pending"
+}

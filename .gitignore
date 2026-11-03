@@ -1,0 +1,9 @@
+/.venv/
+/.deps/
+/build*/
+/dist/
+/.cache/
+*.user
+.DS_Store
+/aqtinstall.log
+

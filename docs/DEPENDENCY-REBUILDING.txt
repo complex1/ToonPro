@@ -1,0 +1,127 @@
+Toon Pro dependency source and library replacement notes
+======================================================
+
+This source bundle accompanies the matching Toon Pro binary distribution.
+Qt and FFmpeg are dynamically linked. Their license texts and attribution are
+also included inside the app's third-party directory. This document describes
+the supplied materials and replacement mechanism; it does not set a license
+for Toon Pro's own code or claim that vendor builds have been reproduced.
+
+Contents and provenance
+-----------------------
+SOURCE-MANIFEST.json records source URLs, revisions, SHA-256 values, matching
+basis and coverage limits. SHA256SUMS also covers the copied SDK manifests and
+these instructions. The archives are complete upstream repository snapshots,
+including their license files and vendored third-party source directories.
+
+QtBase and QtSvg use the exact commits recorded by the installed Qt 6.10.3
+SDK's SPDX files, including vendor fixes after the initial release. Replacing
+these with the initial 6.10.3 release tarballs would lose those fixes.
+QtMultimedia uses its v6.10.3 tag resolved to commit df54b9d71bd5c83691b598942e19107dfc23c2a7;
+the installed SDK records the release version but no source commit for this
+module. QtShaderTools is included at the revision required by that module.
+Qt's supermodule snapshot includes the 6.10.3 coin/provisioning build scripts.
+Its other module subdirectories are Git submodule placeholders, not additional
+module sources; only the explicitly listed source archives are supplied.
+
+FFmpeg n7.1.3 matches the SDK version and the source checksum in Qt's Unix
+provisioning script (SHA-1 27051817deec88bed3b9652d49f9127d22268d83).
+The additional SHA-256 checks protect archive integrity. They are recorded
+download hashes, not detached publisher signatures.
+
+Preparing a replacement build
+-----------------------------
+Use a separate work directory and install prefix. Do not overwrite the Qt SDK,
+the original app, or an artist's project/profile. Verify SHA256SUMS, then extract
+the individual archives into this work directory. Compilers and platform SDKs
+are not included. Use Qt's supported compiler/OS combination for Qt 6.10.3 and
+the same CPU architecture, C++ ABI, shared-library build and deployment target
+as the package. SDK configuration evidence is in sdk-sbom/qconfig.pri where
+provided. Preserve Qt's framework layout on macOS and DLL layout on Windows.
+
+Build QtBase first, QtSvg and QtShaderTools next, then FFmpeg and QtMultimedia.
+QtBase's configure script supports an independent install prefix:
+
+  mkdir qtbase-build
+  cd qtbase-build
+  /path/to/qtbase-source/configure -release -shared -nomake examples \
+      -nomake tests -prefix /path/to/replacement-qt
+  cmake --build . --parallel
+  cmake --install .
+
+Use configure.bat and native Windows paths on Windows. Select the appropriate
+Qt open-source license through the upstream configure process. The options
+above are a starting point, not a reproduction of the vendor's private build
+environment. Configure Qt modules with the newly installed qt-configure-module
+tool in separate build directories, then run cmake --build and cmake --install.
+For QtMultimedia provide the replacement FFmpeg prefix through FFMPEG_DIR.
+Qt Quick/QML modules are optional for Toon Pro's Widgets UI; if rebuilding the
+SDK's optional QML components, their matching sources must also be obtained.
+
+Qt's supplied FFmpeg instructions are in the extracted qt5 snapshot:
+
+  coin/provisioning/common/shared/ffmpeg_config_options.txt
+  coin/provisioning/common/unix/ffmpeg-installation-utils.sh
+  coin/provisioning/common/macos/install-ffmpeg-macos.sh
+  coin/provisioning/common/linux/install-ffmpeg-linux.sh
+  coin/provisioning/common/windows/install-ffmpeg.ps1
+
+Read these scripts as build references. Do not run them unchanged on a working
+machine: provisioning scripts install tools, change environment settings, use
+system paths and may invoke sudo. Use the supplied FFmpeg archive offline and
+copy the relevant configure options into your isolated build. Keep shared
+libraries enabled, preserve the ABI major versions, and review any newly
+enabled optional codecs or libraries against their own licensing terms.
+
+Installing modified compatible libraries
+----------------------------------------
+Quit Toon Pro and make a separate copy of its extracted package before changing
+libraries. Keep the filenames, dependency names, plugin paths and ABI versions
+used by the package. Replace related Qt libraries and plugins together when
+the change affects their interfaces. Do not mix release/debug or CPU variants.
+
+macOS: libraries live in Toon Pro.app/Contents/Frameworks and plugins in
+Contents/PlugIns. Preserve framework symlinks and @rpath/@loader_path dependency
+names. Modifying signed contents invalidates their signatures. A locally
+modified copy needs new valid nested signatures, followed by a signature on
+the application. For private local testing, an ad-hoc signature may be used
+where macOS allows it. This does not recreate the publisher's Developer ID or
+notarization. A hardened publisher build must preserve the user's permitted
+library replacement path; verify its entitlements and Gatekeeper behavior.
+
+Windows: replace the matching Qt and FFmpeg DLLs beside the executable and
+their matching plugin DLLs in the deployed plugin subdirectories. Use the same
+MSVC runtime/ABI and architecture. A modified DLL may trigger security checks;
+do not instruct users to disable platform protection as an installation step.
+
+Linux: replace the matching shared libraries in the extracted package's lib
+directory, keeping SONAME links and Qt plugin directories. Start through the
+supplied launcher so its relative library/plugin paths are used. System
+dependencies that the package does not ship remain supplied by the OS.
+
+After replacing libraries, verify the application and packaged smoke checks
+against a separate temporary profile. The repository's verify_package.py can
+run the isolated save/reopen, drawing, playback, media and renderer checks.
+Confirm ordinary opening, saving, drawing and playback before using a modified
+runtime with production work. No Toon Pro source or object files are included
+in this dependency-only bundle.
+
+Release coverage still to be confirmed
+-------------------------------------
+The source material and instructions do not constitute legal approval. Before
+public distribution, the publisher must confirm the actual deployed-library
+inventory, corresponding-source coverage, source delivery at the same download
+location, notices, installation/relinking rights and final application terms.
+Additional Linux runtime libraries, optional Qt modules, or modified external
+dependencies need their own matching source/notice review. No written source
+offer or application EULA is created by this file. Source rebuilds and modified
+library installation have not yet been independently verified.
+
+Official references
+-------------------
+https://www.qt.io/development/open-source-lgpl-obligations
+https://doc.qt.io/qt-6.10/build-sources.html
+https://doc.qt.io/qt-6.10/qtmultimedia-building-from-source.html
+https://doc.qt.io/qt-6.10/qtmultimedia-attribution-ffmpeg.html
+https://doc.qt.io/qt-6.10/supported-platforms.html
+https://developer.apple.com/developer-id/

@@ -1,0 +1,24 @@
+material {
+    name : ToonProReference,
+    shadingModel : lit,
+    blending : masked,
+    doubleSided : true,
+    requires : [ uv0 ],
+    parameters : [
+        { type : float4, name : baseColor },
+        { type : sampler2d, name : baseTexture },
+        { type : float, name : useTexture },
+        { type : float, name : useAlpha }
+    ]
+}
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        vec4 texel = texture(materialParams_baseTexture, getUV0());
+        material.baseColor = materialParams.baseColor * mix(vec4(1.0), texel, materialParams.useTexture);
+        material.baseColor.a = mix(1.0, material.baseColor.a, materialParams.useAlpha);
+        material.roughness = 0.9;
+        material.metallic = 0.0;
+        material.reflectance = 0.2;
+    }
+}

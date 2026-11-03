@@ -1,0 +1,5 @@
+<RCC><qresource prefix="/scene3d">
+<file alias="reference.filamat">reference.filamat</file>
+<file alias="licenses/Filament-LICENSE.txt">licenses/Filament-LICENSE.txt</file>
+<file alias="licenses/Filament-THIRD-PARTY-NOTICES.txt">licenses/Filament-THIRD-PARTY-NOTICES.txt</file>
+</qresource></RCC>

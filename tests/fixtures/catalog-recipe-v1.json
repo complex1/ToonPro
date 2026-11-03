@@ -1,0 +1,562 @@
+[
+    {
+        "hash": "8df804eaab479f92a1e82145c81ed7268e02b3f8ee6a253a6079a891caee685d",
+        "id": "builtin/catalog/clean-contour",
+        "smoothing": 12
+    },
+    {
+        "hash": "9acb8acde9d4a1e7ee3a0b349d615540536129d8620b854bbcdaea2286c80438",
+        "id": "builtin/catalog/tapered-hairline",
+        "smoothing": 12
+    },
+    {
+        "hash": "1ef07e10e52d6a2d6d0be37e2f95d9f683f23859bf1d70091d374e151daae6ba",
+        "id": "builtin/catalog/fine-facial-detail",
+        "smoothing": 12
+    },
+    {
+        "hash": "a6f5172719b74d7dc5d5c9d14cde28a849978394e0ed2654af99179369177fc3",
+        "id": "builtin/catalog/cloth-crease",
+        "smoothing": 12
+    },
+    {
+        "hash": "bc4114e3ad258c08aab5200bef702684e9c1dc109becd4ff6ac39f0ac4b35fe2",
+        "id": "builtin/catalog/dry-manga-nib",
+        "smoothing": 5
+    },
+    {
+        "hash": "b9902f9831c340301c426f889868de57e6378c17f033aa1ad93fdc78d114b384",
+        "id": "builtin/catalog/bold-silhouette",
+        "smoothing": 5
+    },
+    {
+        "hash": "3e44d0d32c35abc72755ee704fa4839fbdc4beb3ab331403ab4d96cf21236fa0",
+        "id": "builtin/catalog/delicate-eyelash",
+        "smoothing": 5
+    },
+    {
+        "hash": "ca3dd9d3937049f01116dfc8d6c6b18e280d8cd36bc09432313052b1ff9880ac",
+        "id": "builtin/catalog/hair-ribbon-ink",
+        "smoothing": 5
+    },
+    {
+        "hash": "94f8d4826ddfad6d31c1768a8c1f40003285fb565aa76521e0e1e7ff3ee9b5e3",
+        "id": "builtin/catalog/brush-letter-ink",
+        "smoothing": 5
+    },
+    {
+        "hash": "e1922efcb4caa1a77eb7dd0057f2db3641efee3cf10f531fae73c1fb6b6b70b4",
+        "id": "builtin/catalog/round-detail-mono",
+        "smoothing": 5
+    },
+    {
+        "hash": "61f49258c51eed4321de1ed8d958d58e7f203122338e19a2c99b864a9e812865",
+        "id": "builtin/catalog/angular-prop-ink",
+        "smoothing": 5
+    },
+    {
+        "hash": "d9da7249ff2d6c9c2045948d7fea3ded3daf7ab9eb28c7f458f6be730ee30d26",
+        "id": "builtin/catalog/rough-contour",
+        "smoothing": 5
+    },
+    {
+        "hash": "9dcefffff0d865d71bd5224eee3ed0bd9a77ab938cd49c69addd4e4146a65764",
+        "id": "builtin/catalog/fine-scratch-ink",
+        "smoothing": 5
+    },
+    {
+        "hash": "2e3c948529c6b44423f23c694475c1440bf75e14d11088c05b56dd95aeafd9e9",
+        "id": "builtin/catalog/foliage-ink",
+        "smoothing": 5
+    },
+    {
+        "hash": "3f07eabee95fcf51eddc65e4a4103c5083fc1e5dab59a5e639d202d51c6b4aee",
+        "id": "builtin/catalog/fabric-edge-ink",
+        "smoothing": 5
+    },
+    {
+        "hash": "f72d379fa520df0ec5d3d29dd739f2c07a34e67316a8bb3b7aad758a08053539",
+        "id": "builtin/catalog/calligraphic-accent",
+        "smoothing": 5
+    },
+    {
+        "hash": "c387c1d6f38ca43e1791186f84110d7dae6f6c254bffb51dfd984247fb130b26",
+        "id": "builtin/catalog/heavy-brush-accent",
+        "smoothing": 5
+    },
+    {
+        "hash": "8a10a2149738ad50dfb9c2b885e80bb658dc20e83fa09953be5f631a510c6d8a",
+        "id": "builtin/catalog/dry-edge-highlight",
+        "smoothing": 5
+    },
+    {
+        "hash": "d0f2ddd323eb0d46c3e25edcb2c8d2eeb24734b553613cbf9247017c30af5400",
+        "id": "builtin/catalog/construction-lead",
+        "smoothing": 5
+    },
+    {
+        "hash": "23464d636afc9013278b2ff650daa3d1a11d0d53e812409b4f380f35dceafa99",
+        "id": "builtin/catalog/rough-layout-pencil",
+        "smoothing": 5
+    },
+    {
+        "hash": "72a424232094656f7410d96d05faeb0d8f4bad70338b60d16dd8b8f7792956d8",
+        "id": "builtin/catalog/fine-layout-pencil",
+        "smoothing": 5
+    },
+    {
+        "hash": "f5e404f0f9b9d69e23ceeec93e55c6a012eb86178da7838c04d93821803b03ea",
+        "id": "builtin/catalog/soft-graphite-side",
+        "smoothing": 0
+    },
+    {
+        "hash": "34a56443c1312ffa9bd3d292cb6eb7d36a85f8faee01a7d4e64e892ed3a66bd1",
+        "id": "builtin/catalog/broken-graphite",
+        "smoothing": 0
+    },
+    {
+        "hash": "78beedc692ed7a00745087f8465b8ff5c7150226e97ee17c1b3579d4bcd2724c",
+        "id": "builtin/catalog/graphite-hatching",
+        "smoothing": 5
+    },
+    {
+        "hash": "c6b646cc026ef9782c92c4c5a1277de6394386d360bd873c1d23417cb085b9f2",
+        "id": "builtin/catalog/powder-charcoal",
+        "smoothing": 0
+    },
+    {
+        "hash": "729af2ea926863a08eb30eb946e4ab11c537e941a6a0d04feda2cd7229751913",
+        "id": "builtin/catalog/charcoal-edge",
+        "smoothing": 0
+    },
+    {
+        "hash": "5cfc9f54624f99e16c35decfe951a91bd53f297450675f7ef330c8e8bf76a9e3",
+        "id": "builtin/catalog/chalk-block",
+        "smoothing": 0
+    },
+    {
+        "hash": "dfa952fb47288be52dd9a1e591ba2eefbe21848ffbfcfdd312d4e05ea5383e27",
+        "id": "builtin/catalog/chalk-detail",
+        "smoothing": 0
+    },
+    {
+        "hash": "ce1ee3139f1ea4b662d335a42db01c4e53feef372e33d8227216702bc3442ac8",
+        "id": "builtin/catalog/dry-pastel",
+        "smoothing": 0
+    },
+    {
+        "hash": "b6d4b5560d3a36e82d654de5a8503ccd0ec22a33159b16b62c1855faec68ed49",
+        "id": "builtin/catalog/cont-accent",
+        "smoothing": 0
+    },
+    {
+        "hash": "8b3e286c8f7aaa674ab85a92abcf6814c04e2ed6c522ba26caa92a8b64984abf",
+        "id": "builtin/catalog/velvet-shade",
+        "smoothing": 0
+    },
+    {
+        "hash": "57b53f72a457db82aeb7b39df7cecff4d45df701c5fbe65f448967c2a279b4d3",
+        "id": "builtin/catalog/edge-glaze",
+        "smoothing": 0
+    },
+    {
+        "hash": "847983a8f963dd079ec64fb8890cb2b51a3f765bdb7d60ad846a01ce326acff9",
+        "id": "builtin/catalog/fine-aerosol",
+        "smoothing": 0
+    },
+    {
+        "hash": "0b0815f60b731f1dc19b484f38d7602bc370a83dbbf0191c0b95c0c6f7aa415b",
+        "id": "builtin/catalog/granular-spray",
+        "smoothing": 0
+    },
+    {
+        "hash": "fb518ef09774b1ffc24d9b45398bb11fb345122bf489b88c82fbb4a8b1dffb17",
+        "id": "builtin/catalog/soft-oval",
+        "smoothing": 0
+    },
+    {
+        "hash": "da62fb95c131b87de3ceb3696cae50d28aa66db71ecabe183312034d5cd84dc4",
+        "id": "builtin/catalog/broad-light-wash",
+        "smoothing": 0
+    },
+    {
+        "hash": "c43e37989eb78a89fac5214bbdd58a309c049b84fe877e22e3fd9a530597f7a9",
+        "id": "builtin/catalog/soft-rim-light",
+        "smoothing": 0
+    },
+    {
+        "hash": "ce65e45ecfb557dad5438ef5b925c8f806d927d6345b474890a6ad695b3dd40d",
+        "id": "builtin/catalog/dense-airbrush",
+        "smoothing": 0
+    },
+    {
+        "hash": "8183d000c38364bd73b951fec3c06779d8d7d5964f6af5a445d0cf30a1261bec",
+        "id": "builtin/catalog/dusty-spray",
+        "smoothing": 0
+    },
+    {
+        "hash": "84fd2db7c6ec18555752fe593e1770c48e38b1aaa2d2b253433e77933a68b4b0",
+        "id": "builtin/catalog/coarse-spatter",
+        "smoothing": 0
+    },
+    {
+        "hash": "17e9b224037896ea23700d339e6ed2583cfa4c2052d5c29c0bf9b71eba78c495",
+        "id": "builtin/catalog/needle-spatter",
+        "smoothing": 0
+    },
+    {
+        "hash": "c7dfd6eb04217ad8ac3ee0cd808192b5bd65d223e18ad4e13f408087836dce2b",
+        "id": "builtin/catalog/fine-pollen",
+        "smoothing": 0
+    },
+    {
+        "hash": "9c0a5240c12e17b4f5b7c8d45f65412e8d058b1dfb0ca2ad71c8e8f8061f6737",
+        "id": "builtin/catalog/soft-grain-glaze",
+        "smoothing": 0
+    },
+    {
+        "hash": "43ef63540b526341dad138c0dd3d90b4d9626ac089cae614405cf30f261abedd",
+        "id": "builtin/catalog/short-grass-tuft",
+        "smoothing": 0
+    },
+    {
+        "hash": "1e7577afa74c58c700807100d1f318805012b3aff67244cc38f70e2269b635dc",
+        "id": "builtin/catalog/wind-grass",
+        "smoothing": 0
+    },
+    {
+        "hash": "ae9d54402ba9d1da14b6d08db34d5485127b64ebb4d44f3736f09981d77a72fc",
+        "id": "builtin/catalog/clover-patch",
+        "smoothing": 0
+    },
+    {
+        "hash": "828da2b8326db1d37e2cf59ea378608444192413e555f46cb1a1f23ebaeb11e0",
+        "id": "builtin/catalog/moss-fringe",
+        "smoothing": 0
+    },
+    {
+        "hash": "8c17a0a0492aa1fd3781570afb09e595a02fd0c14cd9ed67d8244daf2b75f590",
+        "id": "builtin/catalog/broadleaf-cluster",
+        "smoothing": 0
+    },
+    {
+        "hash": "100e6d8830b380da9d9ef8748e2b9e851bfd2d6fb98c12c8ff564e8534ef32ff",
+        "id": "builtin/catalog/conifer-branch",
+        "smoothing": 0
+    },
+    {
+        "hash": "029f28a267ee218599305941a494e903ce96969a1d19aed249ad21140ac59030",
+        "id": "builtin/catalog/distant-canopy",
+        "smoothing": 0
+    },
+    {
+        "hash": "3a2af3524d6f5c929ac7c3332c30d6d6e2965b81e28f5921607ab7d088966f18",
+        "id": "builtin/catalog/bare-twig",
+        "smoothing": 0
+    },
+    {
+        "hash": "ca647be1bf93b1ae5e4308c8bcbcddd22843a72a1e42387e333887f819e93760",
+        "id": "builtin/catalog/vine-leaves",
+        "smoothing": 0
+    },
+    {
+        "hash": "3b7bd960b9190572f160fcfb71bf280af4765e1727d3e00201146232e223d0fb",
+        "id": "builtin/catalog/bark-edge",
+        "smoothing": 0
+    },
+    {
+        "hash": "b9185cfcfeff581fa70e1b227bee63684c26a6070869b65b5eb44efa4a27f030",
+        "id": "builtin/catalog/cloud-edge-soft",
+        "smoothing": 0
+    },
+    {
+        "hash": "1499700a252497049211ecb0236dd29e653dde986a7dad12aeb0260b14f0100e",
+        "id": "builtin/catalog/wispy-cloud",
+        "smoothing": 0
+    },
+    {
+        "hash": "f61e438eccf5f181bdb429af0a1faf3fa8b5ec2f940dd04f075b99275711a98c",
+        "id": "builtin/catalog/ground-mist",
+        "smoothing": 0
+    },
+    {
+        "hash": "c32489b2f24311aba24eef07a8e7df869438dcc4112e95bf9cf115011018c798",
+        "id": "builtin/catalog/sunlit-cloud-rim",
+        "smoothing": 0
+    },
+    {
+        "hash": "299f588abcfb242cf9273208d0bae56b15d5a63a06c65bb4d82d21cbeeffa2f6",
+        "id": "builtin/catalog/dust-haze",
+        "smoothing": 0
+    },
+    {
+        "hash": "1e3d64b2cbbfcaadedd303f7b3570043d134f2ebf0cc04ac2074cbd0f7598ab1",
+        "id": "builtin/catalog/mountain-haze",
+        "smoothing": 0
+    },
+    {
+        "hash": "8bfe04f3884dd7f832e9aba8b4ab4a776f75e51acdb23d53abac94806e15117e",
+        "id": "builtin/catalog/stone-grain",
+        "smoothing": 0
+    },
+    {
+        "hash": "ce690ef28347fa317bbdd2c380badd1bf58bdd2c8d9a76fa531221675047a88d",
+        "id": "builtin/catalog/sand-speckle",
+        "smoothing": 0
+    },
+    {
+        "hash": "21d72a896667352331b8e9b1467090badd549627cb9eab2be02eebe3030b2a6a",
+        "id": "builtin/catalog/soil-grain",
+        "smoothing": 0
+    },
+    {
+        "hash": "20fa7496dd87865766792d0c029e008e06a18d6cc46af25f57a25eed0139c14b",
+        "id": "builtin/catalog/cracked-earth",
+        "smoothing": 0
+    },
+    {
+        "hash": "6bc332e86f2eec7e5556776b819dee8e97c7944113e42e1ccb4d45fae2bec962",
+        "id": "builtin/catalog/mud-speckles",
+        "smoothing": 0
+    },
+    {
+        "hash": "b71411ef761b4dd8aee3001bea1336bac24511a39e5516e8ed1724b2cb2a5350",
+        "id": "builtin/catalog/rock-strata",
+        "smoothing": 0
+    },
+    {
+        "hash": "b388d7b23f226a976f55ba396657a1e7791c9fe5b51a87ab7d05073ee22d55c3",
+        "id": "builtin/catalog/cliff-facet",
+        "smoothing": 0
+    },
+    {
+        "hash": "5ee1da69050262c78da335ed3ef3222031e2823d15599c8b64926c35cdcbd34b",
+        "id": "builtin/catalog/snow-crust",
+        "smoothing": 0
+    },
+    {
+        "hash": "9e49ae52aaf2b5c261c1906461c6f8d35425ef3ff2ec38d7a387e7c61f69d1fc",
+        "id": "builtin/catalog/plaster-grain",
+        "smoothing": 0
+    },
+    {
+        "hash": "0f5ad2be8f0fcf5bb1eaa83c71085b82e3ff2f4f0c52a743724e5b312e64856d",
+        "id": "builtin/catalog/brick-surface",
+        "smoothing": 0
+    },
+    {
+        "hash": "967d51a5518205753b310e88dc24c58e76971255aae0130792ad8daaa45b7814",
+        "id": "builtin/catalog/wood-grain",
+        "smoothing": 0
+    },
+    {
+        "hash": "b634fb7e09387994108634eb9c5500273d8e416bcd020d74dc8a0aee476f21a6",
+        "id": "builtin/catalog/rough-concrete",
+        "smoothing": 0
+    },
+    {
+        "hash": "0b3bef465242fb30c3684cc6df5557948ed652d17b22f1e54afb236fa5de66bd",
+        "id": "builtin/catalog/smooth-concrete",
+        "smoothing": 0
+    },
+    {
+        "hash": "b30af88382687e71fb0381d84e1b635b6f1bfbb0001f0ace6673350376a1dc54",
+        "id": "builtin/catalog/stone-block-surface",
+        "smoothing": 0
+    },
+    {
+        "hash": "c0665fa5aa664253eccdfb650fa95482da84aa1abd1790311ea239751ddb0324",
+        "id": "builtin/catalog/roof-tile-surface",
+        "smoothing": 0
+    },
+    {
+        "hash": "044a960d10ecc4d6c4bb0b6136c085782d66a903f87c00248cf71dfcc95fc736",
+        "id": "builtin/catalog/asphalt-grain",
+        "smoothing": 0
+    },
+    {
+        "hash": "a456d1c7a3be729e66fd0abdbb19b0542afedcddef3f4a2ed0328b78e5e9ae2c",
+        "id": "builtin/catalog/stucco-wall",
+        "smoothing": 0
+    },
+    {
+        "hash": "0b21af32ad8bffe782a3c30fb11bc39f4cd913046987df71c061e9110be2d4a2",
+        "id": "builtin/catalog/peeling-paint",
+        "smoothing": 0
+    },
+    {
+        "hash": "40a1ee77b8fd9ad57a425614ce0bcaad5e55a368fb5ebaff2a313e26ad2cef8e",
+        "id": "builtin/catalog/wall-cracks",
+        "smoothing": 0
+    },
+    {
+        "hash": "321472fbdad93ec8e53ac1be2323edc2167a2e31d19434ed14a03881dd2fe069",
+        "id": "builtin/catalog/water-stains",
+        "smoothing": 0
+    },
+    {
+        "hash": "ad67ef95419de33c9e44ce89d7d0c63d89800af02338bb078393f9383dabccc3",
+        "id": "builtin/catalog/rust-flecks",
+        "smoothing": 0
+    },
+    {
+        "hash": "2b201711f7abf5c98a30fe9fbb2c5e898c2e9fc1d6369e0412f25a3f22d3e65a",
+        "id": "builtin/catalog/paint-roller-grain",
+        "smoothing": 0
+    },
+    {
+        "hash": "8012c035db103607cfe4f659ca4da7f6b18ccbf4e9cf37a75cd96b48a7b6981e",
+        "id": "builtin/catalog/fabric-weave",
+        "smoothing": 0
+    },
+    {
+        "hash": "18b455f86e6a17771bc825bc1ba1755a4539f1ecd0eaf7d4298fc4d43f0d9e91",
+        "id": "builtin/catalog/tatami-surface",
+        "smoothing": 0
+    },
+    {
+        "hash": "9352aca4bd06bdac73c07f97d5c99eee4fdd68d3d0d2a310240aec6941d21a47",
+        "id": "builtin/catalog/calm-ripples",
+        "smoothing": 0
+    },
+    {
+        "hash": "4ab676e41e09504976c603de67030afd0d1dbf5b15648eff83cab68ca28222a6",
+        "id": "builtin/catalog/broken-reflection",
+        "smoothing": 0
+    },
+    {
+        "hash": "d683ef8dbc0b18284b2f19d66a017dbc890a0f551d038e7cf058f34886e43609",
+        "id": "builtin/catalog/foam-flecks",
+        "smoothing": 0
+    },
+    {
+        "hash": "2ba9b6f7a9577c399017aa1e08ac00aa4f1f4475ab1bdf51dc5badc3017df42c",
+        "id": "builtin/catalog/surf-spray",
+        "smoothing": 0
+    },
+    {
+        "hash": "bd65a66d726b2f058c4d87f58bb471d3579f7190ef17eebce8f22c8eac9cb063",
+        "id": "builtin/catalog/caustic-surface",
+        "smoothing": 0
+    },
+    {
+        "hash": "54611f8871a89b932e905f0dd3eecc6d0e9563fbc6bf9eae16d2cd7fbb3f8343",
+        "id": "builtin/catalog/parallel-hatch",
+        "smoothing": 0
+    },
+    {
+        "hash": "fa27a176999edbac66d6a4354e6efdd8646250411d169204c615872628d21584",
+        "id": "builtin/catalog/stipple-shadow",
+        "smoothing": 0
+    },
+    {
+        "hash": "b0750a837845b45b6d4d84fd51251bb72272af74d3f74bd6b53582127febe4b9",
+        "id": "builtin/catalog/crosshatch-tile",
+        "smoothing": 0
+    },
+    {
+        "hash": "9241251c4db2658193972368ca17e76cf7db97f0d5f0d402c1d1885e174c111a",
+        "id": "builtin/catalog/engraved-shade",
+        "smoothing": 0
+    },
+    {
+        "hash": "843095faf9174486a38af125856804146d6520b9f1e433480ae568942d9c8566",
+        "id": "builtin/catalog/action-streak",
+        "smoothing": 0
+    },
+    {
+        "hash": "4403a08d1fe278b6f1cc1bd9c8be95723ae4d8a575b450b17d23c711dde0e199",
+        "id": "builtin/catalog/impact-fleck",
+        "smoothing": 0
+    },
+    {
+        "hash": "5a579e24e5729395009cd1565519afc59b57c35a60e4c3425a3d6b52d7ddda75",
+        "id": "builtin/catalog/dry-speed-texture",
+        "smoothing": 0
+    },
+    {
+        "hash": "c7a22f9e9bda6d08c2236df20b90e2d73c081027c4ae6fae035a6ce479ec7da3",
+        "id": "builtin/catalog/rain-hatching",
+        "smoothing": 0
+    },
+    {
+        "hash": "dee42cd18ed6a5aa33514a57192e293d2babf997f486566fd0b5da88f04fee9d",
+        "id": "builtin/catalog/spark-cross",
+        "smoothing": 0
+    },
+    {
+        "hash": "19094b74cbc1f91a492b6c23ac0e30b1f12bf0bc931e4966bf510eb321ac06d3",
+        "id": "builtin/catalog/flower-screen",
+        "smoothing": 0
+    },
+    {
+        "hash": "4156b941830901a47b8c76666df61f7331c29984ad6661780f81753027415c7a",
+        "id": "builtin/catalog/fine-rain",
+        "smoothing": 0
+    },
+    {
+        "hash": "5a0379ee00a0447147206b49d38f0644b4136150b8ea6a9b1f59436521ece9e3",
+        "id": "builtin/catalog/heavy-rain",
+        "smoothing": 0
+    },
+    {
+        "hash": "b9170f77e05d16bf7c8d9443f917df28741794dd3fb32747c086fa43f5213d77",
+        "id": "builtin/catalog/snow-flurry",
+        "smoothing": 0
+    },
+    {
+        "hash": "bde893ada99c1a1423e4a1057c43e053834cf6767973ff898ab4c0fc59a98582",
+        "id": "builtin/catalog/ember-drift",
+        "smoothing": 0
+    },
+    {
+        "hash": "207a46fb01b91a750f9384cf67b48d7f61864897cf767feedfd33ad3feb32521",
+        "id": "builtin/catalog/ash-drift",
+        "smoothing": 0
+    },
+    {
+        "hash": "83e6224dfc08383209a2d79c5491c4ebbeff293c8457e2bd9bf3a499d82631ca",
+        "id": "builtin/catalog/dust-motes",
+        "smoothing": 0
+    },
+    {
+        "hash": "7e3f5eb3a00d33c26d8fdbba781b70f2b560484e2883687474c346d354dfd749",
+        "id": "builtin/catalog/firefly-glow",
+        "smoothing": 0
+    },
+    {
+        "hash": "3c2b66098fc884a8e01a17c104a4a238ae0f53a8b1a84ca59b29e2d8272e9a40",
+        "id": "builtin/catalog/painted-leaf-cluster",
+        "smoothing": 0
+    },
+    {
+        "hash": "b130adac21348a224df388f60c84211c332b84e2db7d1c4253d6d771b4135ed3",
+        "id": "builtin/catalog/painted-flower",
+        "smoothing": 0
+    },
+    {
+        "hash": "75752629e158f55f464ce2f16284dee27a4d108743214b68bf29ce5e038855f9",
+        "id": "builtin/catalog/painted-pebble",
+        "smoothing": 0
+    },
+    {
+        "hash": "be5e4030414a1f9d1e7f001fd695b39a4a4937825f94a4b5ec51111ad30f2646",
+        "id": "builtin/catalog/painted-branch",
+        "smoothing": 0
+    },
+    {
+        "hash": "80f5775036c54c4b5e8a411b71b84d27ecabb122dd9a1df35a023ce32bc00a2f",
+        "id": "builtin/catalog/painted-moss-patch",
+        "smoothing": 0
+    },
+    {
+        "hash": "ebba97649ab7a2a65b0dd3cf940f00cdec83c9ee47646cc696ad65611d41a643",
+        "id": "builtin/catalog/painted-water-foam",
+        "smoothing": 0
+    },
+    {
+        "hash": "ac0f346c04607077ab075c5cb16449c699f43094d19b1c9f4649f771b4a280b0",
+        "id": "builtin/catalog/painted-ground-patch",
+        "smoothing": 0
+    }
+]
