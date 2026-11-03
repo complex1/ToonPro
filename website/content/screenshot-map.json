@@ -1,0 +1,313 @@
+{
+  "schemaVersion": 1,
+  "contentVersion": "0.75.0",
+  "primaryRendering": "The website generator inserts the matching primary image from assets/screenshots/index.json; guide Markdown contains supplemental images only.",
+  "imageProvenance": "Captures are real application or widget views, including historical fixtures for unchanged interfaces. The Blue Hour illustration was generated separately and imported into Toon Pro; it is not claimed as painted in the application. Full capture provenance remains in assets/screenshots/index.json.",
+  "guides": [
+    {
+      "slug": "3d-reference-and-rigging",
+      "markdown": "3d-reference-and-rigging.md",
+      "primary": {
+        "url": "/assets/screenshots/3d-reference-and-rigging.webp",
+        "caption": "The built-in mannequin rendered in a posed perspective view.",
+        "alt": "The built-in mannequin rendered in a posed perspective view.",
+        "sourceVersion": "development fixture"
+      },
+      "supplemental": [],
+      "implementationReferences": [
+        "docs/drawing-tools.md",
+        "docs/requirements.md",
+        "src/rig3d_panel.cpp",
+        "src/skin3d_panel.cpp",
+        "src/pose3d_panel.cpp"
+      ]
+    },
+    {
+      "slug": "audio-movie-and-export",
+      "markdown": "audio-movie-and-export.md",
+      "primary": {
+        "url": "/assets/screenshots/audio-movie-and-export.webp",
+        "caption": "Movie review with shot thumbnails and a shared playback position.",
+        "alt": "Movie review with shot thumbnails and a shared playback position.",
+        "sourceVersion": "0.75.0"
+      },
+      "supplemental": [],
+      "implementationReferences": [
+        "docs/animation.md",
+        "src/main_window.cpp",
+        "src/movie_review_panel.cpp",
+        "src/video_export_dialog.cpp"
+      ]
+    },
+    {
+      "slug": "brushes-and-dynamics",
+      "markdown": "brushes-and-dynamics.md",
+      "primary": {
+        "url": "/assets/screenshots/brushes-and-dynamics.webp",
+        "caption": "Advanced brush settings with a pressure response curve for stroke size.",
+        "alt": "Advanced brush settings with a pressure response curve for stroke size.",
+        "sourceVersion": "0.75.0"
+      },
+      "supplemental": [
+        {
+          "url": "/assets/screenshots/brush-management.webp",
+          "caption": "Brush Management groups brush previews, filters and editable metadata.",
+          "heading": "Make an independent brush"
+        }
+      ],
+      "implementationReferences": [
+        "docs/brush-settings.md",
+        "docs/brush-compatibility.md",
+        "src/brush_management_panel.cpp"
+      ]
+    },
+    {
+      "slug": "cel-paint-and-light-table",
+      "markdown": "cel-paint-and-light-table.md",
+      "primary": {
+        "url": "/assets/screenshots/cel-paint-and-light-table.webp",
+        "caption": "Cel Paint Check lists suspected holes and stray pixels for review.",
+        "alt": "Cel Paint Check lists suspected holes and stray pixels for review.",
+        "sourceVersion": "0.62.0"
+      },
+      "supplemental": [
+        {
+          "url": "/assets/screenshots/light-table.webp",
+          "caption": "A pinned drawing with opacity and temporary alignment controls in Light Table.",
+          "heading": "Shift and trace with Light Table"
+        }
+      ],
+      "implementationReferences": [
+        "docs/cel-coloring.md",
+        "src/cel_paint_check_panel.cpp",
+        "src/cel_shading_panel.cpp"
+      ]
+    },
+    {
+      "slug": "drawing-workspace",
+      "markdown": "drawing-workspace.md",
+      "primary": {
+        "url": "/assets/screenshots/drawing-workspace.webp",
+        "caption": "Original illustration imported into Toon Pro; actual application capture.",
+        "alt": "Original illustration imported into Toon Pro; actual application capture.",
+        "sourceVersion": "0.75.0"
+      },
+      "supplemental": [
+        {
+          "url": "/assets/screenshots/drawing-workspace-anime.webp",
+          "caption": "Original illustration imported into Toon Pro; actual anime-workspace capture.",
+          "heading": "Pick an arrangement for today's task"
+        }
+      ],
+      "implementationReferences": [
+        "docs/workspaces.md",
+        "docs/ui-guidelines.md",
+        "src/main_window_workspaces.cpp",
+        "src/quick_access_toolbar.cpp",
+        "src/brush_preset_panel.cpp"
+      ]
+    },
+    {
+      "slug": "frame-by-frame-animation",
+      "markdown": "frame-by-frame-animation.md",
+      "primary": {
+        "url": "/assets/screenshots/frame-by-frame-animation.webp",
+        "caption": "A drawing track and cel exposures in the current timeline layout.",
+        "alt": "A drawing track and cel exposures in the current timeline layout.",
+        "sourceVersion": "0.75.0"
+      },
+      "supplemental": [],
+      "implementationReferences": [
+        "docs/animation.md",
+        "src/timeline_panel.cpp"
+      ]
+    },
+    {
+      "slug": "getting-started",
+      "markdown": "getting-started.md",
+      "primary": {
+        "url": "/assets/screenshots/getting-started.webp",
+        "caption": "Anime project template with production-sheet preview and project settings.",
+        "alt": "Anime project template with production-sheet preview and project settings.",
+        "sourceVersion": "0.74.0"
+      },
+      "supplemental": [],
+      "implementationReferences": [
+        "docs/workspaces.md",
+        "src/project_dialog.cpp",
+        "src/main_window.cpp"
+      ]
+    },
+    {
+      "slug": "history-and-auto-actions",
+      "markdown": "history-and-auto-actions.md",
+      "primary": {
+        "url": "/assets/screenshots/history-and-auto-actions.webp",
+        "caption": "A recorded fill-and-transform workflow ready to replay in Auto Actions.",
+        "alt": "A recorded fill-and-transform workflow ready to replay in Auto Actions.",
+        "sourceVersion": "0.75.0"
+      },
+      "supplemental": [
+        {
+          "url": "/assets/screenshots/history.webp",
+          "caption": "History shows the recorded fill and transform operations for the current document.",
+          "heading": "Move through artwork history"
+        }
+      ],
+      "implementationReferences": [
+        "docs/history-and-actions.md",
+        "src/history_panel.cpp",
+        "src/auto_actions_panel.cpp"
+      ]
+    },
+    {
+      "slug": "keyframes-cameras-and-effects",
+      "markdown": "keyframes-cameras-and-effects.md",
+      "primary": {
+        "url": "/assets/screenshots/keyframes-cameras-and-effects.webp",
+        "caption": "Position keyframes shown beneath an animated layer in the timeline.",
+        "alt": "Position keyframes shown beneath an animated layer in the timeline.",
+        "sourceVersion": "0.73.0"
+      },
+      "supplemental": [],
+      "implementationReferences": [
+        "docs/animation.md",
+        "docs/layers.md",
+        "src/keyframe_panel.cpp",
+        "src/camera_panel.cpp"
+      ]
+    },
+    {
+      "slug": "layers-and-compositing",
+      "markdown": "layers-and-compositing.md",
+      "primary": {
+        "url": "/assets/screenshots/layers-and-compositing.webp",
+        "caption": "Compact layer stack with folders, visibility, locking and opacity controls.",
+        "alt": "Compact layer stack with folders, visibility, locking and opacity controls.",
+        "sourceVersion": "0.72.0"
+      },
+      "supplemental": [],
+      "implementationReferences": [
+        "docs/layers.md",
+        "docs/animation.md",
+        "src/layer_panel.cpp",
+        "src/effects_panel.cpp"
+      ]
+    },
+    {
+      "slug": "perspective-guides",
+      "markdown": "perspective-guides.md",
+      "primary": {
+        "url": "/assets/screenshots/perspective-guides.webp",
+        "caption": "Editable perspective assistants on the canvas.",
+        "alt": "Editable perspective assistants on the canvas.",
+        "sourceVersion": "development fixture"
+      },
+      "supplemental": [],
+      "implementationReferences": [
+        "docs/guides.md",
+        "src/guide_panel.cpp"
+      ]
+    },
+    {
+      "slug": "references-and-characters",
+      "markdown": "references-and-characters.md",
+      "primary": {
+        "url": "/assets/screenshots/references-and-characters.webp",
+        "caption": "Character Model Sheets organize reusable turnaround references.",
+        "alt": "Character Model Sheets organize reusable turnaround references.",
+        "sourceVersion": "0.59.0"
+      },
+      "supplemental": [
+        {
+          "url": "/assets/screenshots/character-colors.webp",
+          "caption": "A character’s Night color variant organized by material and shading role.",
+          "heading": "Define approved character colors"
+        },
+        {
+          "url": "/assets/screenshots/character-recolor.webp",
+          "caption": "Preview a Night palette on selected drawings before applying recoloring.",
+          "heading": "Recolor existing drawings with a preview"
+        }
+      ],
+      "implementationReferences": [
+        "docs/drawing-tools.md",
+        "docs/cel-coloring.md",
+        "src/character_model_panel.cpp",
+        "src/character_color_panel.cpp"
+      ]
+    },
+    {
+      "slug": "selection-and-transform",
+      "markdown": "selection-and-transform.md",
+      "primary": {
+        "url": "/assets/screenshots/selection-and-transform.webp",
+        "caption": "Selection boundary and contextual actions on a synthetic illustration fixture.",
+        "alt": "Selection boundary and contextual actions on a synthetic illustration fixture.",
+        "sourceVersion": "development fixture"
+      },
+      "supplemental": [],
+      "implementationReferences": [
+        "docs/selections.md",
+        "docs/drawing-tools.md",
+        "src/main_window.cpp"
+      ]
+    },
+    {
+      "slug": "shortcuts-and-troubleshooting",
+      "markdown": "shortcuts-and-troubleshooting.md",
+      "primary": {
+        "url": "/assets/screenshots/shortcuts-and-troubleshooting.webp",
+        "caption": "The compact drawing drawer opens controls over the canvas.",
+        "alt": "The compact drawing drawer opens controls over the canvas.",
+        "sourceVersion": "0.57.0"
+      },
+      "supplemental": [],
+      "implementationReferences": [
+        "docs/drawing-tools.md",
+        "docs/selections.md",
+        "docs/animation.md",
+        "src/main_window.cpp",
+        "src/color_panel.cpp"
+      ]
+    },
+    {
+      "slug": "symbols-and-lip-sync",
+      "markdown": "symbols-and-lip-sync.md",
+      "primary": {
+        "url": "/assets/screenshots/symbols-and-lip-sync.webp",
+        "caption": "Symbol clip timing and held-pose controls for manual pose changes.",
+        "alt": "Symbol clip timing and held-pose controls for manual pose changes.",
+        "sourceVersion": "0.71.0"
+      },
+      "supplemental": [
+        {
+          "url": "/assets/screenshots/symbol-editor.webp",
+          "caption": "The Symbol editor opens reusable content with its own drawing timeline.",
+          "heading": "Edit the shared source"
+        }
+      ],
+      "implementationReferences": [
+        "docs/symbols.md",
+        "docs/animation.md",
+        "src/symbol_clip_panel.cpp"
+      ]
+    },
+    {
+      "slug": "vector-drawing",
+      "markdown": "vector-drawing.md",
+      "primary": {
+        "url": "/assets/screenshots/vector-drawing.webp",
+        "caption": "Path Edit controls for adjusting width along an editable vector stroke.",
+        "alt": "Path Edit controls for adjusting width along an editable vector stroke.",
+        "sourceVersion": "0.55.0"
+      },
+      "supplemental": [],
+      "implementationReferences": [
+        "docs/drawing-tools.md",
+        "docs/animation.md",
+        "src/vector_edit_panel.cpp"
+      ]
+    }
+  ]
+}

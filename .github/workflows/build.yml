@@ -2,7 +2,33 @@ name: Desktop release candidates
 
 on:
   push:
+    paths:
+      - 'src/**'
+      - 'include/**'
+      - 'resources/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'cmake/**'
+      - 'third-party/**'
+      - 'CMakeLists.txt'
+      - 'CMakePresets.json'
+      - '*.cmake'
+      - 'vcpkg*.json'
+      - '.github/workflows/build.yml'
   pull_request:
+    paths:
+      - 'src/**'
+      - 'include/**'
+      - 'resources/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'cmake/**'
+      - 'third-party/**'
+      - 'CMakeLists.txt'
+      - 'CMakePresets.json'
+      - '*.cmake'
+      - 'vcpkg*.json'
+      - '.github/workflows/build.yml'
   workflow_dispatch:
 
 # This workflow creates tested candidate artifacts only. It never publishes a
@@ -20,13 +46,14 @@ jobs:
     strategy:
       fail-fast: false
       # Candidate branches fill the Windows validation gap without repeating
-      # locally verified Mac/Linux builds. Normal CI and manual runs test all.
+      # locally verified Mac builds. Normal CI and manual runs test Mac/Windows.
+      # Linux recipes remain in the repository but its release is deferred.
       matrix:
         include: >-
           ${{ fromJSON(
             (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/codex/release-candidate-'))
             && '[{"os":"windows-2022","host":"windows","arch":"win64_msvc2022_64","qt_dir":"msvc2022_64","target":"windows-x86_64","filament":"OFF"}]'
-            || '[{"os":"macos-15","host":"mac","arch":"clang_64","qt_dir":"macos","target":"macos-arm64","filament":"ON","apple_arch":"arm64"},{"os":"macos-15-intel","host":"mac","arch":"clang_64","qt_dir":"macos","target":"macos-x86_64","filament":"OFF","apple_arch":"x86_64"},{"os":"windows-2022","host":"windows","arch":"win64_msvc2022_64","qt_dir":"msvc2022_64","target":"windows-x86_64","filament":"OFF"},{"os":"ubuntu-24.04","host":"linux","arch":"linux_gcc_64","qt_dir":"gcc_64","target":"linux-x86_64","filament":"OFF"}]'
+            || '[{"os":"macos-15","host":"mac","arch":"clang_64","qt_dir":"macos","target":"macos-arm64","filament":"ON","apple_arch":"arm64"},{"os":"macos-15-intel","host":"mac","arch":"clang_64","qt_dir":"macos","target":"macos-x86_64","filament":"OFF","apple_arch":"x86_64"},{"os":"windows-2022","host":"windows","arch":"win64_msvc2022_64","qt_dir":"msvc2022_64","target":"windows-x86_64","filament":"OFF"}]'
           ) }}
     runs-on: ${{ matrix.os }}
     env:
@@ -167,10 +194,10 @@ jobs:
       - name: Check packaging scripts
         run: python -m unittest discover -s tests -p test_packaging_scripts.py
       # Packages are produced only after tests, through a deliberate manual
-      # run or an explicitly named release-candidate branch. No signing keys
+      # run, main integration, or an explicitly named release-candidate branch. No signing keys
       # or GitHub Release publication are used; artifacts share repo visibility.
       - name: Stage, relocate and verify macOS candidate
-        if: success() && github.event_name == 'workflow_dispatch' && runner.os == 'macOS'
+        if: success() && runner.os == 'macOS' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
         shell: bash
         run: |
           args=(--dmg)
@@ -183,14 +210,14 @@ jobs:
           --qt-root ".deps/Qt/6.10.3/${{ matrix.qt_dir }}" --output-dir build/package --skip-build --xvfb
           --ffmpeg-root build/linux-codecs/install
       - name: Stage, relocate and verify Windows candidate
-        if: success() && runner.os == 'Windows' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/codex/release-candidate-')))
+        if: success() && runner.os == 'Windows' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/codex/release-candidate-'))))
         shell: pwsh
         run: |
           $env:PATH = "${{ github.workspace }}\.deps\Qt\6.10.3\msvc2022_64\bin;$env:PATH"
           python scripts/package_desktop.py --build-dir build --config Release --qt-root ".deps/Qt/6.10.3/${{ matrix.qt_dir }}" --output-dir build/package --skip-build
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Upload verified candidate packages
-        if: success() && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/codex/release-candidate-')))
+        if: success() && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/codex/release-candidate-'))))
         uses: actions/upload-artifact@v4
         with:
           name: ToonPro-candidate-${{ matrix.target }}

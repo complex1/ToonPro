@@ -1,0 +1,8 @@
+{
+  "version": "0.75.0",
+  "channel": "Public preview",
+  "repository": "https://github.com/complex1/ToonPro",
+  "mac": {"status":"local-verified","label":"macOS · Apple Silicon","minimum":"macOS 13 or later","note":"The Apple Silicon candidate has passed package checks. A public download is being prepared. It is ad-hoc signed and not notarized.","url":null},
+  "windows": {"status":"testing","label":"Windows · 64-bit","minimum":"Windows 10 1809 or later / Windows 11","note":"The Windows candidate is in validation. A download will appear after the full test and package checks pass.","url":null},
+  "intel": {"status":"withheld","note":"The Intel Mac candidate is not available while an audio-export crash is investigated."}
+}

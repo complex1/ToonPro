@@ -2,6 +2,8 @@
 
 The current release candidate is **Toon Pro 0.75.0**, using **Qt 6.10.3**. Candidates are test builds, not signed production releases. Packaging creates local artifacts and reports; it does not publish a release, upload to a store, or install over an existing Toon Pro session. `package.json` deliberately records `published: false`, `releaseChannel: "candidate"` and `publicReleaseReady: false`.
 
+The active distribution scope is **Windows and macOS**. Linux is deferred; its recipes and earlier verification results below are retained for future work, with no Linux target in the active CI matrix or current download offering.
+
 The scripts stage the native application, Qt libraries/plugins, matching FFmpeg libraries, dependency notices and build-capability metadata. They relocate that installation into a temporary directory and run the app without its development SDK environment. Distribution archives and checksums are created after verification passes.
 
 ## Current platform status
@@ -10,8 +12,7 @@ The scripts stage the native application, Qt libraries/plugins, matching FFmpeg 
 | --- | --- | --- | --- |
 | macOS arm64, deployment target 13.0 | ZIP and optional DMG | Filament 1.78.0 / Metal | 0.75.0 package passed all 20 checks in offscreen 2× and native Cocoa modes. A copy from the mounted DMG also passed the native checks. |
 | macOS x86_64, deployment target 13.0 | ZIP and optional DMG | Unavailable in this build | Cross-compiled; intermittent AAC export crashes under Rosetta. Artifact withheld pending diagnosis and actual Intel acceptance. |
-| Linux x86_64, Ubuntu 24.04 / glibc 2.39 baseline | Portable `.tar.gz` | Unavailable in this build | 25 selected suites and six save/export follow-up suites pass; relocated offscreen 2× and native XCB package checks pass with software H.264/AAC. Final archive passes all 20 checks in each mode in a clean Ubuntu runtime container without SDK/compiler/source. |
-| Windows x86_64, MSVC 2022 | Portable ZIP | Unavailable in this build | Application compiles in native Windows CI. First full run: 195/246 suites passed; six focused suites now pass after save/font fixes. A short-AAC export fix is entering full CI; packages remain withheld. |
+| Windows x86_64, MSVC 2022 | Portable ZIP | Unavailable in this build | Application and all test targets compile in native Windows CI. All seven focused suites pass after save/font/short-AAC fixes. Full 246-suite validation is running; packages remain withheld. |
 
 These are build targets and recorded results, not a claim of testing every OS version. The verified Apple Silicon artifacts are in `dist/0.75.0/macos-arm64/`. Their exact sizes, hashes, capabilities and checks are in `package.json`, `SHA256SUMS` and `verification/package-verification.json`. The current Mac candidate has an **ad-hoc signature**, with no Developer ID signature or notarization. Clean-machine installation and physical Huion acceptance remain separate checks.
 
@@ -80,7 +81,9 @@ python scripts/package_desktop.py `
 
 The portable ZIP contains `bin/ToonPro.exe`, deployed Qt/FFmpeg libraries and plugins. CMake stages release MSVC runtime DLLs beside the executable. Verification inspects both normal and delayed DLL imports and rejects missing compiler runtimes. Windows 10/11 supplies UCRT; no Visual Studio installation should be needed, subject to actual clean-machine validation. Windows packages are unsigned: the script does not implement Authenticode signing or claim SmartScreen acceptance.
 
-### Linux
+### Linux — deferred recipe and verification history
+
+This platform is not being distributed in the current Windows/Mac release. Its earlier build passed 25 selected suites and six save/export follow-up suites; relocated offscreen 2× and native XCB checks passed with software H.264/AAC. The retained archive passed all 20 checks in each mode in a clean Ubuntu runtime container without SDK/compiler/source. These historical checks do not enable a Linux release or establish physical Linux workstation acceptance.
 
 The current target uses Ubuntu 24.04 / glibc 2.39 and Qt's `gcc_64` SDK. Packaging requires `patchelf`, `readelf` from binutils and `ldd`. Native GUI checks require an X11 display, or Xvfb for automated checks. Build the software codec runtime with the recipe below before packaging. The dependency list is in the workflow; [the Linux release Dockerfile](../scripts/linux-release.Dockerfile) provides the same baseline for an isolated build environment.
 
@@ -129,7 +132,9 @@ python3 scripts/package_desktop.py \
 
 These options are macOS-only. `--notarize-profile` requires `--sign-identity`, uploads the newly created application archive and optional DMG to Apple, checks acceptance, staples tickets and validates them. Secrets remain in the existing keychain profile. This path is implemented but has not been exercised for the current candidate; no suitable signing identity has been provided. Signing/notarization does not publish the app.
 
-The GitHub workflow builds/tests macOS arm64, macOS x86_64, Windows x86_64 and Linux x86_64. Distribution artifacts are produced after successful tests by a manual `workflow_dispatch`, or a push to `codex/release-candidate-*` (Windows only). Other push/PR runs perform tests. Diagnostic artifacts can be uploaded on any workflow run. The artist authorized public source and test downloads in `complex1/ToonPro`. Repository visibility also controls artifact visibility; use a private repository when private downloads are required. The workflow does not create a GitHub Release; its artifact retention is 30 days for candidates and 14 days for diagnostics.
+The GitHub workflow builds/tests macOS arm64, macOS x86_64 and Windows x86_64; Linux is inactive. Distribution artifacts are produced only after successful tests and packaged-runtime verification, through a manual `workflow_dispatch`, an application/CI change on `main`, or a push to `codex/release-candidate-*` (Windows only). Other application push/PR runs perform tests. Website-only changes do not trigger desktop builds. Windows diagnostics collect all seven results and the full suite even if an early diagnostic fails; an explicit failure gate prevents packaging in that case. Diagnostic artifacts are uploaded even after failure.
+
+The artist authorized public source and test downloads in `complex1/ToonPro`. Repository visibility also controls artifact visibility; [GitHub Actions artifact downloads require a GitHub sign-in and expire](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts). The workflow does not create a GitHub Release; its artifact retention is 30 days for candidates and 14 days for diagnostics. No failed or unverified platform should be offered by the download page.
 
 ## Runtime checks and reports
 

@@ -1,14 +1,20 @@
 # Toon Pro
 
-A native desktop workspace for a solo artist making hand-drawn anime. Built with **C++20, Qt 6 Widgets, and CMake** for macOS, Windows and Linux.
+A native desktop workspace for a solo artist making hand-drawn anime. Built with **C++20, Qt 6 Widgets, and CMake**. Current distribution work targets **macOS and Windows**; Linux distribution is deferred.
 
 This repository contains a native **drawing workspace with frame-by-frame animation, layer/property keyframes, vector path morphing and production-sheet exports**. Apple Silicon Mac builds also provide 3D references, rest-skeleton editing, mesh binding, weight painting and FK/two-bone IK posing. Drawing exposures, property animation, 2D/3D camera keys and embedded audio clips share the shot timeline.
 
 ## Desktop release candidates — 0.75.0
 
-Optimized desktop packages, dependency deployment, relocated runtime checks and SHA-256 manifests are now available through the [packaging workflow](docs/packaging.md). The source and Windows candidate CI are in [complex1/ToonPro](https://github.com/complex1/ToonPro/tree/codex/release-candidate-0.75.0).
+Optimized desktop packaging, dependency deployment, relocated runtime checks and SHA-256 manifests are implemented in the [packaging workflow](docs/packaging.md). The public source and candidate CI are in [complex1/ToonPro](https://github.com/complex1/ToonPro). Apple Silicon packages have passed local verification; Windows validation is still in progress, and Intel Mac packages remain withheld pending audio-export verification.
 
 These are **unsigned/ad-hoc-signed test candidates**, not a signed production release. macOS arm64 includes the Metal 3D renderer; the other platform builds currently provide the 2D drawing/animation workflow without 3D rendering. See [release verification and remaining acceptance work](docs/release-0.75.0.md) for the exact build/test status and artifacts. Older milestone results below describe their original development builds.
+
+## Product website and illustrated field guide
+
+The [website source](website/README.md) contains a cinematic product site and **16 detailed artist guides with 23 authentic application screenshots**. It covers the drawing workspace, brushes, character references and palettes, cel painting, animation, Symbols, audio and export. Documentation includes local search, enlarged screenshots, keyboard navigation, mobile layouts and print/PDF output. Original illustrative artwork is credited separately from real app captures.
+
+GitHub Pages deployment is configured for `https://complex1.github.io/ToonPro/`; initial publication requires the repository's Pages source to be set to **GitHub Actions**. Download links remain unavailable until their corresponding public packages pass validation. See [website maintenance and publishing](website/README.md).
 
 ## Scene and Movie playback in 0.75.0
 

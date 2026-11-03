@@ -1,8 +1,18 @@
 # Toon Pro development checklist
 
-Updated 3 November 2026. Current implementation: **0.75.0** Scene/Movie playback, shot thumbnails and a global playhead with continuous shot audio. The app builds and all **130 regression suites pass**. Nine native Mac suites and nine Retina suites each pass **140 checks**, with no failures/skips. Results are recorded in [the development log](DEVELOPMENT.md). Earlier release results below are historical.
+Updated 4 November 2026. Current implementation: **0.75.0** Scene/Movie playback, shot thumbnails and a global playhead with continuous shot audio. The app builds and all **130 regression suites pass**. Nine native Mac suites and nine Retina suites each pass **140 checks**, with no failures/skips. Results are recorded in [the development log](DEVELOPMENT.md). Earlier release results below are historical.
+
+## Website and illustrated documentation
+
+- [x] Build the responsive product website with original anime artwork, real app captures and 16 detailed guides.
+- [x] Verify all 21 routes, search, image previews, keyboard focus and mobile navigation (49 browser checks).
+- [x] Add GitHub Pages build, validation and deployment workflow.
+- [ ] Enable GitHub Actions as the repository Pages source and verify the public deployment.
+- [ ] Connect verified Windows/Mac public candidate downloads when available.
 
 ## Distribution candidates — 0.75
+
+Current distribution scope: **Windows and macOS**. Linux release work is deferred by the artist; its earlier checks and build recipes are retained as history.
 
 - [x] Add Release build configuration and capability metadata for macOS arm64/x86_64, Windows x86_64 and Ubuntu 24.04 x86_64.
 - [x] Package Qt/FFmpeg dependencies, notices, SHA-256 manifests and isolated runtime verification; provide optional Mac DMG/signing/notarization controls.
@@ -12,7 +22,7 @@ Updated 3 November 2026. Current implementation: **0.75.0** Scene/Movie playback
 - [x] Verify the Linux candidate with software H.264/AAC in relocated offscreen and native XCB checks.
 - [ ] Complete Windows native CI after save-file and offscreen-font fixes; keep failed packages withheld.
 - [ ] Resolve intermittent Intel Mac AAC export crashes and validate on actual Intel hardware.
-- [ ] Complete all platform candidates and record final results in [release verification](release-0.75.0.md).
+- [ ] Complete the active Windows/macOS candidates and record final results in [release verification](release-0.75.0.md).
 - [ ] Test physical Huion input and real production projects on each supported operating system.
 - [ ] Validate clean-machine installation on supported OS baselines, including an actual Intel Mac and Windows compiler-runtime installation.
 - [ ] Complete dependency-source coverage/replacement review and choose application distribution terms.
