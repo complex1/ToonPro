@@ -246,8 +246,13 @@ class PackageScriptTests(unittest.TestCase):
                 verify.inspect_windows(stage)
             pe_runtime(stage / "bin/msvcp140_atomic_wait.dll")
             result = verify.inspect_windows(stage)
-            self.assertEqual(len(result), 5)
-            self.assertEqual(result[0]["file"], "bin/ToonPro.exe")
+            self.assertCountEqual(result, [
+                {"file": "bin/ToonPro.exe", "imports": ["msvcp140_atomic_wait.dll", "vcruntime140.dll"]},
+                {"file": "bin/vcruntime140.dll", "imports": []},
+                {"file": "bin/vcruntime140_1.dll", "imports": []},
+                {"file": "bin/msvcp140.dll", "imports": []},
+                {"file": "bin/msvcp140_atomic_wait.dll", "imports": []},
+            ])
 
     @unittest.skipIf(os.name == "nt", "Xvfb uses POSIX ready descriptors")
     def test_virtual_display_uses_ready_descriptor_and_cleans_up_its_process(self):
@@ -326,6 +331,22 @@ class PackageScriptTests(unittest.TestCase):
             self.assertEqual(result["version"], "73.2")
             self.assertEqual(result["libraries"], ["libicuuc.so.73.2"])
             self.assertEqual((destination / cached.name).read_bytes(), cached.read_bytes())
+
+    def test_empty_cache_can_stage_reviewed_notices_without_network(self):
+        with tempfile.TemporaryDirectory() as temporary, \
+             mock.patch.object(package.urllib.request, "urlopen", side_effect=AssertionError("network accessed")):
+            root = Path(temporary)
+            stage, cache, destination = root / "stage", root / "cache", root / "licenses"
+            for path in (stage, cache, destination):
+                path.mkdir()
+            name, url = package.download_license("Apache-2.0", cache)
+            self.assertEqual(name, "Apache-2.0")
+            self.assertIn("/v3.27.0/text/", url)
+            self.assertIn("TERMS AND CONDITIONS", (cache / "Apache-2.0.txt").read_text())
+            (stage / "libicuuc.so.73.2").touch()
+            documents = [{"packages": [{"name": "ICU", "versionInfo": "73.2"}]}]
+            result = package.collect_icu_notice(stage, documents, destination, cache)
+            self.assertEqual(package.digest(destination / result["file"]), package.ICU_NOTICES["73.2"][1])
 
     def test_cache_can_be_explicit_or_environment_configured(self):
         with tempfile.TemporaryDirectory() as temporary:

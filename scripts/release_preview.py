@@ -208,32 +208,51 @@ def publish(output: Path, repository: str, commit: str, run_id: str) -> str:
             "Prepared assets changed before upload")
 
     def gh(*args: str, check: bool = True) -> subprocess.CompletedProcess:
-        return subprocess.run(["gh", *args], check=check, capture_output=True, text=True)
+        result = subprocess.run(["gh", *args], check=False, capture_output=True, text=True)
+        if check and result.returncode:
+            raise RuntimeError("GitHub release command failed: " + result.stderr.strip())
+        return result
 
-    endpoint = f"repos/{repository}/releases/tags/{tag}"
-    existing = gh("api", endpoint, check=False)
-    if existing.returncode == 0:
-        release = json.loads(existing.stdout)
-        require(release.get("draft") is True and release.get("prerelease") is True
-                and release.get("target_commitish") == commit,
-                "A different or already public release exists; it will not be changed")
-    else:
+    releases = f"repos/{repository}/releases"
+
+    def draft_id() -> str:
+        # A draft may have no Git ref yet. GitHub lists authenticated drafts but
+        # its GET /releases/tags/{tag} route can return 404 until publication.
+        found = gh("api", "--paginate", f"{releases}?per_page=100",
+                   "--jq", f'.[] | select(.tag_name == "{tag}") | .id').stdout.strip()
+        require(not found or re.fullmatch(r"[1-9][0-9]*", found),
+                "Expected one release ID for the preview tag")
+        return found
+
+    release_id = draft_id()
+    if not release_id:
         gh("release", "create", tag, "--repo", repository, "--target", commit,
            "--draft", "--prerelease", "--latest=false", "--title", f"Toon Pro {VERSION} preview ({run_id})",
            "--notes-file", str(output / "RELEASE-NOTES.md"))
-    # Retry only the same private draft. Public releases/assets are immutable.
-    gh("release", "upload", tag, "--repo", repository, "--clobber", *(str(p) for p in assets))
-    release = json.loads(gh("api", endpoint).stdout)
-    require(release.get("draft") is True and release.get("target_commitish") == commit,
-            "Draft changed during upload")
-    uploaded = release.get("assets", [])
+        release_id = draft_id()
+        require(release_id, "Created draft is missing from the release list")
+    endpoint = f"{releases}/{release_id}"
+
+    def verified_draft() -> dict:
+        release = json.loads(gh("api", endpoint).stdout)
+        require(release.get("tag_name") == tag and release.get("draft") is True
+                and release.get("prerelease") is True and release.get("target_commitish") == commit,
+                "A different or already public release exists; it will not be changed")
+        return release
+
+    # Resume an interrupted upload without replacing any existing asset.
+    uploaded = {a["name"] for a in verified_draft()["assets"]}
+    missing = [str(p) for p in assets if p.name not in uploaded]
+    if missing:
+        gh("release", "upload", tag, "--repo", repository, *missing)
+    uploaded = verified_draft()["assets"]
     require({a.get("name") for a in uploaded} == {p.name for p in assets}
             and len(uploaded) == len(assets), "Remote release asset set is incomplete")
     for asset in uploaded:
         local = output / asset["name"]
         require(asset.get("state") == "uploaded" and asset.get("size") == local.stat().st_size
                 and asset.get("digest") == "sha256:" + digest(local), "Remote upload integrity failed")
-    gh("release", "edit", tag, "--repo", repository, "--draft=false", "--prerelease", "--latest=false")
+    gh("api", "--method", "PATCH", endpoint, "-F", "draft=false", "-F", "prerelease=true", "-f", "make_latest=false")
     return f"https://github.com/{repository}/releases/tag/{tag}"
 
 

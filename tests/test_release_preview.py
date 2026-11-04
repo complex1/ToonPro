@@ -155,55 +155,72 @@ class PreviewPublicationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unsafe"):
             release.regular_file(root, "../outside")
 
+    def draft(self, *, complete=True):
+        assets = [{"name": p.name, "state": "uploaded", "size": p.stat().st_size,
+                   "digest": "sha256:" + release.digest(p)}
+                  for p in self.output.iterdir() if p.name != "RELEASE-NOTES.md"] if complete else []
+        return {"tag_name": "v0.75.0-preview.1234", "draft": True, "prerelease": True,
+                "target_commitish": COMMIT, "assets": assets}
+
+    def run_publisher(self):
+        return release.publish(self.output, "complex1/ToonPro", COMMIT, RUN)
+
     def test_remote_hash_checked_before_publication(self):
         self.candidate()
         self.prepare()
-        calls = []
-        def command(args, **kwargs):
-            calls.append(args)
-            if args[1] == "api":
-                data = {"draft": True, "prerelease": True, "target_commitish": COMMIT, "assets": []}
-                if len(calls) > 1:
-                    data["assets"] = [{"name": p.name, "state": "uploaded", "size": p.stat().st_size,
-                                       "digest": "sha256:" + release.digest(p)} for p in self.output.iterdir() if p.name != "RELEASE-NOTES.md"]
-                    data["assets"][0]["digest"] = "sha256:" + "0" * 64
-                return subprocess.CompletedProcess(args, 0, json.dumps(data))
-            return subprocess.CompletedProcess(args, 0, "")
-        with mock.patch.object(release.subprocess, "run", side_effect=command):
+        data = self.draft()
+        data["assets"][0]["digest"] = "sha256:" + "0" * 64
+        replies = ["4321", json.dumps(data), json.dumps(data)]
+        with mock.patch.object(release.subprocess, "run", side_effect=[
+                subprocess.CompletedProcess([], 0, out) for out in replies]) as run:
             with self.assertRaisesRegex(ValueError, "upload integrity"):
-                release.publish(self.output, "complex1/ToonPro", COMMIT, RUN)
-        self.assertFalse(any("edit" in c for c in calls))
+                self.run_publisher()
+        self.assertFalse(any("PATCH" in call.args[0] for call in run.call_args_list))
 
     def test_existing_public_release_is_never_modified(self):
         self.candidate()
         self.prepare()
-        with mock.patch.object(release.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, json.dumps({"draft": False, "target_commitish": COMMIT}))) as run:
+        public = self.draft()
+        public["draft"] = False
+        with mock.patch.object(release.subprocess, "run", side_effect=[
+                subprocess.CompletedProcess([], 0, out) for out in ("4321", json.dumps(public))]) as run:
             with self.assertRaisesRegex(ValueError, "already public"):
-                release.publish(self.output, "complex1/ToonPro", COMMIT, RUN)
-        self.assertEqual(run.call_count, 1)
+                self.run_publisher()
+        self.assertEqual(run.call_count, 2)
 
     def test_complete_verified_upload_is_published_last(self):
         self.candidate()
         self.prepare()
-        calls = []
-        def command(args, **kwargs):
-            calls.append(args)
-            if args[1] == "api":
-                if len(calls) == 1:
-                    return subprocess.CompletedProcess(args, 1, "")
-                return subprocess.CompletedProcess(args, 0, json.dumps({
-                    "draft": True, "target_commitish": COMMIT,
-                    "assets": [{"name": p.name, "state": "uploaded", "size": p.stat().st_size,
-                                "digest": "sha256:" + release.digest(p)}
-                               for p in self.output.iterdir() if p.name != "RELEASE-NOTES.md"]}))
-            return subprocess.CompletedProcess(args, 0, "")
-        with mock.patch.object(release.subprocess, "run", side_effect=command):
-            url = release.publish(self.output, "complex1/ToonPro", COMMIT, RUN)
+        # GitHub's tag lookup returns 404 for a draft with an unpublished tag.
+        # Listing discovers the created ID and all verification uses that ID.
+        replies = ["", "", "4321", json.dumps(self.draft(complete=False)), "",
+                   json.dumps(self.draft()), "{}"]
+        with mock.patch.object(release.subprocess, "run", side_effect=[
+                subprocess.CompletedProcess([], 0, out) for out in replies]) as run:
+            url = self.run_publisher()
+        calls = [call.args[0] for call in run.call_args_list]
         self.assertTrue(url.endswith("/releases/tag/v0.75.0-preview.1234"))
         self.assertIn("--draft", calls[1])
-        self.assertIn("upload", calls[2])
-        self.assertIn("--draft=false", calls[-1])
-        self.assertIn("--latest=false", calls[-1])
+        self.assertIn("upload", calls[4])
+        self.assertEqual(calls[3], ["gh", "api", "repos/complex1/ToonPro/releases/4321"])
+        self.assertEqual(calls[5], calls[3])
+        self.assertIn("PATCH", calls[-1])
+        self.assertIn("draft=false", calls[-1])
+        self.assertIn("make_latest=false", calls[-1])
+
+    def test_resume_existing_draft_uploads_only_missing_assets(self):
+        self.candidate()
+        self.prepare()
+        partial = self.draft()
+        missing = partial["assets"].pop()["name"]
+        replies = ["4321", json.dumps(partial), "", json.dumps(self.draft()), "{}"]
+        with mock.patch.object(release.subprocess, "run", side_effect=[
+                subprocess.CompletedProcess([], 0, out) for out in replies]) as run:
+            self.run_publisher()
+        calls = [call.args[0] for call in run.call_args_list]
+        self.assertEqual(calls[2], ["gh", "release", "upload", "v0.75.0-preview.1234",
+                                     "--repo", "complex1/ToonPro", str(self.output/missing)])
+        self.assertIn("PATCH", calls[-1])
 
 
 if __name__ == "__main__":

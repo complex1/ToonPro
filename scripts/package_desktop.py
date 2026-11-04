@@ -16,6 +16,7 @@ import sys
 import tarfile
 import tempfile
 import urllib.request
+import zipfile
 
 from verify_package import binary_architecture, is_elf, is_macho, linux_dependencies
 
@@ -255,6 +256,25 @@ def relocate_macos_offscreen(plugin: Path, qt_root: Path) -> None:
         run(["/usr/bin/install_name_tool", "-add_rpath", deployed, str(plugin)])
 
 
+def notice_bytes(filename: str, url: str) -> bytes:
+    """Use the reviewed texts included with this release before going online."""
+    limit = 512 * 1024
+    with zipfile.ZipFile(ROOT / "third-party/packaging-notices" / f"{SPDX_TAG}.zip") as archive:
+        if filename in archive.namelist():
+            with archive.open(filename) as stream:
+                data = stream.read(limit + 1)
+        else:
+            request = urllib.request.Request(url, headers={"User-Agent": "ToonPro-package-notices/1"})
+            try:
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    data = response.read(limit + 1)
+            except OSError as error:
+                raise RuntimeError(f"Could not fetch missing package notice {filename} from {url}: {error}") from error
+    if not data or len(data) > limit:
+        raise RuntimeError(f"Invalid license text size: {filename}")
+    return data
+
+
 def download_license(license_id: str, cache: Path) -> tuple[str, str]:
     # License IDs originate in the bounded official SDK manifests, not paths.
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.+-]*", license_id):
@@ -262,11 +282,7 @@ def download_license(license_id: str, cache: Path) -> tuple[str, str]:
     target = cache / (license_id + ".txt")
     url = f"https://raw.githubusercontent.com/spdx/license-list-data/{SPDX_TAG}/text/{license_id}.txt"
     if not target.exists():
-        request = urllib.request.Request(url, headers={"User-Agent": "ToonPro-package-notices/1"})
-        with urllib.request.urlopen(request, timeout=30) as response:
-            data = response.read(512 * 1024 + 1)
-        if not data or len(data) > 512 * 1024:
-            raise RuntimeError(f"Invalid license text size: {license_id}")
+        data = notice_bytes(target.name, url)
         temporary = target.with_suffix(".download")
         temporary.write_bytes(data)
         temporary.replace(target)
@@ -319,10 +335,8 @@ def collect_icu_notice(stage: Path, documents: list[dict], destination: Path, ca
     name = f"ICU-{version}-LICENSE.txt"
     cached = cache / name
     if not cached.exists():
-        request = urllib.request.Request(url, headers={"User-Agent": "ToonPro-package-notices/1"})
-        with urllib.request.urlopen(request, timeout=30) as response:
-            data = response.read(512 * 1024 + 1)
-        if not data or len(data) > 512 * 1024 or hashlib.sha256(data).hexdigest() != expected:
+        data = notice_bytes(name, url)
+        if hashlib.sha256(data).hexdigest() != expected:
             raise RuntimeError("Upstream ICU notice did not match its reviewed checksum.")
         temporary = cached.with_suffix(".download")
         temporary.write_bytes(data)
