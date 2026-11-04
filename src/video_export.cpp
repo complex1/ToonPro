@@ -48,24 +48,25 @@ QAudioFormat exportAudioFormat() {
 }
 constexpr qint64 streamLeadUSecs = 250000;
 constexpr int audioChunkSamples = 2048;
-constexpr int minimumAacSamples = 1024;
+constexpr int minimumAacSamples = 2 * 1024;
+constexpr int audioPrerollSamples = 2 * 1024;
 constexpr int stallTimeoutMSecs = 60000;
-constexpr qint64 singleFrameBufferLimit = 80 * 1024 * 1024;
+constexpr qint64 shortClipBufferLimit = 80 * 1024 * 1024;
 
 // Qt 6.10 stores the requested encoder FPS in an int internally. A fractional
 // single frame therefore gets the wrong inferred duration. Buffer only this
-// bounded case so its finalized MP4 timing can be corrected before publishing.
-class SingleFrameBuffer final : public QBuffer {
+// bounded case; audio metadata is finalized on disk for movies of any length.
+class ShortClipBuffer final : public QBuffer {
 public:
     bool failed() const { return m_failed; }
     bool seek(qint64 position) override {
-        if (position < 0 || position > singleFrameBufferLimit) return reject();
+        if (position < 0 || position > shortClipBufferLimit) return reject();
         return QBuffer::seek(position);
     }
 protected:
     qint64 writeData(const char *data, qint64 length) override {
-        if (m_failed || length < 0 || length > singleFrameBufferLimit
-            || pos() > singleFrameBufferLimit - length) {
+        if (m_failed || length < 0 || length > shortClipBufferLimit
+            || pos() > shortClipBufferLimit - length) {
             reject(); return -1;
         }
         return QBuffer::writeData(data, length);
@@ -73,7 +74,7 @@ protected:
 private:
     bool reject() {
         m_failed = true;
-        setErrorString("The single-frame video exceeded its 80 MiB encoding limit.");
+        setErrorString("The short video exceeded its 80 MiB encoding limit.");
         return false;
     }
     bool m_failed = false;
@@ -104,26 +105,23 @@ public slots:
         m_segments = videoExportSegments(m_project, m_settings);
         m_totalFrames = m_settings.lastFrame - m_settings.firstFrame + 1;
         m_totalSamples = videoExportSampleCount(m_project, m_settings);
-        QString outputPath = m_path;
-        if (!m_settings.overwriteApproved) {
-            // Do not retain a QTemporaryFile handle across QSaveFile::commit:
-            // close() does not release that handle on Windows.
-            m_stagingDirectory = std::make_unique<QTemporaryDir>(QFileInfo(m_path).absoluteDir().filePath(".toon-export-XXXXXX"));
-            if (!m_stagingDirectory->isValid()) {
-                finishWithoutRecorder(VideoExportOutcome::Failed, "Could not prepare an atomic export in the destination folder."); return;
-            }
-            outputPath = m_stagingDirectory->filePath("video.mp4");
+        // Keep the encoded file private until its audio timing is finalized.
+        // Do not retain a QTemporaryFile handle across QSaveFile::commit:
+        // close() does not release that handle on Windows.
+        m_stagingDirectory = std::make_unique<QTemporaryDir>(QFileInfo(m_path).absoluteDir().filePath(".toon-export-XXXXXX"));
+        if (!m_stagingDirectory->isValid()) {
+            finishWithoutRecorder(VideoExportOutcome::Failed, "Could not prepare an atomic export in the destination folder."); return;
         }
-        m_output = std::make_unique<QSaveFile>(outputPath);
+        m_output = std::make_unique<QSaveFile>(m_stagingDirectory->filePath("video.mp4"));
         // Never fall back to overwriting the final file when an atomic temp cannot be created.
         m_output->setDirectWriteFallback(false);
         if (!m_output->open(QIODevice::WriteOnly)) {
             finishWithoutRecorder(VideoExportOutcome::Failed, "Could not open the export destination: " + m_output->errorString()); return;
         }
         if (m_totalFrames == 1 && m_project.fps != std::floor(m_project.fps)) {
-            m_memoryOutput = std::make_unique<SingleFrameBuffer>();
+            m_memoryOutput = std::make_unique<ShortClipBuffer>();
             if (!m_memoryOutput->open(QIODevice::ReadWrite)) {
-                finishWithoutRecorder(VideoExportOutcome::Failed, "Could not prepare the single-frame video buffer."); return;
+                finishWithoutRecorder(VideoExportOutcome::Failed, "Could not prepare the short video buffer."); return;
             }
         }
         m_session = std::make_unique<QMediaCaptureSession>();
@@ -236,7 +234,7 @@ private:
         if (cancelRequested()) { requestStop(VideoExportOutcome::Cancelled); return; }
         if (!m_started || m_recorder->recorderState() != QMediaRecorder::RecordingState) return;
         const qint64 videoTime = videoExportFrameTimeUSecs(m_sentFrames, m_project.fps);
-        const qint64 audioTime = m_sentSamples * 1000000 / audioSampleRate;
+        const qint64 audioTime = (m_audioPrerollSent ? audioPrerollSamples + m_sentSamples : 0) * 1000000 / audioSampleRate;
         const bool videoAllowed = m_videoReady && !m_videoEos
             && (m_audioEos || videoTime <= audioTime + streamLeadUSecs);
         const bool audioAllowed = m_audioReady && !m_audioEos
@@ -286,6 +284,15 @@ private:
         emit progress(m_sentFrames, m_totalFrames, "Encoding video");
     }
     void sendAudio() {
+        if (!m_audioPrerollSent) {
+            // Native Windows AAC suppresses its first few hundred input samples.
+            // Warm up with explicit silence instead of guessing a backend delay.
+            // Remove this exact preroll in the final MP4 audio edit below.
+            if (!m_pendingAudio.isValid())
+                m_pendingAudio = QAudioBuffer(QByteArray(audioPrerollSamples * audioBytesPerSampleFrame, '\0'), m_audioFormat, 0);
+            if (!m_audioInput->sendAudioBuffer(m_pendingAudio)) { m_audioReady = false; return; }
+            m_audioPrerollSent = true; m_pendingAudio = {}; m_activity.restart(); return;
+        }
         if (m_sentSamples == m_totalSamples) {
             if (m_audioInput->sendAudioBuffer({})) { m_audioEos = true; m_activity.restart(); }
             else m_audioReady = false;
@@ -299,12 +306,13 @@ private:
             if (bytes.size() != count * audioBytesPerSampleFrame) {
                 requestStop(VideoExportOutcome::Failed, "The audio mix ended unexpectedly."); return;
             }
-            // Media Foundation AAC can drain without producing a packet when
-            // the entire input is shorter than its 1024-sample output block.
-            // Supply only a bounded silent tail, never audio beyond the range.
-            if (m_totalSamples < minimumAacSamples)
+            // A short input also gets bounded silent look-ahead. Never read
+            // audio outside the selected range. The presentation edit excludes
+            // this tail and the explicit preroll, preserving backend priming.
+            if (m_totalSamples < minimumAacSamples) {
                 bytes.append(QByteArray((minimumAacSamples - count) * audioBytesPerSampleFrame, '\0'));
-            m_pendingAudio = QAudioBuffer(bytes, m_audioFormat, m_sentSamples * 1000000 / audioSampleRate);
+            }
+            m_pendingAudio = QAudioBuffer(bytes, m_audioFormat, (audioPrerollSamples + m_sentSamples) * 1000000 / audioSampleRate);
             if (!m_pendingAudio.isValid()) { requestStop(VideoExportOutcome::Failed, "Could not prepare audio for the encoder."); return; }
         }
         if (!m_audioInput->sendAudioBuffer(m_pendingAudio)) { m_audioReady = false; return; }
@@ -346,7 +354,7 @@ private:
                 || !m_output || encodedSize <= 0) {
                 m_outcome = VideoExportOutcome::Failed;
                 m_error = "The encoder did not produce a complete MP4 file.";
-            } else if (m_memoryOutput && !writeCorrectedSingleFrame()) {
+            } else if (m_memoryOutput && !writeFinalizedShortClip()) {
                 // The helper sets a failure/cancellation result and never commits.
             }
             // Copying a bounded file can still take time on a slow destination.
@@ -361,13 +369,25 @@ private:
                 m_outcome = VideoExportOutcome::Failed;
                 m_error = "Could not finish the exported file: " + m_output->errorString();
             }
+            if (m_outcome == VideoExportOutcome::Completed && m_settings.includeAudio) {
+                QFile staging(m_stagingDirectory->filePath("video.mp4")); QString error;
+                if (!staging.open(QIODevice::ReadWrite)
+                    || !finalizeMp4AudioPresentation(&staging, m_totalSamples, audioSampleRate, audioPrerollSamples, &error)
+                    || !staging.flush()) {
+                    m_outcome = VideoExportOutcome::Failed;
+                    m_error = "Could not finalize audio timing: " + (error.isEmpty() ? staging.errorString() : error);
+                }
+                // Release the native file handle before publishing on Windows.
+                staging.close();
+            }
             if (m_outcome == VideoExportOutcome::Completed && m_stagingDirectory && cancelRequested())
                 m_outcome = VideoExportOutcome::Cancelled;
             if (m_outcome == VideoExportOutcome::Completed && m_stagingDirectory) {
-                // Publish without replacement atomically: a check followed by
-                // QSaveFile::commit alone would race another writer. The staging
-                // file is on the same filesystem; a hard link fails if any target,
-                // including a dangling symlink, already occupies the name.
+                // The private file is complete and every handle is closed. Its
+                // directory is inside the destination folder, so publication is
+                // on one filesystem. Rename replaces atomically only with prior
+                // approval; otherwise a hard link refuses every existing target,
+                // including a dangling symlink, without a check/write race.
                 const auto nativePath = [](const QString &path) {
 #ifdef Q_OS_WIN
                     return std::filesystem::path(path.toStdWString());
@@ -376,10 +396,14 @@ private:
 #endif
                 };
                 std::error_code error;
-                std::filesystem::create_hard_link(nativePath(m_stagingDirectory->filePath("video.mp4")), nativePath(m_path), error);
+                if (m_settings.overwriteApproved)
+                    std::filesystem::rename(nativePath(m_stagingDirectory->filePath("video.mp4")), nativePath(m_path), error);
+                else
+                    std::filesystem::create_hard_link(nativePath(m_stagingDirectory->filePath("video.mp4")), nativePath(m_path), error);
                 if (error) {
                     m_outcome = VideoExportOutcome::Failed;
-                    m_error = "Could not publish the video without replacing an existing file: " + QString::fromStdString(error.message());
+                    m_error = (m_settings.overwriteApproved ? "Could not replace the exported video: "
+                        : "Could not publish the video without replacing an existing file: ") + QString::fromStdString(error.message());
                 }
             }
         }
@@ -391,12 +415,13 @@ private:
         emit finished({m_outcome, m_path, m_error, m_sentFrames});
     }
 
-    bool writeCorrectedSingleFrame() {
+    bool writeFinalizedShortClip() {
         if (m_memoryOutput->failed()) {
             m_outcome = VideoExportOutcome::Failed; m_error = m_memoryOutput->errorString(); return false;
         }
         QString error;
-        if (!correctSingleFrameMp4Timing(&m_memoryOutput->buffer(), m_project.fps, &error)) {
+        if (m_totalFrames == 1 && m_project.fps != std::floor(m_project.fps)
+            && !correctSingleFrameMp4Timing(&m_memoryOutput->buffer(), m_project.fps, &error)) {
             m_outcome = VideoExportOutcome::Failed;
             m_error = "Could not finalize single-frame video timing: " + error;
             return false;
@@ -424,7 +449,7 @@ private:
     std::shared_ptr<std::atomic_bool> m_cancelled;
     std::unique_ptr<QTemporaryDir> m_stagingDirectory;
     std::unique_ptr<QSaveFile> m_output;
-    std::unique_ptr<SingleFrameBuffer> m_memoryOutput;
+    std::unique_ptr<ShortClipBuffer> m_memoryOutput;
     std::unique_ptr<QMediaCaptureSession> m_session;
     std::unique_ptr<QMediaRecorder> m_recorder;
     std::unique_ptr<QVideoFrameInput> m_videoInput;
@@ -441,6 +466,7 @@ private:
     qint64 m_totalSamples = 0, m_sentSamples = 0;
     bool m_started = false, m_done = false, m_stopping = false;
     bool m_videoReady = false, m_audioReady = false, m_videoEos = false, m_audioEos = false;
+    bool m_audioPrerollSent = false;
     bool m_pumpQueued = false, m_completionQueued = false;
     VideoExportOutcome m_outcome = VideoExportOutcome::Failed;
     QString m_error;

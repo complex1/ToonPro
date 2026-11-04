@@ -4,6 +4,25 @@ A native desktop workspace for a solo artist making hand-drawn anime. Built with
 
 This repository contains a native **drawing workspace with frame-by-frame animation, layer/property keyframes, vector path morphing and production-sheet exports**. Apple Silicon Mac builds also provide 3D references, rest-skeleton editing, mesh binding, weight painting and FK/two-bone IK posing. Drawing exposures, property animation, 2D/3D camera keys and embedded audio clips share the shot timeline.
 
+[Website](https://complex1.github.io/ToonPro/) · [Illustrated documentation](https://complex1.github.io/ToonPro/docs/) · [Downloads and platform status](https://complex1.github.io/ToonPro/download/)
+
+![Toon Pro drawing workspace with brushes, color controls and layers](website/assets/screenshots/drawing-workspace.webp)
+
+*Actual Toon Pro workspace. The original illustration is imported as an artwork layer.*
+
+<details>
+<summary>Character references and animation timeline</summary>
+
+![Character Model Sheets with an imported turnaround and expressions](website/assets/screenshots/references-and-characters.webp)
+
+*Organize each character's turnarounds, expressions and costumes across shots. This capture shows an original character sheet imported into References.*
+
+![Toon Pro frame-by-frame timeline with drawing tracks and playback controls](website/assets/screenshots/frame-by-frame-animation.webp)
+
+*Drawing tracks, exposures and playback controls in the actual animation timeline. [Screenshot provenance and artwork credits](https://complex1.github.io/ToonPro/credits/).*
+
+</details>
+
 ## Desktop release candidates — 0.75.0
 
 Optimized desktop packaging, dependency deployment, relocated runtime checks and SHA-256 manifests are implemented in the [packaging workflow](docs/packaging.md). The public source and candidate CI are in [complex1/ToonPro](https://github.com/complex1/ToonPro). Apple Silicon packages have passed local verification; Windows validation is still in progress, and Intel Mac packages remain withheld pending audio-export verification.

@@ -1,12 +1,18 @@
 #include "mp4_timing.h"
+#include <QBuffer>
 #include <QMap>
 #include <QtEndian>
 #include <QtTest>
 #include <functional>
 #include <limits>
+#include <cstring>
 
 using namespace toon;
 namespace {
+bool finalizeBuffer(QByteArray *bytes, qint64 frames, int rate, qint64 preroll, QString *error) {
+    QBuffer file(bytes);
+    return file.open(QIODevice::ReadWrite) && finalizeMp4AudioPresentation(&file, frames, rate, preroll, error);
+}
 // Independent ISO-BMFF fixtures. Offsets are recorded while writing each field;
 // assertions do not reuse the finalizer's atom traversal or duration calculation.
 struct Bytes {
@@ -65,12 +71,13 @@ Bytes mediaHeader(const QString &prefix, bool version1, quint32 timescale, quint
     Bytes b; const auto key = prefix + ".media"; clockFields(b, key, version1, timescale, duration);
     b.u16(0x55c4); b.u16(0); return atom("mdhd", b, key);
 }
-Bytes editList(const QString &prefix, bool version1, bool audio) {
-    const auto key = prefix + ".edit"; Bytes b; fullHeader(b, key, version1); b.u32(key + ".count", audio ? 2 : 1);
-    for (int i = 0; i < (audio ? 2 : 1); ++i) {
+Bytes editList(const QString &prefix, bool version1, bool audio, bool shortAudio = false) {
+    const auto key = prefix + ".edit"; Bytes b; fullHeader(b, key, version1);
+    const int count = audio && !shortAudio ? 2 : 1; b.u32(key + ".count", count);
+    for (int i = 0; i < count; ++i) {
         const auto entry = key + QString::number(i);
-        const quint64 duration = audio ? (i == 0 ? 500 : 1500) : 1000;
-        const qint64 mediaTime = audio ? (i == 0 ? -1 : 1024) : 0;
+        const quint64 duration = audio ? (shortAudio ? 43 : i == 0 ? 500 : 1500) : 1000;
+        const qint64 mediaTime = audio ? (shortAudio ? 1024 : i == 0 ? -1 : 1024) : 0;
         if (version1) { b.u64(entry + ".duration", duration); b.u64(entry + ".mediaTime", quint64(mediaTime)); }
         else { b.u32(entry + ".duration", quint32(duration)); b.u32(entry + ".mediaTime", quint32(mediaTime)); }
         b.u32(entry + ".rate", 0x00010000);
@@ -81,18 +88,21 @@ struct Options {
     bool version1 = false, withAudio = false, extended = false, co64 = false;
     bool withEdits = true, ctts = false, cttsVersion1 = false, variableSizes = false;
     bool duplicateStts = false, secondVideo = false;
+    bool shortAudio = false;
 };
 Bytes track(const QString &prefix, const Options &options, bool audio = false) {
     const auto p = prefix + '.';
-    Bytes body; body.append(trackHeader(prefix, options.version1, audio ? 2000 : 1000, audio ? 2 : 1));
-    if (options.withEdits) body.append(editList(prefix, options.version1, audio));
-    Bytes media; media.append(mediaHeader(prefix, options.version1, audio ? 48000 : 15360, audio ? 96000 : 15360));
+    Bytes body; body.append(trackHeader(prefix, options.version1, audio ? (options.shortAudio ? 43 : 2000) : 1000, audio ? 2 : 1));
+    if (options.withEdits) body.append(editList(prefix, options.version1, audio, options.shortAudio));
+    Bytes media; media.append(mediaHeader(prefix, options.version1, audio ? 48000 : 15360,
+        audio ? (options.shortAudio ? 3072 : 96000) : 15360));
     Bytes handler; fullHeader(handler, p + "handler", false); handler.u32({}, 0);
     handler.fields.insert(p + "handler.type", handler.data.size()); handler.raw(audio ? "soun" : "vide"); handler.zero(12); handler.raw("Fixture\0");
     media.append(atom("hdlr", handler, p + "handler"));
     Bytes table;
     Bytes stts; fullHeader(stts, p + "time", false); stts.u32(p + "time.entries", 1);
-    stts.u32(p + "time.samples", audio ? 2 : 1); stts.u32(p + "time.delta", audio ? 48000 : 15360);
+    stts.u32(p + "time.samples", audio ? (options.shortAudio ? 3 : 2) : 1);
+    stts.u32(p + "time.delta", audio ? (options.shortAudio ? 1024 : 48000) : 15360);
     table.append(atom("stts", stts, p + "time"));
     if (!audio && options.duplicateStts) table.append(atom("stts", stts, p + "duplicateTime"));
     if (!audio && options.ctts) {
@@ -101,11 +111,14 @@ Bytes track(const QString &prefix, const Options &options, bool audio = false) {
         table.append(atom("ctts", ctts, p + "composition"));
     }
     Bytes sizes; fullHeader(sizes, p + "sizes", false);
-    sizes.u32(p + "sizes.constant", options.variableSizes ? 0 : 16); sizes.u32(p + "sizes.count", audio ? 2 : 1);
-    if (options.variableSizes) { sizes.u32(p + "sizes.sample", 16); if (audio) sizes.u32(p + "sizes.sample2", 16); }
+    sizes.u32(p + "sizes.constant", options.variableSizes ? 0 : 16); sizes.u32(p + "sizes.count", audio ? (options.shortAudio ? 3 : 2) : 1);
+    if (options.variableSizes) {
+        sizes.u32(p + "sizes.sample", 16);
+        if (audio) { sizes.u32(p + "sizes.sample2", 16); if (options.shortAudio) sizes.u32(p + "sizes.sample3", 16); }
+    }
     table.append(atom("stsz", sizes, p + "sizes"));
     Bytes chunks; fullHeader(chunks, p + "mapping", false); chunks.u32(p + "mapping.entries", 1);
-    chunks.u32(p + "mapping.first", 1); chunks.u32(p + "mapping.samples", audio ? 2 : 1); chunks.u32(p + "mapping.description", 1);
+    chunks.u32(p + "mapping.first", 1); chunks.u32(p + "mapping.samples", audio ? (options.shortAudio ? 3 : 2) : 1); chunks.u32(p + "mapping.description", 1);
     table.append(atom("stsc", chunks, p + "mapping"));
     Bytes offsets; fullHeader(offsets, p + "chunks", false); offsets.u32(p + "chunks.entries", 1);
     if (options.co64) offsets.u64(p + "chunks.offset", 0); else offsets.u32(p + "chunks.offset", 0);
@@ -160,11 +173,162 @@ QByteArray expected(const Bytes &source, const Options &options, quint32 videoSc
     }
     return bytes;
 }
+
+// A seekable file-shaped device with a multi-gigabyte media hole. No large
+// allocation or real disk space is required; reading media is a test failure.
+class SparseMovie final : public QIODevice {
+public:
+    QByteArray prefix, metadata;
+    qint64 metadataOffset = 0, bytesRead = 0;
+    bool readMedia = false;
+    qint64 size() const override { return metadataOffset + metadata.size(); }
+    bool isSequential() const override { return false; }
+    bool seek(qint64 position) override { return position >= 0 && position <= size() && QIODevice::seek(position); }
+protected:
+    qint64 readData(char *out, qint64 maximum) override {
+        const auto position = pos(); const auto count = qMin(maximum, size() - position);
+        if (count <= 0) return 0;
+        bytesRead += count;
+        if (position < prefix.size() && count <= prefix.size() - position)
+            std::memcpy(out, prefix.constData() + position, size_t(count));
+        else if (position >= metadataOffset && count <= size() - position)
+            std::memcpy(out, metadata.constData() + position - metadataOffset, size_t(count));
+        else { readMedia = true; return -1; }
+        return count;
+    }
+    qint64 writeData(const char *data, qint64 count) override {
+        if (pos() < metadataOffset || count < 0 || count > size() - pos()) return -1;
+        std::memcpy(metadata.data() + pos() - metadataOffset, data, size_t(count)); return count;
+    }
+};
+class FailingPatchBuffer final : public QBuffer {
+public:
+    using QBuffer::QBuffer;
+    int writes = 0;
+protected:
+    qint64 writeData(const char *data, qint64 count) override {
+        if (++writes > 1) return -1;
+        return QBuffer::writeData(data, count);
+    }
+};
 }
 
 class Mp4TimingTests final : public QObject {
     Q_OBJECT
 private slots:
+    void audioFinalizationSeeksOverLargeMediaInsteadOfBufferingIt() {
+        Options options; options.withAudio = true; options.shortAudio = true; options.co64 = true;
+        auto source = fixture(options);
+        put32(source.data, source.fields["video.track.duration"], 17);
+        put32(source.data, source.fields["audio.media.duration"], 5120);
+        const auto movieBegin = source.fields["movieContainer.box"];
+        SparseMovie file;
+        file.prefix = source.data.left(get32(source.data, 0));
+        Bytes extended; extended.u32({}, 1); extended.raw("mdat"); extended.u64({}, quint64(8) * 1024 * 1024 * 1024);
+        file.prefix += extended.data;
+        file.metadataOffset = file.prefix.size() - 16 + qint64(8) * 1024 * 1024 * 1024;
+        file.metadata = source.data.mid(movieBegin);
+        auto wanted = file.metadata;
+        put32(wanted, source.fields["audio.edit0.mediaTime"] - movieBegin, 3072);
+        for (const auto &key : {"movie.duration", "audio.track.duration", "audio.edit0.duration"})
+            put32(wanted, source.fields[key] - movieBegin, 17);
+        QVERIFY(file.open(QIODevice::ReadWrite | QIODevice::Unbuffered)); QString error;
+        QVERIFY2(finalizeMp4AudioPresentation(&file, 801, 48000, 2048, &error), qPrintable(error));
+        QVERIFY(!file.readMedia); QVERIFY(file.bytesRead < file.metadata.size() + 128);
+        QCOMPARE(file.metadata, wanted);
+        QCOMPARE(file.size(), file.metadataOffset + wanted.size());
+    }
+    void audioFinalizationRejectsReadOnlyAndMalformedFilesBeforeWriting() {
+        Options options; options.withAudio = true; options.shortAudio = true;
+        const auto source = fixture(options); auto bytes = source.data; QString error;
+        QBuffer file(&bytes); QVERIFY(file.open(QIODevice::ReadOnly));
+        QVERIFY(!finalizeMp4AudioPresentation(&file, 801, 48000, 0, &error)); QCOMPARE(bytes, source.data);
+        file.close(); bytes += source.data.mid(source.fields["movieContainer.box"]);
+        const auto duplicate = bytes; QVERIFY(file.open(QIODevice::ReadWrite));
+        QVERIFY(!finalizeMp4AudioPresentation(&file, 801, 48000, 0, &error)); QCOMPARE(bytes, duplicate);
+    }
+    void audioFinalizationReportsPartialPrivateStagingWriteFailure() {
+        Options options; options.withAudio = true; options.shortAudio = true;
+        auto source = fixture(options); put32(source.data, source.fields["audio.media.duration"], 5120);
+        auto bytes = source.data; FailingPatchBuffer file(&bytes);
+        QVERIFY(file.open(QIODevice::ReadWrite)); QString error;
+        QVERIFY(!finalizeMp4AudioPresentation(&file, 801, 48000, 2048, &error));
+        QVERIFY(error.contains("write")); QCOMPARE(file.writes, 2);
+        auto expected = source.data; put32(expected, source.fields["audio.edit0.mediaTime"], 3072);
+        QCOMPARE(bytes, expected); // The caller must discard this private partial file.
+    }
+    void shortAudioTrimPreservesPrimingPacketsAndVideo_data() {
+        QTest::addColumn<bool>("version1"); QTest::addColumn<quint64>("priming"); QTest::addColumn<qint64>("preroll");
+        for (const bool version1 : {false, true}) for (const quint64 priming : {quint64(0), quint64(1024), quint64(2112)})
+            for (const qint64 preroll : {qint64(0), qint64(2048)})
+                QTest::newRow(qPrintable(QString("v%1-priming-%2-preroll-%3").arg(version1).arg(priming).arg(preroll)))
+                    << version1 << priming << preroll;
+    }
+    void shortAudioTrimPreservesPrimingPacketsAndVideo() {
+        QFETCH(bool, version1); QFETCH(quint64, priming); QFETCH(qint64, preroll);
+        Options options; options.withAudio = true; options.shortAudio = true; options.version1 = version1;
+        options.co64 = true; options.variableSizes = true;
+        auto source = fixture(options);
+        putDuration(source.data, source, "movie.duration", 43, version1);
+        putDuration(source.data, source, "video.track.duration", 17, version1);
+        putDuration(source.data, source, "audio.edit0.mediaTime", priming, version1);
+        putDuration(source.data, source, "audio.media.duration", priming + preroll + 2048, version1);
+        auto bytes = source.data; auto wanted = source.data;
+        putDuration(wanted, source, "audio.edit0.mediaTime", priming + preroll, version1);
+        putDuration(wanted, source, "audio.edit0.duration", 17, version1);
+        putDuration(wanted, source, "audio.track.duration", 17, version1);
+        putDuration(wanted, source, "movie.duration", 17, version1);
+        QString error;
+        QVERIFY2(finalizeBuffer(&bytes, 801, 48000, preroll, &error), qPrintable(error));
+        QCOMPARE(bytes, wanted); // Add only known preroll to priming; media and offsets stay intact.
+        const auto once = bytes;
+        // Reapplying duration-only correction must not repeat the explicit preroll.
+        QVERIFY2(finalizeBuffer(&bytes, 801, 48000, 0, &error), qPrintable(error));
+        QCOMPARE(bytes, once);
+    }
+    void shortAudioTrimRejectsUnsupportedFilesWithoutMutation_data() {
+        QTest::addColumn<QByteArray>("bytes");
+        Options options; options.withAudio = true; options.shortAudio = true;
+        const auto source = fixture(options);
+        const auto field = [&](const char *name, const QString &key, quint32 value) {
+            auto bytes = source.data; put32(bytes, source.fields[key], value); QTest::newRow(name) << bytes;
+        };
+        QTest::newRow("no-audio") << fixture().data;
+        QTest::newRow("truncated") << source.data.left(source.data.size() - 1);
+        field("empty-audio-samples", "audio.sizes.count", 0);
+        field("wrong-sample-rate", "audio.media.timescale", 44100);
+        field("insufficient-media", "audio.media.duration", 1600);
+        field("empty-edit", "audio.edit0.mediaTime", 0xffffffff);
+        field("multiple-edits", "audio.edit.count", 2);
+        field("wrong-rate", "audio.edit0.rate", 0x00008000);
+        field("edit-shorter-than-selection", "audio.edit0.duration", 1);
+        field("track-shorter-than-selection", "audio.track.duration", 1);
+        auto noEdits = source.data; noEdits.replace(source.fields["audio.edits.box"] + 4, 4, "free");
+        QTest::newRow("missing-edit-list") << noEdits;
+        auto noAudio = source.data; noAudio.replace(source.fields["audio.handler.type"], 4, "vide");
+        QTest::newRow("two-video-tracks") << noAudio;
+        auto fragmented = source.data; fragmented += atom("moof", QByteArray(), "fragment").data;
+        QTest::newRow("fragmented") << fragmented;
+    }
+    void shortAudioTrimRejectsUnsupportedFilesWithoutMutation() {
+        QFETCH(QByteArray, bytes); const auto original = bytes; QString error;
+        QVERIFY(!finalizeBuffer(&bytes, 801, 48000, 0, &error));
+        QVERIFY(!error.isEmpty()); QCOMPARE(bytes, original);
+    }
+    void shortAudioTrimRejectsInvalidRangesWithoutMutation() {
+        Options options; options.withAudio = true; options.shortAudio = true;
+        const auto source = fixture(options);
+        for (const auto range : {QPair<qint64, int>{0, 48000}, {-1, 48000}, {48001, 48000}, {800, 0}, {800, 400000}}) {
+            auto bytes = source.data; QString error;
+            QVERIFY(!finalizeBuffer(&bytes, range.first, range.second, 0, &error));
+            QVERIFY(!error.isEmpty()); QCOMPARE(bytes, source.data);
+        }
+        for (const qint64 preroll : {qint64(-1), qint64(48001), qint64(2048)}) {
+            auto bytes = source.data; QString error;
+            QVERIFY(!finalizeBuffer(&bytes, 801, 48000, preroll, &error));
+            QVERIFY(!error.isEmpty()); QCOMPARE(bytes, source.data);
+        }
+    }
     void rationalDurationsAndSupportedVersions_data() {
         QTest::addColumn<double>("fps"); QTest::addColumn<quint32>("scale"); QTest::addColumn<quint32>("ticks");
         QTest::addColumn<quint64>("movieTicks"); QTest::addColumn<bool>("version1");

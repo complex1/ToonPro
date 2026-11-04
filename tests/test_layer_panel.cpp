@@ -209,11 +209,13 @@ private slots:
     const auto id=active(doc).id;panel.findChild<QToolButton*>("removeLayer")->click();QVERIFY(!item(tree,id));doc.history()->undo();QVERIFY(item(tree,id));
  }
  void thumbnailsUpdateAfterPainting(){
-    Canvas canvas;canvas.setProject(groupedProject());auto *doc=canvas.document();doc->selectLayer(1);LayerPanel panel(doc);panel.resize(270,480);panel.show();QTest::qWait(50);auto *tree=panel.findChild<QTreeWidget*>("layerTree");auto *ink=item(tree,active(*doc).id);
+    Canvas canvas;canvas.setProject(groupedProject());auto *doc=canvas.document();doc->selectLayer(1);LayerPanel panel(doc);panel.resize(270,480);panel.show();auto *tree=panel.findChild<QTreeWidget*>("layerTree");QVERIFY(tree);auto *ink=item(tree,active(*doc).id);QVERIFY(ink);
     // The role is deliberately discovered by its QImage payload, not the visual row's pixels.
     auto thumbnail=[&]{for(int role=Qt::UserRole;role<Qt::UserRole+20;++role){auto image=ink->data(0,role).value<QImage>();if(!image.isNull())return image;}return QImage();};
-    const auto before=thumbnail();QVERIFY(!before.isNull());BrushSettings brush;brush.color=Qt::red;brush.size=60;QVERIFY(doc->beginStroke({150,120},1,brush,false));QVERIFY(tree->isEnabled());
-    QTest::qWait(60);QCOMPARE(thumbnail(),before);doc->endStroke();QTRY_VERIFY(thumbnail()!=before);QVERIFY(tree->isEnabled());const auto output=qEnvironmentVariable("TOON_UI_PREVIEW","test-artifacts");QVERIFY(QDir().mkpath(output));QVERIFY(panel.grab().save(QDir(output).filePath("layers-panel.png")));
+    // Thumbnails are deferred so pen events stay responsive. Wait for the
+    // actual image rather than assuming a timer has fired after a fixed sleep.
+    QTRY_VERIFY(!thumbnail().isNull());const auto before=thumbnail();BrushSettings brush;brush.color=Qt::red;brush.size=60;QVERIFY(doc->beginStroke({150,120},1,brush,false));QVERIFY(tree->isEnabled());
+    QTest::qWait(60);QCOMPARE(thumbnail(),before);doc->endStroke();QTRY_VERIFY(!thumbnail().isNull()&&thumbnail()!=before);QVERIFY(tree->isEnabled());const auto output=qEnvironmentVariable("TOON_UI_PREVIEW","test-artifacts");QVERIFY(QDir().mkpath(output));QVERIFY(panel.grab().save(QDir(output).filePath("layers-panel.png")));
  }
  void importButtonUsesSharedActionAndGuardsPenContact(){
     QTemporaryDir directory;QVERIFY(directory.isValid());MainWindow window(directory.filePath("workspace.ini"));

@@ -12,6 +12,7 @@
 #include <QtTest>
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 using namespace toon;
 namespace {
@@ -70,21 +71,101 @@ private slots:
         const auto original = catalogBrushPresets(1);
         QCOMPARE(rows.size(), 112); QCOMPARE(original.size(), rows.size());
         QSet<QString> ids;
+        const auto exportPath = qEnvironmentVariable("TOON_RECIPE_BASELINE_OUTPUT");
+        QJsonArray exported;
+        QJsonArray references;
+        if (exportPath.isEmpty()) {
+            QFile reference(QFINDTESTDATA("fixtures/catalog-recipe-v1-reference.json"));
+            QVERIFY(reference.open(QIODevice::ReadOnly));
+            const auto baseline = QJsonDocument::fromJson(reference.readAll());
+            QVERIFY(baseline.isArray()); references = baseline.array();
+            QCOMPARE(references.size(), rows.size());
+        }
         for (qsizetype i = 0; i < original.size(); ++i) {
             const auto &preset = original[i];
             const auto expected = rows[i].toObject();
             QCOMPARE(preset.id, expected["id"].toString());
             QVERIFY(!ids.contains(preset.id)); ids.insert(preset.id);
             QCOMPARE(preset.smoothing, expected["smoothing"].toDouble());
+            const auto settings = brushSettingsToJson(preset.brush);
+            const auto settingsBytes = QJsonDocument(settings).toJson(QJsonDocument::Compact);
             QCryptographicHash hash(QCryptographicHash::Sha256);
-            hash.addData(QJsonDocument(brushSettingsToJson(preset.brush)).toJson(QJsonDocument::Compact));
-            for (const auto &image : {preset.brush.tipMask, preset.brush.colorTip,
-                    preset.brush.texture.pattern, preset.brush.dual.tipMask}) {
+            hash.addData(settingsBytes);
+            const QList<QImage> images{preset.brush.tipMask, preset.brush.colorTip,
+                                      preset.brush.texture.pattern, preset.brush.dual.tipMask};
+            QJsonArray referenceImages;
+            for (const auto &image : images) {
                 hash.addData(QByteArray::number(image.width()) + ":" + QByteArray::number(image.height())
                     + ":" + QByteArray::number(image.format()));
                 hash.addData(QByteArrayView(reinterpret_cast<const char *>(image.constBits()), image.sizeInBytes()));
+                if (!exportPath.isEmpty()) {
+                    const QByteArray raw(reinterpret_cast<const char *>(image.constBits()), image.sizeInBytes());
+                    referenceImages.append(QJsonObject{{"width", image.width()}, {"height", image.height()},
+                        {"format", int(image.format())}, {"pixels", QString::fromLatin1(qCompress(raw, 9).toBase64())}});
+                }
             }
-            QVERIFY2(hash.result().toHex() == expected["hash"].toString().toLatin1(), qPrintable(preset.id));
+            const auto originalHash = expected["hash"].toString().toLatin1();
+            if (!exportPath.isEmpty()) {
+                // Never regenerate a reference from unverified changed recipes.
+                QVERIFY2(hash.result().toHex() == originalHash, qPrintable(preset.id));
+                exported.append(QJsonObject{{"id", preset.id}, {"settings", settings}, {"images", referenceImages}});
+                continue;
+            }
+            const auto reference = references[i].toObject();
+            QCOMPARE(reference["id"].toString(), preset.id);
+            QCOMPARE(reference["settings"].toObject(), settings);
+            const auto encodedImages = reference["images"].toArray();
+            QCOMPARE(encodedImages.size(), images.size());
+            QCryptographicHash referenceHash(QCryptographicHash::Sha256);
+            referenceHash.addData(settingsBytes);
+            for (qsizetype slot = 0; slot < images.size(); ++slot) {
+                const auto &image = images[slot]; const auto encoded = encodedImages[slot].toObject();
+                QCOMPARE(encoded["width"].toInt(), image.width());
+                QCOMPARE(encoded["height"].toInt(), image.height());
+                QCOMPARE(encoded["format"].toInt(), int(image.format()));
+                const auto raw = qUncompress(QByteArray::fromBase64(encoded["pixels"].toString().toLatin1()));
+                QCOMPARE(raw.size(), image.sizeInBytes());
+                referenceHash.addData(QByteArray::number(image.width()) + ":" + QByteArray::number(image.height())
+                    + ":" + QByteArray::number(image.format()));
+                referenceHash.addData(raw);
+                const QByteArray actual(reinterpret_cast<const char *>(image.constBits()), image.sizeInBytes());
+                if (actual == raw) continue;
+                // Shape/texture/alpha remain exact. Qt's SIMD gradient/color
+                // compositing can round a color channel differently on x86/ARM.
+                QVERIFY2(slot == 1 && image.format() == QImage::Format_ARGB32_Premultiplied, qPrintable(preset.id));
+                QImage baseline(image.size(), image.format());
+                std::memcpy(baseline.bits(), raw.constData(), raw.size());
+                int maximum = 0; qint64 total = 0;
+                for (int y = 0; y < image.height(); ++y) for (int x = 0; x < image.width(); ++x) {
+                    const auto a = image.pixel(x, y), b = baseline.pixel(x, y);
+                    QCOMPARE(qAlpha(a), qAlpha(b));
+                    for (const int delta : {qAbs(qRed(a)-qRed(b)), qAbs(qGreen(a)-qGreen(b)), qAbs(qBlue(a)-qBlue(b))}) {
+                        maximum = qMax(maximum, delta); total += delta;
+                    }
+                }
+                const double mean = double(total) / (3 * image.width() * image.height());
+                qInfo() << preset.id << "colored-stamp rounding: maximum" << maximum << "mean" << mean;
+                const auto review = qEnvironmentVariable("TOON_RECIPE_DIFF_OUTPUT");
+                if (!review.isEmpty()) {
+                    QVERIFY(QDir().mkpath(review));
+                    const auto name = preset.id.section('/', -1);
+                    QVERIFY(image.save(QDir(review).filePath(name + "-actual.png")));
+                    QVERIFY(baseline.save(QDir(review).filePath(name + "-reference.png")));
+                }
+                // The native Windows probe differs in just two channel bytes
+                // by one level. Keep a tiny total rounding budget rather than
+                // permitting a shifted tint across the whole stamp.
+                QVERIFY2(maximum <= 1 && total <= 8, qPrintable(preset.id));
+            }
+            // Compressed reference pixels must reproduce the immutable old
+            // snapshot exactly, independently of this platform's rasterizer.
+            QVERIFY2(referenceHash.result().toHex() == originalHash, qPrintable(preset.id));
+        }
+        if (!exportPath.isEmpty()) {
+            QFile output(exportPath);
+            QVERIFY(output.open(QIODevice::WriteOnly | QIODevice::NewOnly));
+            const auto bytes = QJsonDocument(exported).toJson(QJsonDocument::Compact);
+            QCOMPARE(output.write(bytes), bytes.size());
         }
     }
 

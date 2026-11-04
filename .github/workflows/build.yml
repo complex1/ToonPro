@@ -2,6 +2,7 @@ name: Desktop release candidates
 
 on:
   push:
+    branches-ignore: ['codex/media-probe-*']
     paths:
       - 'src/**'
       - 'include/**'
@@ -15,6 +16,7 @@ on:
       - '*.cmake'
       - 'vcpkg*.json'
       - '.github/workflows/build.yml'
+      - 'docs/DEPENDENCY-REBUILDING.txt'
   pull_request:
     paths:
       - 'src/**'
@@ -29,10 +31,11 @@ on:
       - '*.cmake'
       - 'vcpkg*.json'
       - '.github/workflows/build.yml'
+      - 'docs/DEPENDENCY-REBUILDING.txt'
   workflow_dispatch:
 
-# This workflow creates tested candidate artifacts only. It never publishes a
-# GitHub Release, uploads to a store, or claims signing/notarization credentials.
+# Main builds may publish an explicitly unsigned/ad-hoc preview after all
+# per-platform test, runtime, source-bundle and upload-integrity gates pass.
 permissions:
   contents: read
 
@@ -115,6 +118,7 @@ jobs:
           -DCMAKE_PREFIX_PATH="${{ github.workspace }}/.deps/Qt/6.10.3/${{ matrix.qt_dir }}"
           -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0
           -DCMAKE_OSX_ARCHITECTURES=${{ matrix.apple_arch }}
+          "-DCMAKE_CXX_FLAGS_RELEASE=-O3 -DNDEBUG -gline-tables-only"
           -DTOON_ENABLE_FILAMENT=${{ matrix.filament }} -DBUILD_TESTING=ON
       - name: Configure Linux release candidate
         if: runner.os == 'Linux'
@@ -137,6 +141,7 @@ jobs:
           toon_project_save_tests toon_cel_workflows_tests
           toon_audio_export_tests toon_video_export_tests toon_vector_brush_storage_tests
       - name: Build with bounded parallelism
+        id: native-build
         if: runner.os != 'Windows'
         run: cmake --build build --config Release --parallel 4
       - name: Build pinned Linux software video runtime
@@ -145,8 +150,34 @@ jobs:
           TOON_CODEC_JOBS: 2
         run: bash scripts/build_linux_codecs.sh build/linux-codecs
       - name: Test on macOS
+        id: mac-tests
         if: runner.os == 'macOS'
-        run: ctest --test-dir build -C Release --output-on-failure --parallel 2
+        shell: bash
+        run: |
+          set +e
+          ctest --test-dir build -C Release --output-on-failure --parallel 2 --output-junit "${{ github.workspace }}/build/full-tests.xml"
+          test_status=$?
+          if [ "$test_status" != 0 ] && [ -f build/Testing/Temporary/LastTestsFailed.log ]; then
+            cat build/Testing/Temporary/LastTestsFailed.log >> build/mac-native-failures.log
+          fi
+          exit "$test_status"
+      - name: Require three stable recolor workspace runs on Mac
+        if: always() && runner.os == 'macOS' && steps.native-build.outcome == 'success'
+        shell: bash
+        run: |
+          set +e
+          ctest --test-dir build -C Release --output-on-failure -R '^character_recolor_workspace$' --repeat until-fail:3 --output-junit "${{ github.workspace }}/build/recolor-repeat.xml"
+          test_status=$?
+          if [ "$test_status" != 0 ] && [ -f build/Testing/Temporary/LastTestsFailed.log ]; then
+            cat build/Testing/Temporary/LastTestsFailed.log >> build/mac-native-failures.log
+          fi
+          exit "$test_status"
+      - name: Capture optimized recolor crash diagnostics when it fails
+        if: failure() && runner.os == 'macOS' && steps.native-build.outcome == 'success'
+        run: >-
+          python scripts/diagnose_recolor_crash.py --build-dir build
+          --failure-log build/mac-native-failures.log
+          --report-dir build/test-artifacts/recolor-diagnostics
       - name: Test on Linux with a virtual display
         if: runner.os == 'Linux'
         run: |
@@ -183,7 +214,7 @@ jobs:
         run: |
           $env:PATH = "${{ github.workspace }}\.deps\Qt\6.10.3\msvc2022_64\bin;$env:PATH"
           $env:QT_FORCE_STDERR_LOGGING = '1'
-          ctest --test-dir build -C Release --output-on-failure --parallel 2
+          ctest --test-dir build -C Release --output-on-failure --parallel 2 --output-junit "${{ github.workspace }}/build/full-tests.xml"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Require successful Windows diagnostics before packaging
         if: always() && runner.os == 'Windows' && steps.windows-diagnostics.outcome == 'failure'
@@ -193,9 +224,14 @@ jobs:
           exit 1
       - name: Check packaging scripts
         run: python -m unittest discover -s tests -p test_packaging_scripts.py
+      - name: Check release publication gates
+        run: python -m unittest discover -s tests -p test_release_preview.py
+      - name: Check recolor diagnostic collection
+        if: runner.os == 'macOS'
+        run: python -m unittest discover -s tests -p test_recolor_diagnostics.py
       # Packages are produced only after tests, through a deliberate manual
-      # run, main integration, or an explicitly named release-candidate branch. No signing keys
-      # or GitHub Release publication are used; artifacts share repo visibility.
+      # run, main integration, or an explicitly named release-candidate branch.
+      # Public preview publication is a separate, main-only job below.
       - name: Stage, relocate and verify macOS candidate
         if: success() && runner.os == 'macOS' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
         shell: bash
@@ -216,6 +252,18 @@ jobs:
           $env:PATH = "${{ github.workspace }}\.deps\Qt\6.10.3\msvc2022_64\bin;$env:PATH"
           python scripts/package_desktop.py --build-dir build --config Release --qt-root ".deps/Qt/6.10.3/${{ matrix.qt_dir }}" --output-dir build/package --skip-build
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Collect matching dependency sources
+        if: success() && runner.os != 'Linux' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/codex/release-candidate-'))))
+        run: >-
+          python scripts/collect_dependency_sources.py
+          --qt-root ".deps/Qt/6.10.3/${{ matrix.qt_dir }}"
+          --output-dir "build/package/dependency-sources/ToonPro-0.75.0-${{ matrix.target }}-dependency-sources"
+      - name: Bind verification evidence to this exact native build
+        if: success() && runner.os != 'Linux' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/codex/release-candidate-'))))
+        shell: bash
+        run: |
+          ctest --test-dir build -C Release --show-only=json-v1 > build/configured-tests.json
+          python scripts/release_preview.py attest --package build/package --target "${{ matrix.target }}" --commit "${{ github.sha }}" --run-id "${{ github.run_id }}" --tests build/full-tests.xml --expected build/configured-tests.json
       - name: Upload verified candidate packages
         if: success() && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/codex/release-candidate-'))))
         uses: actions/upload-artifact@v4
@@ -227,8 +275,11 @@ jobs:
             build/package/*.dmg
             build/package/SHA256SUMS
             build/package/package.json
+            build/package/ci-verification.json
+            build/package/full-tests.xml
+            build/package/dependency-sources/*.tar.gz
+            build/package/dependency-sources/*.sha256
             build/package/verification/**
-            build/linux-codecs/dependency-sources/**
           if-no-files-found: error
           retention-days: 30
       - name: Upload diagnostic logs even when verification fails
@@ -241,6 +292,50 @@ jobs:
             build/Testing/Temporary/**
             build/package/verification/**
             build/test-artifacts/*.png
+            build/test-artifacts/recolor-diagnostics/**
+            build/mac-native-failures.log
+            build/full-tests.xml
+            build/recolor-repeat.xml
             build/linux-codecs/logs/**
           if-no-files-found: warn
           retention-days: 14
+
+  publish-preview:
+    needs: build
+    # Each artifact exists only after its entire native job succeeds. One failed
+    # platform cannot be advertised or prevent other verified targets shipping.
+    if: always() && !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ToonPro-candidate-*
+          path: build/candidates
+      - name: Read final native job outcomes for this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs?per_page=100" > build/native-jobs.json
+      - name: Verify exact-build evidence and prepare preview
+        run: >-
+          python scripts/release_preview.py prepare --inputs build/candidates
+          --output build/public-preview --repository "${{ github.repository }}"
+          --commit "${{ github.sha }}" --run-id "${{ github.run_id }}" --jobs build/native-jobs.json
+      - name: Upload and verify all assets before making the preview public
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python scripts/release_preview.py publish --output build/public-preview
+          --repository "${{ github.repository }}" --commit "${{ github.sha }}"
+          --run-id "${{ github.run_id }}"
+      - name: Record durable download URLs
+        run: cat build/public-preview/RELEASE-NOTES.md >> "$GITHUB_STEP_SUMMARY"

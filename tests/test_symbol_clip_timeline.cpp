@@ -238,7 +238,10 @@ private slots:
         QTimer poll; poll.setInterval(10); QTimer deadline; deadline.setSingleShot(true);
         connect(&poll, &QTimer::timeout, &workspace, [&] {
             auto *picker = qobject_cast<SymbolFramePickerDialog *>(QApplication::activeModalWidget());
-            if (!picker) return;
+            // Qt registers a modal before its platform activation arrives.
+            // A real user clicks an active picker; wait for that state before
+            // closing it so this checks restoration of focus the picker owned.
+            if (!picker || !picker->isActiveWindow()) return;
             poll.stop(); opened = true;
             picker->findChild<ValueSlider *>("symbolFramePickerFrame")->setValue(8);
             picker->findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Cancel)->click();

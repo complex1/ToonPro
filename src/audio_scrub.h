@@ -1,5 +1,6 @@
 #pragma once
 #include <QObject>
+#include <functional>
 #include <memory>
 namespace toon {
 struct Shot;
@@ -9,7 +10,11 @@ class AudioScrub final : public QObject {
     Q_OBJECT
 public:
     enum class OutputMode { System, Silent };
-    explicit AudioScrub(QObject *parent = nullptr, OutputMode mode = OutputMode::System);
+    // Defaults to a monotonic elapsed timer. Supplying milliseconds lets timing
+    // checks exercise either side of the coalescing deadline without sleeps.
+    using MonotonicClock = std::function<qint64()>;
+    explicit AudioScrub(QObject *parent = nullptr, OutputMode mode = OutputMode::System,
+                        MonotonicClock clock = {});
     ~AudioScrub() override;
     void begin(const Shot &shot, double fps);
     void seek(int frame);

@@ -11,10 +11,13 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <utility>
 
 namespace toon {
 struct AudioScrub::Private {
-    Private(AudioScrub *owner, OutputMode output) : q(owner), mode(output) {
+    Private(AudioScrub *owner, OutputMode output, MonotonicClock clock)
+        : q(owner), mode(output), clock(std::move(clock)) {
+        elapsed.start();
         timer.setSingleShot(true);
         QObject::connect(&timer, &QTimer::timeout, q, [this] { render(); });
     }
@@ -26,8 +29,11 @@ struct AudioScrub::Private {
     bool active = false, outputAttempted = false;
     QTimer timer;
     QElapsedTimer elapsed;
+    MonotonicClock clock;
+    qint64 renderedAt = -1;
     std::unique_ptr<QAudioSink> sink;
     QBuffer buffer;
+    qint64 now() const { return clock ? clock() : elapsed.elapsed(); }
     void openOutput() {
         if (outputAttempted || mode == OutputMode::Silent) return;
         outputAttempted = true;
@@ -45,7 +51,7 @@ struct AudioScrub::Private {
         if (!active || pending < 0) return;
         const int frame = pending; pending = -1;
         if (frame == rendered) return;
-        rendered = frame; elapsed.restart();
+        rendered = frame; renderedAt = now();
         if (sink) sink->reset();
         buffer.close(); buffer.setData({});
         AudioMixStream stream(clips, fps, frame, 0, frameCount - 1, false);
@@ -76,8 +82,8 @@ struct AudioScrub::Private {
         emit q->grainReady(frame, pcm);
     }
 };
-AudioScrub::AudioScrub(QObject *parent, OutputMode mode)
-    : QObject(parent), d(std::make_unique<Private>(this, mode)) {}
+AudioScrub::AudioScrub(QObject *parent, OutputMode mode, MonotonicClock clock)
+    : QObject(parent), d(std::make_unique<Private>(this, mode, std::move(clock))) {}
 AudioScrub::~AudioScrub() { end(); }
 bool AudioScrub::active() const { return d->active; }
 void AudioScrub::begin(const Shot &shot, double fps) {
@@ -88,11 +94,14 @@ void AudioScrub::begin(const Shot &shot, double fps) {
 void AudioScrub::seek(int frame) {
     if (!d->active || frame < 0 || frame >= d->frameCount) return;
     d->pending = frame;
-    if (!d->elapsed.isValid() || d->elapsed.elapsed() >= 30) { d->timer.stop(); d->render(); }
-    else if (!d->timer.isActive()) d->timer.start(int(30 - d->elapsed.elapsed()));
+    // Sample once: a scheduler pause between the deadline check and interval
+    // calculation must not produce a negative timer interval.
+    const qint64 sinceRender = d->now() - d->renderedAt;
+    if (d->renderedAt < 0 || sinceRender >= 30) { d->timer.stop(); d->render(); }
+    else if (!d->timer.isActive()) d->timer.start(int(30 - sinceRender));
 }
 void AudioScrub::end() {
-    d->active = false; d->timer.stop(); d->pending = d->rendered = -1; d->elapsed.invalidate();
+    d->active = false; d->timer.stop(); d->pending = d->rendered = -1; d->renderedAt = -1;
     if (d->sink) { d->sink->reset(); d->sink.reset(); }
     d->buffer.close(); d->buffer.setData({}); d->clips.clear(); d->outputAttempted = false;
 }

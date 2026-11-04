@@ -28,20 +28,48 @@ class AudioScrubTests final:public QObject{
  Q_OBJECT
 private slots:
  void previewUsesTheMixAndStopsImmediately(){
-    auto p=fixture();AudioScrub scrub(nullptr,AudioScrub::OutputMode::Silent);QSignalSpy grains(&scrub,&AudioScrub::grainReady);
+    qint64 now=0;
+    auto p=fixture();AudioScrub scrub(nullptr,AudioScrub::OutputMode::Silent,[&now]{return now;});QSignalSpy grains(&scrub,&AudioScrub::grainReady);
     scrub.begin(p.shots[0],p.fps);QVERIFY(scrub.active());scrub.seek(5);QCOMPARE(grains.size(),1);
     const auto bytes=grains[0][1].toByteArray();QCOMPARE(bytes.size(),qsizetype(3840*4));QCOMPARE(sample(bytes,0),0);QCOMPARE(sample(bytes,7679),0);
     AudioMixStream mix(p.shots[0].audioClips,p.fps,5,0,23,false);const auto expected=mix.read(bytes.size());
     QCOMPARE(bytes.mid(96*4,(3840-192)*4),expected.mid(96*4,(3840-192)*4));
-    scrub.seek(6);scrub.seek(7);scrub.end();QTest::qWait(45);QCOMPARE(grains.size(),1);QVERIFY(!scrub.active());
+    scrub.seek(6);scrub.seek(7);QCOMPARE(grains.size(),1);scrub.end();now=45;QTest::qWait(45);QCOMPARE(grains.size(),1);QVERIFY(!scrub.active());
     scrub.seek(8);QCOMPARE(grains.size(),1);
  }
+ void seeksCoalesceAndNewGestureCannotReplayOldRequests_data(){
+    QTest::addColumn<int>("elapsedAfterGrain");
+    QTest::newRow("pending-before-deadline")<<0;
+    QTest::newRow("pending-just-before-deadline")<<29;
+    QTest::newRow("immediate-at-deadline")<<30;
+    QTest::newRow("immediate-after-scheduler-delay")<<90;
+ }
  void seeksCoalesceAndNewGestureCannotReplayOldRequests(){
-    auto p=fixture();AudioScrub scrub(nullptr,AudioScrub::OutputMode::Silent);QSignalSpy grains(&scrub,&AudioScrub::grainReady);
+    QFETCH(int,elapsedAfterGrain);
+    qint64 now=0;
+    auto p=fixture();AudioScrub scrub(nullptr,AudioScrub::OutputMode::Silent,[&now]{return now;});QSignalSpy grains(&scrub,&AudioScrub::grainReady);
     scrub.begin(p.shots[0],p.fps);scrub.seek(0);for(int i=1;i<12;++i)scrub.seek(i);
+    QCOMPARE(grains.size(),1);QCOMPARE(grains.first()[0].toInt(),0);
+    now=30;
     QTRY_COMPARE_WITH_TIMEOUT(grains.size(),2,500);QCOMPARE(grains.last()[0].toInt(),11);
-    scrub.seek(12);scrub.end();scrub.begin(p.shots[0],p.fps);scrub.seek(3);QTest::qWait(40);QCOMPARE(grains.size(),3);QCOMPARE(grains.last()[0].toInt(),3);
-    scrub.end();p.shots[0].audioClips[0].muted=true;scrub.begin(p.shots[0],p.fps);scrub.seek(4);QCOMPARE(grains.size(),3);
+    // Event-loop polling can resume after the next 30 ms window on a busy
+    // runner. Exercise both legal outcomes explicitly, rather than assuming
+    // seek(12) is queued merely because QTRY just observed the previous grain.
+    now+=elapsedAfterGrain;scrub.seek(12);
+    const int beforeRestart=elapsedAfterGrain>=30?3:2;
+    QCOMPARE(grains.size(),beforeRestart);
+    if(elapsedAfterGrain>=30)QCOMPARE(grains.last()[0].toInt(),12);
+    scrub.end();scrub.begin(p.shots[0],p.fps);scrub.seek(3);
+    QCOMPARE(grains.size(),beforeRestart+1);QCOMPARE(grains.last()[0].toInt(),3);
+    now+=40;QTest::qWait(40);
+    QCOMPARE(grains.size(),beforeRestart+1);QCOMPARE(grains.last()[0].toInt(),3);
+    scrub.end();p.shots[0].audioClips[0].muted=true;scrub.begin(p.shots[0],p.fps);scrub.seek(4);QCOMPARE(grains.size(),beforeRestart+1);
+ }
+ void defaultClockAllowsLaterGrainsAndStops(){
+    auto p=fixture();AudioScrub scrub(nullptr,AudioScrub::OutputMode::Silent);QSignalSpy grains(&scrub,&AudioScrub::grainReady);
+    scrub.begin(p.shots[0],p.fps);scrub.seek(2);QCOMPARE(grains.size(),1);
+    QTest::qWait(40);scrub.seek(8);QCOMPARE(grains.size(),2);QCOMPARE(grains.last()[0].toInt(),8);
+    scrub.end();QTest::qWait(40);QCOMPARE(grains.size(),2);QVERIFY(!scrub.active());
  }
  void frameNavigationIsSilentAndScrubDoesNotEdit(){
     Canvas canvas;auto p=fixture();p.shots[0].audioClips.clear();canvas.setProject(p);
