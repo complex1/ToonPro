@@ -71,6 +71,18 @@ double rms(const QByteArray &pcm, int channel, double startSeconds, double endSe
     }
     return std::sqrt(double(energy / (end - first)));
 }
+double correlation(const QByteArray &actual, const QByteArray &expected, int channel, qint64 frames) {
+    if (frames <= 0 || actual.size() < frames * audioBytesPerSampleFrame
+        || expected.size() < frames * audioBytesPerSampleFrame) return -1;
+    long double dot = 0, actualEnergy = 0, expectedEnergy = 0;
+    for (qint64 i = 0; i < frames; ++i) {
+        const auto offset = i * audioBytesPerSampleFrame + channel * 2;
+        const auto a = qFromLittleEndian<qint16>(actual.constData() + offset);
+        const auto e = qFromLittleEndian<qint16>(expected.constData() + offset);
+        dot += double(a) * e; actualEnergy += double(a) * a; expectedEnergy += double(e) * e;
+    }
+    return actualEnergy > 0 && expectedEnergy > 0 ? double(dot / std::sqrt(actualEnergy * expectedEnergy)) : 0;
+}
 }
 
 class VideoExportTests final : public QObject {
@@ -261,13 +273,15 @@ private slots:
         QFETCH(double, fps); QFETCH(int, frames);
         QTemporaryDir directory; QVERIFY(directory.isValid());
         auto project = blankProject(fps);
-        const auto sound = sineAsset("Short stereo", 1, 440, 660, 18000, 12000);
+        // Non-harmonic stereo frequencies expose timing shifts as well as silence.
+        const auto sound = sineAsset("Short stereo", 1, 457, 683, 18000, 12000);
         project.shots[0].audioClips = {{uuid(), "Short stereo", sound, 6, 0, sound->sampleFrameCount(), 1, false}};
         const auto metadata = project.toJson();
         auto settings = videoExportDefaults(project); settings.firstFrame = 6;
         settings.lastFrame = settings.firstFrame + frames - 1; settings.includeAudio = true;
         const auto sourceSamples = videoExportSampleCount(project, settings);
         QVERIFY(sourceSamples > 0 && sourceSamples <= 4000);
+        const auto expectedAudio = sound->pcm.left(sourceSamples * audioBytesPerSampleFrame);
         const auto retained = qEnvironmentVariable("TOON_VIDEO_TEST_OUTPUT");
         const auto path = retained.isEmpty() ? directory.filePath("short-stereo.mp4")
             : QFileInfo(retained).absoluteFilePath() + ".short-" + QTest::currentDataTag() + ".mp4";
@@ -306,6 +320,8 @@ private slots:
             QVERIFY(pcm.open(QIODevice::WriteOnly)); QCOMPARE(pcm.write(decoded), decoded.size());
             QFile detail(path + ".audio.txt"); QVERIFY(detail.open(QIODevice::WriteOnly));
             const auto text = audioDetail.toUtf8(); QCOMPARE(detail.write(text), text.size());
+            QFile source(path + ".source-s16le-stereo.pcm");
+            QVERIFY(source.open(QIODevice::WriteOnly)); QCOMPARE(source.write(expectedAudio), expectedAudio.size());
         }
         QVERIFY2(decodedSamples >= sourceSamples, qPrintable(audioDetail));
         QVERIFY2(firstSampleTime >= 0 && firstSampleTime <= (1000000 + audioSampleRate - 1) / audioSampleRate,
@@ -318,12 +334,17 @@ private slots:
                 qPrintable(QString("Short export lost the onset of channel %1; %2").arg(channel).arg(audioDetail)));
             QVERIFY2(rms(decoded, channel, duration * 2 / 3, duration) > 500,
                 qPrintable(QString("Short export lost the end of channel %1; %2").arg(channel).arg(audioDetail)));
+            for (const auto count : {qMin<qint64>(512, sourceSamples), sourceSamples}) {
+                const auto similarity = correlation(decoded, expectedAudio, channel, count);
+                QVERIFY2(similarity > .8,
+                    qPrintable(QString("Export changed source timing in channel %1 over %2 samples (correlation %3); %4")
+                        .arg(channel).arg(count).arg(similarity).arg(audioDetail)));
+            }
         }
 
         // Decoders may expose full AAC packets beyond the MP4 edit duration.
-        // The explicitly padded short path must present exactly the selection,
-        // rounded by at most one millisecond. Longer unmodified inputs retain
-        // the existing ordinary AAC trailing-packet allowance.
+        // Every AAC path must exclude explicit preroll and present the selected
+        // duration, rounded by at most one millisecond.
         QMediaPlayer reader; QString loadError;
         connect(&reader, &QMediaPlayer::errorOccurred, this,
             [&](QMediaPlayer::Error, const QString &message) { loadError = message; });
@@ -333,7 +354,7 @@ private slots:
         QVERIFY2(loadError.isEmpty(), qPrintable(loadError));
         const auto expectedMS = qRound64(1000.0 * frames / fps);
         QVERIFY(reader.duration() >= expectedMS - 1);
-        const auto latestMS = expectedMS + (sourceSamples < 2048 ? 1 : 24);
+        const auto latestMS = expectedMS + 1;
         QVERIFY2(reader.duration() <= latestMS,
             qPrintable(QString("Short export duration %1ms exceeds %2ms plus AAC padding")
                 .arg(reader.duration()).arg(expectedMS)));
@@ -341,6 +362,43 @@ private slots:
     void invalidSettingsFailAsynchronouslyAndPreserveDestination_data() {
         QTest::addColumn<bool>("fractionalSingle");
         QTest::newRow("movie") << false; QTest::newRow("single-fractional") << true;
+    }
+    void approvedReplacementPublishesFinalizedAudibleAudio() {
+        QTemporaryDir directory; QVERIFY(directory.isValid());
+        const auto path = directory.filePath("approved.mp4");
+        const QByteArray original("Existing destination before approved replacement");
+        QVERIFY(writeFile(path, original));
+        auto project = blankProject(30);
+        const auto sound = sineAsset("Replacement audio", 1, 457, 683, 18000, 12000);
+        project.shots[0].audioClips = {{uuid(), "Replacement audio", sound, 0, 0, sound->sampleFrameCount(), 1, false}};
+        auto settings = videoExportDefaults(project); settings.firstFrame = 0; settings.lastFrame = 2;
+        settings.includeAudio = true; settings.overwriteApproved = true;
+        VideoExport exporter; QSignalSpy finished(&exporter, &VideoExport::finished);
+        QVERIFY(exporter.start(project, settings, path));
+        QTRY_COMPARE_WITH_TIMEOUT(finished.size(), 1, 30000);
+        const auto result = qvariant_cast<VideoExportResult>(finished[0][0]);
+        QVERIFY2(result.outcome == VideoExportOutcome::Completed, qPrintable(result.error));
+        const auto movie = readFile(path); QVERIFY(movie != original);
+        QVERIFY(hasMp4Container(movie)); QVERIFY(movie.contains("soun"));
+        QCOMPARE(QDir(directory.path()).entryList(QDir::AllEntries | QDir::Hidden | QDir::NoDotAndDotDot), QStringList{"approved.mp4"});
+
+        QAudioDecoder decoder; QAudioFormat format; format.setSampleRate(audioSampleRate);
+        format.setChannelConfig(QAudioFormat::ChannelConfigStereo); format.setSampleFormat(QAudioFormat::Int16);
+        decoder.setAudioFormat(format); QByteArray decoded; QString error; bool done = false;
+        connect(&decoder, &QAudioDecoder::bufferReady, this, [&] {
+            const auto buffer = decoder.read();
+            if (buffer.format() != format) { error = "Unexpected decoded replacement audio format"; return; }
+            decoded.append(buffer.constData<char>(), buffer.byteCount());
+        });
+        connect(&decoder, &QAudioDecoder::finished, this, [&] { done = true; });
+        connect(&decoder, qOverload<QAudioDecoder::Error>(&QAudioDecoder::error), this,
+            [&](QAudioDecoder::Error) { error = decoder.errorString(); });
+        decoder.setSource(QUrl::fromLocalFile(path)); decoder.start();
+        QTRY_VERIFY_WITH_TIMEOUT(done || !error.isEmpty(), 15000);
+        QVERIFY2(error.isEmpty(), qPrintable(error)); QVERIFY(done);
+        QVERIFY(decoded.size() >= 4800 * audioBytesPerSampleFrame);
+        for (int channel : {0, 1})
+            QVERIFY2(correlation(decoded, sound->pcm, channel, 512) > .8, "Replacement lost or shifted the audio onset");
     }
     void invalidSettingsFailAsynchronouslyAndPreserveDestination() {
         QFETCH(bool, fractionalSingle);

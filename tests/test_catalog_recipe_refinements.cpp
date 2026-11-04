@@ -152,7 +152,10 @@ private slots:
                     QVERIFY(image.save(QDir(review).filePath(name + "-actual.png")));
                     QVERIFY(baseline.save(QDir(review).filePath(name + "-reference.png")));
                 }
-                QVERIFY2(maximum <= 2 && mean <= .25, qPrintable(preset.id));
+                // The native Windows probe differs in just two channel bytes
+                // by one level. Keep a tiny total rounding budget rather than
+                // permitting a shifted tint across the whole stamp.
+                QVERIFY2(maximum <= 1 && total <= 8, qPrintable(preset.id));
             }
             // Compressed reference pixels must reproduce the immutable old
             // snapshot exactly, independently of this platform's rasterizer.
