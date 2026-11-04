@@ -14,7 +14,7 @@ These are **unsigned/ad-hoc-signed test candidates**, not a signed production re
 
 The [website source](website/README.md) contains a cinematic product site and **16 detailed artist guides with 23 authentic application screenshots**. It covers the drawing workspace, brushes, character references and palettes, cel painting, animation, Symbols, audio and export. Documentation includes local search, enlarged screenshots, keyboard navigation, mobile layouts and print/PDF output. Original illustrative artwork is credited separately from real app captures.
 
-GitHub Pages deployment is configured for `https://complex1.github.io/ToonPro/`; initial publication requires the repository's Pages source to be set to **GitHub Actions**. Download links remain unavailable until their corresponding public packages pass validation. See [website maintenance and publishing](website/README.md).
+The [product website](https://complex1.github.io/ToonPro/) and [illustrated field guide](https://complex1.github.io/ToonPro/docs/) are live on GitHub Pages. All 21 public routes and 49 browser checks pass, including mobile layouts, search and screenshot previews. Download links remain unavailable until their corresponding public packages pass validation. See [website maintenance and publishing](website/README.md).
 
 ## Scene and Movie playback in 0.75.0
 

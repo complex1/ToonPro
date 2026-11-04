@@ -7,7 +7,7 @@ Updated 4 November 2026. Current implementation: **0.75.0** Scene/Movie playback
 - [x] Build the responsive product website with original anime artwork, real app captures and 16 detailed guides.
 - [x] Verify all 21 routes, search, image previews, keyboard focus and mobile navigation (49 browser checks).
 - [x] Publish website source and add GitHub Pages build, validation and deployment workflow; hosted build and validation pass.
-- [ ] Enable GitHub Actions as the repository Pages source and verify the public deployment.
+- [x] Enable GitHub Actions as the repository Pages source and verify the public deployment: 21 pages and all 49 live browser checks pass.
 - [ ] Connect verified Windows/Mac public candidate downloads when available.
 
 ## Distribution candidates — 0.75
