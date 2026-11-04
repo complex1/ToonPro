@@ -34,7 +34,7 @@ def fetch(url):
     return body
 
 
-def latest_preview(version):
+def public_previews(version):
     page = 1
     pattern = re.compile(rf"v{re.escape(version)}-preview\.[1-9][0-9]*")
     while True:
@@ -42,25 +42,13 @@ def latest_preview(version):
         for release in releases:
             if (release["prerelease"] and not release["draft"] and release["published_at"]
                     and pattern.fullmatch(release["tag_name"])):
-                return release
+                yield release
         if len(releases) < 20:
-            return None
+            return
         page += 1
 
 
-def sync(registry, release):
-    version = registry["version"]
-    registry["releaseUrl"] = None
-    for key, _, _ in TARGETS.values():
-        card = registry[key]
-        if card.get("status") == "available":
-            card.update(status="testing", note="A verified preview for this platform is pending.")
-        card.update(url=None, links=[])
-        card.pop("sha256", None)
-        card.pop("bytes", None)
-    if release is None:
-        return
-
+def verified_cards(version, release):
     tag = release["tag_name"]
     url = f"{WEB}/releases/download/{tag}/"
     assets = {item["name"]: item for item in release["assets"]}
@@ -97,12 +85,11 @@ def sync(registry, release):
         checksums[name] = digest
     require(set(checksums) == set(assets) - {"SHA256SUMS"}, "Release checksums are incomplete")
 
-    seen = set()
+    cards = {}
     for platform in manifest["platforms"]:
         target = platform["target"]
-        require(target in TARGETS and target not in seen, f"Unexpected platform {target}")
-        seen.add(target)
-        key, primary_format, note = TARGETS[target]
+        require(target in TARGETS and target not in cards, f"Unexpected platform {target}")
+        _, primary_format, note = TARGETS[target]
         prefix = f"ToonPro-{version}-{target}"
         expected = {prefix + ".zip"}
         if primary_format == "dmg":
@@ -122,9 +109,42 @@ def sync(registry, release):
             links.append({"label": "ZIP alternative", "url": url + prefix + ".zip"})
         links += [{"label": "Checksums", "url": url + "SHA256SUMS"},
                   {"label": "Dependency sources", "url": url + sources}]
-        registry[key].update(status="available", note=note, url=primary["browser_download_url"],
+        cards[target] = dict(status="available", note=note, url=primary["browser_download_url"],
                              sha256=checksums[primary["name"]], bytes=primary["size"], links=links)
-    registry["releaseUrl"] = f"{WEB}/releases/tag/{tag}"
+    return cards
+
+
+def sync(registry, releases):
+    version = registry["version"]
+    available = {}
+    used_tags = []
+    # GitHub lists newest releases first. Inspect an older manifest only when
+    # its public asset list offers a platform we still need.
+    for release in releases:
+        names = {item["name"] for item in release["assets"]}
+        offered = {target for target, (_, fmt, _) in TARGETS.items()
+                   if f"ToonPro-{version}-{target}.{fmt}" in names}
+        missing = offered - available.keys()
+        if missing:
+            cards = verified_cards(version, release)
+            require(offered == cards.keys(), "Platform archives disagree with the verified manifest")
+            available.update({target: cards[target] for target in missing})
+            used_tags.append(release["tag_name"])
+        if len(available) == len(TARGETS):
+            break
+    for target, (key, _, _) in TARGETS.items():
+        card = registry[key]
+        if target in available:
+            card.update(available[target])
+        else:
+            if card.get("status") == "available":
+                card.update(status="testing", note="A verified preview for this platform is pending.")
+            card.update(url=None, links=[])
+            card.pop("sha256", None)
+            card.pop("bytes", None)
+    registry["releaseUrl"] = None
+    if used_tags:
+        registry["releaseUrl"] = f"{WEB}/releases/tag/{used_tags[0]}" if len(used_tags) == 1 else f"{WEB}/releases"
 
 
 if __name__ == "__main__":
@@ -132,6 +152,6 @@ if __name__ == "__main__":
     parser.add_argument("registry", type=Path, help="Registry in the Pages build checkout")
     path = parser.parse_args().registry
     registry = json.loads(path.read_text(encoding="utf-8"))
-    sync(registry, latest_preview(registry["version"]))
+    sync(registry, public_previews(registry["version"]))
     path.write_text(json.dumps(registry, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(registry["releaseUrl"] or "No public preview for this version yet")
