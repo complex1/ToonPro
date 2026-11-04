@@ -10,11 +10,11 @@ The scripts stage the native application, Qt libraries/plugins, matching FFmpeg 
 
 | Target | Package format | 3D reference rendering | Verification status |
 | --- | --- | --- | --- |
-| macOS arm64, deployment target 13.0 | ZIP and optional DMG | Filament 1.78.0 / Metal | 0.75.0 package passed all 20 checks in offscreen 2× and native Cocoa modes. A copy from the mounted DMG also passed the native checks. |
-| macOS x86_64, deployment target 13.0 | ZIP and optional DMG | Unavailable in this build | Cross-compiled; intermittent AAC export crashes under Rosetta. Artifact withheld pending diagnosis and actual Intel acceptance. |
-| Windows x86_64, MSVC 2022 | Portable ZIP | Unavailable in this build | Application and all test targets compile in native Windows CI. Latest full run: 242/246 suites pass; six of seven diagnostics pass. Short AAC export, a brush snapshot, audio-scrub timing and external resource paths remain unresolved. No Windows package was produced. |
+| macOS arm64, deployment target 13.0 | ZIP and optional DMG | Filament 1.78.0 / Metal | Local `da5dc454` package passed all 20 checks in offscreen 2× and native Cocoa modes. The extracted ZIP and a copy from the mounted DMG also passed all 20 checks. Hosted native and Retina runtime checks passed on Apple Silicon. |
+| macOS x86_64, deployment target 13.0 | ZIP and optional DMG | Unavailable in this build | All 247 hosted Intel suites passed. The packaging run is repeating with local license notices. |
+| Windows x86_64, Windows 10 1809+ / Windows 11, MSVC 2022 | Portable ZIP | Unavailable in this build | The focused native media probe passed all 38 cases, including short AAC onset and duration checks; resource-path and brush-catalog probes also passed. All 246 native suites and seven diagnostics passed. The portable ZIP is being checked again after fixing file-order handling in a packaging test. |
 
-These are build targets and recorded results, not a claim of testing every OS version. The verified Apple Silicon artifacts are in `dist/0.75.0/macos-arm64/`. Their exact sizes, hashes, capabilities and checks are in `package.json`, `SHA256SUMS` and `verification/package-verification.json`. The current Mac candidate has an **ad-hoc signature**, with no Developer ID signature or notarization. Clean-machine installation and physical Huion acceptance remain separate checks.
+These are build targets and recorded results, not a claim of testing every OS version. The current locally verified Apple Silicon artifacts are in `dist/0.75.0/macos-arm64-da5-preview/`; older candidates are retained separately. Exact sizes, hashes, capabilities and checks are in `package.json`, `SHA256SUMS` and `verification/package-verification.json`. The installed-copy check also confirms the selected AAC duration and opening samples after encoder preroll removal. The current Mac candidate has an **ad-hoc signature**, with no Developer ID signature or notarization. Local checks do not establish public publication; clean-machine installation and physical Huion acceptance remain separate checks.
 
 The pinned Filament SDK supports macOS arm64 only. `TOON_ENABLE_FILAMENT=ON` fails configuration if the required target/SDK is unavailable; `OFF` makes a deliberate 2D build, and `AUTO` uses the renderer when available. Other targets must not use `--require-3d` or claim that the renderer passed. No universal Mac application is currently verified.
 
@@ -43,7 +43,9 @@ python3 scripts/package_desktop.py \
   --require-3d --dmg
 ```
 
-The script deploys Qt, adds the offscreen test plugin if needed, signs nested code and the app, then verifies the relocated copy. ZIP creation preserves framework symlinks. `--dmg` also creates and checks a disk image containing `ToonPro.app` and an Applications shortcut. Extract the ZIP, or open the DMG and copy the app into the chosen Applications folder. The image does not replace a running copy automatically.
+The script deploys Qt, adds the offscreen test plugin if needed, signs nested code and the app, then verifies the relocated copy. ZIP creation preserves framework symlinks. `--dmg` also creates and checks a disk image containing `ToonPro.app` and an Applications shortcut. Extract the ZIP, or open the DMG and copy the app into the chosen Applications folder. Save and quit an older copy before replacing it; launch the copied app after ejecting the disk image.
+
+Downloaded ad-hoc candidates can be blocked by Gatekeeper because they are not Developer ID signed or notarized. For a trusted test build, use Apple's per-app **Privacy & Security → Open Anyway** approval after attempting to open it. A checksum verifies the downloaded bytes, not a developer identity or notarization. See [Apple's opening instructions](https://support.apple.com/102445).
 
 ### macOS Intel
 
@@ -79,7 +81,7 @@ python scripts/package_desktop.py `
   --output-dir dist/0.75.0/windows-x86_64-candidate
 ```
 
-The portable ZIP contains `bin/ToonPro.exe`, deployed Qt/FFmpeg libraries and plugins. CMake stages release MSVC runtime DLLs beside the executable. Verification inspects both normal and delayed DLL imports and rejects missing compiler runtimes. Windows 10/11 supplies UCRT; no Visual Studio installation should be needed, subject to actual clean-machine validation. Windows packages are unsigned: the script does not implement Authenticode signing or claim SmartScreen acceptance.
+The portable ZIP contains `bin/ToonPro.exe`, deployed Qt/FFmpeg libraries and plugins. Use **Extract All**, retain the complete folder and launch `bin/ToonPro.exe`; do not run inside the ZIP or move only the executable. CMake stages release MSVC runtime DLLs beside it. Verification inspects both normal and delayed DLL imports and rejects missing compiler runtimes. The minimum build target is Windows 10 version 1809 or Windows 11, x64. Windows supplies UCRT; no Visual Studio or Qt SDK installation should be needed, subject to actual clean-machine validation. Preferences and user libraries use the normal user profile, so the ZIP is not a self-contained portable settings profile. Windows packages are unsigned: the script does not implement Authenticode signing or claim SmartScreen acceptance.
 
 ### Linux — deferred recipe and verification history
 
@@ -197,6 +199,7 @@ Public distribution still requires final application terms, complete notice/sour
 ## Official references
 
 - [Qt deployment API](https://doc.qt.io/qt-6.10/qt-generate-deploy-app-script.html) and [Windows deployment](https://doc.qt.io/qt-6.10/windows-deployment.html).
+- [Qt 6.10 platform requirements](https://doc.qt.io/qt-6.10/supported-platforms.html).
 - [Qt Multimedia 6.10.3](https://doc.qt.io/qt-6.10/qtmultimedia-index.html) and [FFmpeg attribution/build references](https://doc.qt.io/qt-6.10/qtmultimedia-attribution-ffmpeg.html).
 - [Qt open-source obligations](https://www.qt.io/development/open-source-lgpl-obligations) and [Qt source builds](https://doc.qt.io/qt-6.10/build-sources.html).
 - [Apple Developer ID and notarization](https://developer.apple.com/developer-id/).

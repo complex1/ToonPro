@@ -8,7 +8,7 @@ Updated 4 November 2026. Current implementation: **0.75.0** Scene/Movie playback
 - [x] Verify all 21 routes, search, image previews, keyboard focus and mobile navigation (49 browser checks).
 - [x] Publish website source and add GitHub Pages build, validation and deployment workflow; hosted build and validation pass.
 - [x] Enable GitHub Actions as the repository Pages source and verify the public deployment: 21 pages and all 49 live browser checks pass.
-- [ ] Connect verified Windows/Mac public candidate downloads when available.
+- [x] Connect the downloads page to verified public GitHub release assets and include real workspace, character reference and timeline screenshots in the README.
 
 ## Distribution candidates — 0.75
 
@@ -20,8 +20,9 @@ Current distribution scope: **Windows and macOS**. Linux release work is deferre
 - [x] Collect and verify matching Mac and Linux SDK dependency sources plus the Linux software-codec sources and build recipe.
 - [x] Pass all 247 Mac regression suites and 36 packaging/source-script checks after the save/export fixes.
 - [x] Verify the Linux candidate with software H.264/AAC in relocated offscreen and native XCB checks.
-- [ ] Complete Windows native CI after save-file and offscreen-font fixes; keep failed packages withheld.
-- [ ] Resolve intermittent Intel Mac AAC export crashes and validate on actual Intel hardware.
+- [x] Pass all 246 Windows suites and seven focused diagnostics, including save, export and brush regressions.
+- [x] Pass all 247 native Intel Mac suites, including AAC export. Verify a copied Intel DMG under Rosetta.
+- [ ] Complete the native Intel Mac package check.
 - [ ] Complete the active Windows/macOS candidates and record final results in [release verification](release-0.75.0.md).
 - [ ] Test physical Huion input and real production projects on each supported operating system.
 - [ ] Validate clean-machine installation on supported OS baselines, including an actual Intel Mac and Windows compiler-runtime installation.

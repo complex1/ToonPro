@@ -238,6 +238,13 @@ def check_site(root: Path, base: str, release_path: Path | None = None,
     if release_path:
         registry = json.loads(release_path.read_text())
         approved = {r['url'] for r in registry.values() if isinstance(r, dict) and r.get('url')}
+        approved.update(link['url'] for r in registry.values() if isinstance(r, dict) and r.get('url') for link in r.get('links', []))
+        for key in ('mac', 'windows', 'intel'):
+            package = registry.get(key, {})
+            if package.get('url'):
+                result.require(package.get('status') == 'available', f'{key}: unverified download is advertised')
+                result.require(bool(re.fullmatch(r'[0-9a-f]{64}', package.get('sha256', ''))), f'{key}: verified package checksum is missing')
+                result.require(isinstance(package.get('bytes'), int) and package['bytes'] > 0, f'{key}: package size is missing')
         advertised = set()
         for page in pages.values():
             for e in page.elements:

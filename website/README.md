@@ -21,13 +21,13 @@ Open `http://127.0.0.1:8765/ToonPro/`. For another repository name or root hosti
 - `content/*.md`: artist guides, with YAML title, description, category and order. The builder adds sidebar, table of contents, primary screenshots and adjacent-guide navigation. Links to another `.md` guide become page links.
 - `assets/screenshots/index.json`: actual capture provenance, captions, dimensions and hashes. The `slug` associates a primary screenshot with a guide. Supplemental figures live beside the relevant steps in Markdown.
 - `assets/ARTWORK.txt`: original illustration brief and provenance. The image is illustrative art, not an automated application feature. The workspace screenshot shows it genuinely imported into the app.
-- `releases.json`: platform-specific availability and verified download URLs. Keep URLs null until a public artifact exists. Never turn a pending/failed build into a download button.
+- `releases.json` supplies platform labels and the locally previewable download registry. In the Pages build, `sync_downloads.py` reads the public GitHub prerelease for this version. It verifies the manifest, checksums, platform package names, byte counts and GitHub asset digests before enabling a button. To refresh your local preview, run `python website/sync_downloads.py website/releases.json` before building.
 - `check_site.py`: output-level checks for routes, fragments, assets, screenshots, search coverage and public-path hygiene.
 
 The large original PNG is preserved locally as an artwork master; the optimized WebP is the published asset. Fonts retain their OFL texts. Screenshot masters and browser QA evidence remain in `build/`.
 
 ## Publishing
 
-`.github/workflows/pages.yml` builds, validates and deploys on website changes to `main`. In repository **Settings → Pages**, choose **GitHub Actions** once. The workflow's standard token can deploy an enabled Pages site; it does not have permission to enable that repository setting. GitHub Pages serves the site at `https://complex1.github.io/ToonPro/` after successful deployment.
+`.github/workflows/pages.yml` builds, validates and deploys on website changes to `main` and after the desktop release workflow finishes on `main`. In repository **Settings → Pages**, choose **GitHub Actions** once. The workflow's standard token can deploy an enabled Pages site; it does not have permission to enable that repository setting. GitHub Pages serves the site at `https://complex1.github.io/ToonPro/` after successful deployment.
 
 Application CI is separate from website CI. Linux distribution is deferred; the site offers only Windows/Mac candidates when verified public artifacts are available. Source availability does not set a pricing policy or an application license.

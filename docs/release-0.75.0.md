@@ -1,34 +1,24 @@
 # Toon Pro 0.75.0 release verification
 
-Updated 4 November 2026. The current release scope is **Windows and macOS**; Linux distribution is deferred. These are test candidates, not production approval. The artist authorized public source and test downloads in [complex1/ToonPro](https://github.com/complex1/ToonPro). No store submission or GitHub Release has been published.
+Updated 4 November 2026. The public preview targets Windows x64, Apple Silicon Mac and Intel Mac. The [downloads page](https://complex1.github.io/ToonPro/download/) lists packages available to artists.
 
-## Candidate status
+## Native verification
 
-| Platform | Result | Package |
+| Platform | Native application tests | Package verification |
 | --- | --- | --- |
-| Apple Silicon Mac | Verified Release build, ad-hoc signed; native Cocoa and offscreen 2× checks pass, including 3D and media export. Mounted DMG installation-copy checks pass. | `dist/0.75.0/macos-arm64/` ZIP and DMG |
-| Windows x86_64 | App and all test targets compile. Latest full run: **242/246 suites pass**. Short AAC export, one brush snapshot, audio-scrub timing and external 3D resource paths still fail. | Withheld until full tests and packaged runtime pass |
-| Intel Mac | Cross-compiled; intermittent SIGILL during AAC export under Rosetta, including a copied DMG installation. Many checks pass, but this does not resolve the crash. | Withheld; original logs preserved |
+| Apple Silicon Mac | 247/247 passed plus three repeated recolor workspace checks. | The hosted native and Retina checks passed, including 3D and media export. Both the local extracted ZIP and the app copied from a mounted DMG passed all 20 native checks. |
+| Intel Mac | 247/247 passed plus three repeated recolor workspace checks. | The first hosted packaging attempt stopped while downloading a license notice. Reviewed license texts now ship with the packaging tools. Native package verification is running again. |
+| Windows x64 | 246/246 passed, including the audio export, audio scrubbing, brush catalog and external model path regressions. All seven focused diagnostics passed. | A packaging test assumed Windows enumerated DLLs in a fixed order. It now checks all DLL records by name. Native package verification is running again. |
 
-3D rendering currently ships only on Apple Silicon Mac. Other targets report it unavailable. Mac deployment target is 13.0. These targets do not imply testing on every supported OS release.
+The Apple Silicon preview is public with a DMG, ZIP, checksums and matching sources. [Apple Silicon release](https://github.com/complex1/ToonPro/releases/tag/v0.75.0-preview.41758527843)
 
-## Recorded verification
+The [full native run](https://github.com/complex1/ToonPro/actions/runs/41758527843) tested commit `da5dc454`. The follow-up [packaging run](https://github.com/complex1/ToonPro/actions/runs/41772075808) includes the packaging corrections and identifies GitHub drafts by their release ID before publishing.
 
-- Mac: all **247/247 CTest suites** pass after the final save/export changes (307.81 seconds; `build/release-075-current-all-tests.log`). The subsequent test-only font diagnostic passes its focused PropertyRow check. A later short-AAC fix passes all three media suites on Mac and Linux, including audible stereo decoding and unchanged timing bounds.
-- Packaging: **36/36 Python tests** pass (`build/release-075-windows-font-env-tests.log`).
-- Each packaged smoke run performs 20 checks: project save/reopen, drawings/Undo, icons and brush resources, Movie review, WAV export, actual H.264/AAC export and decode, and supported 3D rendering or its explicit unavailable state.
-- Mac final DMG copy: native Cocoa, all 20 checks, strict signature verification and no SDK/Homebrew library loads. ZIP integrity and matching executable checks pass. Evidence: `dist/0.75.0/macos-arm64/verification/dmg-installed-native/`.
-- Windows first full run: 195/246 suites passed. [Run 41692948278](https://github.com/complex1/ToonPro/actions/runs/41692948278) improves this to **242/246** after font/save fixes. Six of seven diagnostic suites pass. Padding very short audio to one AAC block does **not** resolve the Windows encoder's missing audio track; five short-audio cases still fail. The other remaining failures are the `painted-pebble` macOS snapshot hash, an audio-scrub test observing four grains instead of three, and valid external 3D resources rejected by the source-folder check. No Windows package was produced. Full assertions are preserved in `build/release-075-windows-run5.log` and the run's diagnostic artifact.
-- An earlier intermediate report incorrectly interpreted GitHub's `continue-on-error` step conclusion as a passing diagnostic result. The full job log and explicit packaging guard are authoritative; the failed candidate was withheld.
+## Local installation checks
 
-## Current artifact hashes
+The independently built Apple Silicon package at `dist/0.75.0/macos-arm64-da5-preview/` passed signature checks, ZIP extraction, installation from the mounted disk image, project save/reopen, drawing/Undo, movie review, H.264/AAC export and 3D rendering. Audio exported from the installed app kept the selected 0.500 s duration and the opening stereo samples. Each platform's public checksums belong to the files attached to its GitHub release.
 
-| File | Size (bytes) | SHA-256 |
-| --- | --- | --- |
-| `ToonPro-0.75.0-macos-arm64.zip` | 46,044,380 | `c7f9f6a53246f2b167de25cd7d2f2e248e52031bc428ff260d3fbc75131b7925` |
-| `ToonPro-0.75.0-macos-arm64.dmg` | 51,512,372 | `bb19eca9db513f422b009d9f51a2f72e57667a950a096b702f098ea875eed84e` |
-
-Each platform folder includes `package.json`, `SHA256SUMS` and verification reports. The matching Mac dependency-source archive is `dist/0.75.0/dependency-sources/macos-arm64.tar.gz`, with an adjacent checksum. Windows dependency-source coverage remains pending its verified package. See [packaging](packaging.md) for reproduction and dependency details.
+The Mac builds target macOS 13 and later. 3D rendering uses Metal on Apple Silicon. Intel Mac and Windows support the 2D workflow. Mac previews are ad-hoc signed without notarization. Windows previews use an unsigned portable ZIP. See [packaging](packaging.md) for dependency and build details.
 
 ## Deferred Linux work
 
@@ -38,9 +28,9 @@ The historical archive is `dist/0.75.0/linux-x86_64/ToonPro-0.75.0-linux-x86_64.
 
 ## Remaining acceptance
 
-Windows full-suite/package checks and Intel blockers must be resolved before offering those downloads. Physical Huion feel, production-project testing, baseline OS installations, signing/notarization, application distribution terms and final dependency/replacement review remain open. No public production-readiness claim is made. Use the [acceptance checklist](release-acceptance.md) for hands-on testing.
+Current priorities include physical Huion testing, production projects, clean installations on the minimum OS versions and signing credentials for production packages. See the [hands-on acceptance checklist](release-acceptance.md).
 
-## Focused Windows follow-up
+## Earlier diagnostic builds
 
 [Native probe 41701154425](https://github.com/complex1/ToonPro/actions/runs/41701154425) tested a bounded two-block feed for very short AAC inputs and an MP4 presentation-duration correction. Audio tracks now exist, but five audible-onset cases still fail for 400–1024-sample selections; 32 media cases pass. The remaining problem is Windows encoder priming/leading silence, now measurable in retained MP4 and decoded PCM files. Four Mac media suites pass, but those results do not establish native Windows success. Missing audio is rejected before publishing the destination; no application package is produced by this probe.
 

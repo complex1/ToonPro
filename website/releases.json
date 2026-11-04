@@ -2,7 +2,50 @@
   "version": "0.75.0",
   "channel": "Public preview",
   "repository": "https://github.com/complex1/ToonPro",
-  "mac": {"status":"local-verified","label":"macOS · Apple Silicon","minimum":"macOS 13 or later","note":"The Apple Silicon candidate has passed package checks. A public download is being prepared. It is ad-hoc signed and not notarized.","url":null},
-  "windows": {"status":"testing","label":"Windows · 64-bit","minimum":"Windows 10 1809 or later / Windows 11","note":"The Windows candidate is in validation. A download will appear after the full test and package checks pass.","url":null},
-  "intel": {"status":"withheld","note":"The Intel Mac candidate is not available while an audio-export crash is investigated."}
+  "mac": {
+    "status": "available",
+    "label": "macOS · Apple Silicon",
+    "minimum": "macOS 13 or later",
+    "note": "Includes the 3D renderer. Ad-hoc signed Mac preview.",
+    "url": "https://github.com/complex1/ToonPro/releases/download/v0.75.0-preview.41758527843/ToonPro-0.75.0-macos-arm64.dmg",
+    "links": [
+      {
+        "label": "ZIP alternative",
+        "url": "https://github.com/complex1/ToonPro/releases/download/v0.75.0-preview.41758527843/ToonPro-0.75.0-macos-arm64.zip"
+      },
+      {
+        "label": "Checksums",
+        "url": "https://github.com/complex1/ToonPro/releases/download/v0.75.0-preview.41758527843/SHA256SUMS"
+      },
+      {
+        "label": "Dependency sources",
+        "url": "https://github.com/complex1/ToonPro/releases/download/v0.75.0-preview.41758527843/ToonPro-0.75.0-macos-arm64-dependency-sources.tar.gz"
+      }
+    ],
+    "button": "Download for Mac",
+    "format": "DMG disk image",
+    "sha256": "8b3815d583085111ee678d63680d07fc7b32726a8c5d7fadb57f4468dce2f665",
+    "bytes": 51569178
+  },
+  "windows": {
+    "status": "testing",
+    "label": "Windows · 64-bit",
+    "minimum": "Windows 10 1809 or later / Windows 11",
+    "note": "The Windows candidate is in validation. A download will appear after the full test and package checks pass.",
+    "url": null,
+    "links": [],
+    "button": "Download for Windows",
+    "format": "Portable ZIP"
+  },
+  "intel": {
+    "status": "withheld",
+    "note": "The Intel Mac candidate is undergoing full build and package verification.",
+    "links": [],
+    "label": "macOS · Intel",
+    "minimum": "macOS 13 or later",
+    "button": "Download for Intel Mac",
+    "format": "DMG disk image",
+    "url": null
+  },
+  "releaseUrl": "https://github.com/complex1/ToonPro/releases/tag/v0.75.0-preview.41758527843"
 }

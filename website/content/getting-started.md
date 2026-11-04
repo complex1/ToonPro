@@ -9,6 +9,24 @@ Toon Pro brings drawing and animation into one movie project. You can use that p
 
 This guide takes you from the opening window to a saved drawing and two different image exports. You do not need to set up an animation timeline to paint an illustration.
 
+## Install a test build
+
+Choose a package for your computer when it is available on the Downloads page. Each release identifies the platforms that passed its checks; a listed build target does not mean its download is ready.
+
+| Computer | Minimum build target | Package | 3D reference view |
+| --- | --- | --- | --- |
+| Mac with Apple Silicon | macOS 13 | DMG or ZIP | Available |
+| Mac with Intel processor | macOS 13 | DMG or ZIP | Unavailable in this build |
+| Windows PC, x64 | Windows 10 version 1809 or Windows 11 | Portable ZIP | Unavailable in this build |
+
+These minimums follow the packaged Qt runtime; they are not a claim that every OS version has been tested. The release notes record the actual checks. [Qt platform requirements](https://doc.qt.io/qt-6.10/supported-platforms.html)
+
+**On Mac:** open the DMG, drag **ToonPro.app** to Applications, eject the image and open the copied app. If you choose the ZIP, extract it and move the app to Applications. Save your work and quit any older copy before replacing it. Current test builds are ad-hoc signed and are not notarized. If macOS blocks a preview you trust, Apple's per-app approval is under **System Settings → Privacy & Security → Open Anyway** after the first launch attempt. [Apple's opening instructions](https://support.apple.com/102445)
+
+**On Windows:** use **Extract All** on the ZIP, keep the extracted folder intact and open **bin → ToonPro.exe**. Do not launch inside the ZIP or move the executable away from its DLLs and plugins. Qt, the media libraries and required Microsoft runtime DLLs are bundled; you do not need to install the development tools. Current Windows previews are unsigned and may trigger a publisher warning. “Portable ZIP” describes the package: your settings and brush libraries are still saved in your user profile.
+
+The Intel Mac and Windows builds retain drawing, animation, audio and project storage. Choose the Apple Silicon build when your workflow needs the rendered 3D reference view.
+
 ## Choose a project starter
 
 Open **File → New movie project…**. The starter tabs change the initial canvas, timing, production paper and layers. The preview shows how those settings fit together.
