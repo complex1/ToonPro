@@ -120,6 +120,25 @@ private slots:
         QSignalSpy prepared(&panel,&CelPaintCheckPanel::previewFinished);panel.previewRepairs();QTRY_COMPARE_WITH_TIMEOUT(prepared.count(),1,10000);QVERIFY(panel.pending());
         canvas.document()->addLayer();QVERIFY(!panel.pending());QVERIFY(panel.inspection().issues.isEmpty());QVERIFY(!panel.applyRepairs());
     }
+    void documentReloadWhileNavigatingDiscardsTheOldProblem() {
+        Canvas canvas;
+        canvas.setProject(projectWithPainting());
+        CelPaintCheckPanel panel(&canvas);
+        const auto replacement = projectWithPainting();
+        const QPointF newCenter(31, 47);
+        connect(canvas.document(), &Document::selectionChanged, &panel, [&] {
+            // Selection listeners run synchronously and can replace the shot
+            // before Cel Paint Check centers the canvas on the old problem.
+            canvas.setProject(replacement);
+            canvas.centerOn(newCenter);
+        }, Qt::SingleShotConnection);
+        QSignalSpy inspected(&panel, &CelPaintCheckPanel::inspectionFinished);
+        panel.startCheck();
+        QTRY_COMPARE_WITH_TIMEOUT(inspected.count(), 1, 10000);
+        QCOMPARE(canvas.shot().id, replacement.shots.first().id);
+        QVERIFY(panel.inspection().issues.isEmpty());
+        QCOMPARE(canvas.center(), newCenter);
+    }
     void animatedSourceInspectionHighlightsTheDisplayedPositionAndSourceMode() {
         for(bool sourceMode:{false,true}) {
             Canvas canvas;canvas.resize(600,500);canvas.setProject(projectWithPainting());

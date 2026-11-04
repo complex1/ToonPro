@@ -272,17 +272,46 @@ bool CelPaintCheckPanel::finishEditing(){
 void CelPaintCheckPanel::showProblem(bool navigate){
     if(!m_canvas||!m_document||!m_overlay)return;
     const int index=m_problems->currentRow();if(index<0||index>=m_result.issues.size()){m_overlay->hide();return;}
-    const auto &issue=m_result.issues[index];const auto &target=m_result.targets[issue.target];
+    // Frame/layer selection and centering emit synchronous signals. Keep the
+    // implicitly shared inspection alive and abandon it if a listener replaces
+    // the project, the results, or the selected problem.
+    const auto revision = m_revision;
+    const auto inspection = m_result;
+    const auto &issue = inspection.issues.at(index);
+    const auto &target = inspection.targets.at(issue.target);
+    const auto stillCurrent = [this, revision, index] {
+        return m_canvas && m_document && m_overlay && m_revision == revision && m_problems->currentRow() == index;
+    };
     bool repaired=false;QImage image=target.image;
     if(!m_original->isChecked())for(const auto &repair:m_repairs.drawings)if(repair.source.layerId==target.layerId&&repair.source.shotId==target.shotId){image=repair.preview;repaired=true;break;}
     m_caption->setText((repaired?"Repair preview · ":"Original · ")+target.name);m_preview->setImage(image);
     if(navigate&&m_document->activeShotId()==target.shotId&&!m_document->editingGestureActive()&&!m_document->layerPropertyEditActive()){
-        QScopedValueRollback<bool>jump(m_navigating,true);const auto &shot=m_document->activeShot();const auto owner=animationOwner(shot,target.layerId);
-        for(const auto &track:shot.animationTracks)if(track.id==owner.trackId)for(const auto &exposure:track.exposures)if(exposure.drawingId==owner.drawingId){m_document->setCurrentFrame(exposure.startFrame);break;}
-        for(int i=0;i<shot.layers.size();++i)if(shot.layers[i].id==target.layerId){m_document->selectLayer(i);break;}
+        QScopedValueRollback<bool> jump(m_navigating, true);
+        // An observer can release the document's old shot storage during either
+        // navigation call, even when the active shot ID stays the same.
+        const Shot shot = m_document->activeShot();
+        const auto owner = animationOwner(shot, target.layerId);
+        for (const auto &track : shot.animationTracks) {
+            if (track.id != owner.trackId) continue;
+            for (const auto &exposure : track.exposures) {
+                if (exposure.drawingId != owner.drawingId) continue;
+                m_document->setCurrentFrame(exposure.startFrame);
+                break;
+            }
+            break;
+        }
+        if (!stillCurrent()) return;
+        for (int i = 0; i < shot.layers.size(); ++i) {
+            if (shot.layers.at(i).id == target.layerId) {
+                m_document->selectLayer(i);
+                break;
+            }
+        }
+        if (!stillCurrent()) return;
         const auto origin=sheetGeometry(m_canvas->project(),m_canvas->shot()).output.topLeft();
-        const auto sourceTransform=m_document->keyframeSourceEditing()?QTransform():worldLayerTransform(shot,target.layerId,m_document->currentFrame());
+        const auto sourceTransform=m_document->keyframeSourceEditing()?QTransform():worldLayerTransform(m_document->activeShot(),target.layerId,m_document->currentFrame());
         m_canvas->centerOn(m_canvas->cameraTransform().map(sourceTransform.map(QPointF(issue.bounds.center())))+origin);
+        if (!stillCurrent()) return;
     }
     m_highlightBounds=issue.bounds;m_highlightMask={};
     if(issue.pixels.size()<=65536&&qint64(issue.bounds.width())*issue.bounds.height()<=1024*1024&&!issue.pixels.isEmpty()){

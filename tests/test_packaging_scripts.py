@@ -313,6 +313,25 @@ class PackageScriptTests(unittest.TestCase):
         for path in ["QtCore.framework", "QtCore.prl", "Qt6CoreConfig.cmake", "libother.so"]:
             self.assertIsNone(package.qt_library_name(path))
 
+    def test_windows_system_icu_is_removed_only_for_identical_os_binaries(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            stage, system = root / "stage", root / "System32"
+            (stage / "bin").mkdir(parents=True)
+            system.mkdir()
+            for name, content in {"icuuc.dll": b"common", "icuin.dll": b"i18n"}.items():
+                (system / name).write_bytes(content)
+                (stage / "bin" / name).write_bytes(content)
+            package.remove_windows_system_icu(stage, system)
+            self.assertEqual(list((stage / "bin").iterdir()), [])
+            self.assertEqual((system / "icuuc.dll").read_bytes(), b"common")
+            for name in ("icuuc.dll", "icuuc73.dll", "icu.dll", "vcruntime140.dll"):
+                (stage / "bin" / name).write_bytes(b"vendor build")
+            package.remove_windows_system_icu(stage, system)
+            self.assertEqual(len(list((stage / "bin").iterdir())), 4)
+            with self.assertRaisesRegex(RuntimeError, "version-matched"):
+                package.collect_icu_notice(stage, [], root / "licenses", root / "cache")
+
     def test_icu_notice_requires_matching_version_and_verified_complete_text(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

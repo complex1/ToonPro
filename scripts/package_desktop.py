@@ -321,6 +321,19 @@ def sdk_notice_manifests(qt_root: Path, stage: Path) -> list[tuple[Path, dict]]:
     return selected
 
 
+def remove_windows_system_icu(stage: Path, system_directory: Path) -> None:
+    # windeployqt copies ICU imports from PATH, including Windows' own ICU.
+    # These two OS libraries exist on our minimum Windows 10 1809 target.
+    for name in ("icuuc.dll", "icuin.dll"):
+        staged = stage / "bin" / name
+        system_library = system_directory / name
+        if staged.is_file() and not staged.is_symlink() and system_library.is_file():
+            fingerprint = digest(staged)
+            if fingerprint == digest(system_library):
+                staged.unlink()
+                print(f"Using Windows system {name} (matched SHA-256 {fingerprint})", flush=True)
+
+
 def collect_icu_notice(stage: Path, documents: list[dict], destination: Path, cache: Path) -> dict | None:
     deployed = sorted({path.name for path in stage.rglob("*") if path.is_file()
                        and re.match(r"(?:lib)?icu(?:data|i18n|uc|io|dt|in)[0-9.]*\.(?:so|dylib|dll)", path.name)})
@@ -483,6 +496,8 @@ def main() -> int:
             relocate_macos_offscreen(copied_plugin, qt_root)
     if system == "Linux":
         prepare_linux(stage, qt_root, ffmpeg_root)
+    elif system == "Windows":
+        remove_windows_system_icu(stage, Path(os.environ["SystemRoot"]) / "System32")
     notices = app / "Contents/Resources/third-party" if app.exists() else stage / "third-party"
     collect_notices(qt_root, notices, cache, stage)
     if ffmpeg_root:
