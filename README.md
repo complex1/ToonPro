@@ -23,17 +23,39 @@ This repository contains a native **drawing workspace with frame-by-frame animat
 
 </details>
 
-## Desktop release candidates — 0.75.0
+## Downloads and local builds — 0.75.0
 
-Choose your platform on the [downloads page](https://complex1.github.io/ToonPro/download/). Preview packages include the application, its runtime libraries, SHA-256 checksums and a matching dependency-source download. macOS builds are ad-hoc signed. The Windows ZIP is unsigned.
+**Updated 5 November 2026. GitHub Actions is disabled for this repository. Build, test and package locally using the commands below. Release and installation updates are maintained in this README.**
 
-The Apple Silicon build includes the Metal 3D reference view. Windows and Intel Mac support the 2D drawing and animation workflow. The complete native regression suites passed on all three platforms. See [release verification](docs/release-0.75.0.md) for package status and [installation instructions](https://complex1.github.io/ToonPro/docs/getting-started/#install-a-test-build) for your computer.
+| Platform | Public download | Requirements and status |
+| --- | --- | --- |
+| Mac · Apple Silicon | [DMG](https://github.com/complex1/ToonPro/releases/download/v0.75.0-preview.41758527843/ToonPro-0.75.0-macos-arm64.dmg) · [ZIP](https://github.com/complex1/ToonPro/releases/download/v0.75.0-preview.41758527843/ToonPro-0.75.0-macos-arm64.zip) | macOS 13 or later. Includes Metal 3D references. Ad-hoc signed preview. |
+| Mac · Intel | Pending | macOS 13 or later. Native release packaging still needs verification. |
+| Windows · x64 | Pending | Windows 10 version 1809 or Windows 11. A verified public ZIP is still pending. |
+
+The published Mac preview was built from `da5dc454` and passed all 247 native suites plus the packaged runtime checks. Installing the exact public DMG into a fresh folder passed all 20 checks, including 3D, saving projects and audio/video export. Current source includes a later fix for a Cel Paint Check crash during recoloring. Build from source to include that fix. Windows and Intel Mac currently provide the 2D drawing and animation workflow.
+
+[Release notes](https://github.com/complex1/ToonPro/releases/tag/v0.75.0-preview.41758527843) · [SHA-256 checksums](https://github.com/complex1/ToonPro/releases/download/v0.75.0-preview.41758527843/SHA256SUMS) · [Matching dependency sources](https://github.com/complex1/ToonPro/releases/download/v0.75.0-preview.41758527843/ToonPro-0.75.0-macos-arm64-dependency-sources.tar.gz)
+
+### Install the Mac preview
+
+Open the DMG, copy **ToonPro.app** into Applications, eject the disk image, then open the copied app. For the ZIP, extract the app and move it into Applications. Save and quit an older copy before replacing it. The preview is ad-hoc signed without notarization. If macOS blocks a build you trust, use its per-app **Privacy & Security → Open Anyway** control after the first launch attempt. [Apple's instructions](https://support.apple.com/102445)
+
+### Check a download
+
+Run this in Terminal against the downloaded DMG and compare the result with the published checksum.
+
+```sh
+shasum -a 256 ~/Downloads/ToonPro-0.75.0-macos-arm64.dmg
+```
+
+Expected SHA-256 for this published DMG is `8b3815d583085111ee678d63680d07fc7b32726a8c5d7fadb57f4468dce2f665`.
 
 ## Product website and illustrated field guide
 
 The [website source](website/README.md) contains a cinematic product site and **16 detailed artist guides with 23 authentic application screenshots**. It covers the drawing workspace, brushes, character references and palettes, cel painting, animation, Symbols, audio and export. Documentation includes local search, enlarged screenshots, keyboard navigation, mobile layouts and print/PDF output. Original illustrative artwork is credited separately from real app captures.
 
-The [product website](https://complex1.github.io/ToonPro/) and [illustrated field guide](https://complex1.github.io/ToonPro/docs/) are live on GitHub Pages. All 21 public routes and 49 browser checks pass, including mobile layouts, search and screenshot previews. The downloads page lists public preview packages after their native and installation checks pass. See [website maintenance and publishing](website/README.md).
+The [product website](https://complex1.github.io/ToonPro/) and [illustrated field guide](https://complex1.github.io/ToonPro/docs/) are live on GitHub Pages. All 21 public routes and 49 browser checks pass, including mobile layouts, search and screenshot previews. The website reflects its last published build. Current download availability and local build instructions are maintained in this README.
 
 ## Scene and Movie playback in 0.75.0
 
@@ -458,47 +480,126 @@ Version 0.18 adds **step 3: binding and weight correction**. Open **Weights**, c
 
 Version 0.19 adds **step 4: current-pose editing**. **Pose** shares the joint tree with Rest and Weights. FK offers a canvas rotation ring with clickable X/Y/Z axis labels and precise local rotations; dragging a root moves the body. IK provides endpoint/pole handles for a two-bone chain and optional model-local pinning. Per-axis limits constrain rotations, and direct actions mirror the whole pose or reset selected/all joints while keeping limits. The current pose is saved independently for each instance. Rest and Weights temporarily show the selected model at rest without erasing its saved pose. Imported skins, animated 3D models/rigs and reusable rig/pose library assets remain deferred. See [the posing workflow](docs/drawing-tools.md#current-pose-editing).
 
-## Build and run
+## Build, test and package locally
 
-Requires a C++20 compiler, CMake 3.24+, and Qt 6.10+ with Core, Gui, Widgets, Svg, Concurrent, Multimedia and Test. The development SDK is pinned to **Qt 6.10.3**. Qt 6.8.3 did not link against this machine's macOS 26 SDK because it still references AGL; use the pinned SDK instead.
+Run these commands from the repository root on the target operating system. Use a C++20 compiler, CMake 3.24+, Python 3.10+, zlib and the pinned **Qt 6.10.3** SDK with QtBase, QtSvg and QtMultimedia. Python installs dependencies and runs packaging helpers. The application is C++.
+
+Each command must succeed before proceeding. Packaging requires a new or empty output folder and checks a relocated copy of the application.
 
 ### macOS
 
-With the project-local Qt SDK already downloaded in this workspace, install the pinned renderer SDK once on macOS arm64:
-
-```sh
-./scripts/setup_filament.sh
-cmake -S . -B build -DCMAKE_PREFIX_PATH="$PWD/.deps/Qt/6.10.3/macos" -DCMAKE_BUILD_TYPE=RelWithDebInfo
-cmake --build build --parallel
-ctest --test-dir build --output-on-failure
-open build/ToonPro.app
-```
-
-To install the same SDK in a fresh checkout:
+Install Xcode Command Line Tools with `xcode-select --install` if needed. Install the Qt SDK once in a fresh checkout.
 
 ```sh
 python3 -m venv .venv
 .venv/bin/python -m pip install aqtinstall==3.3.0
-.venv/bin/python -m aqt install-qt mac desktop 6.10.3 clang_64 --outputdir .deps/Qt --modules qtmultimedia --archives qtbase qtsvg qtmultimedia
+.venv/bin/python -m aqt install-qt mac desktop 6.10.3 clang_64 \
+  --outputdir .deps/Qt --modules qtmultimedia \
+  --archives qtbase qtsvg qtmultimedia
 ```
 
-Python is only an SDK installation helper; the application itself is C++.
+For an **Apple Silicon Mac**, install the pinned renderer and configure the 3D build.
 
-Existing local SDKs can add Multimedia with the same install command using `--modules qtmultimedia --archives qtmultimedia`. The module includes the FFmpeg backend used for decoding; retain its bundled runtime libraries.
+```sh
+./scripts/setup_filament.sh
+cmake -S . -B build-release-arm64 \
+  -DCMAKE_PREFIX_PATH="$PWD/.deps/Qt/6.10.3/macos" \
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 \
+  -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 \
+  -DTOON_ENABLE_FILAMENT=ON -DBUILD_TESTING=ON
+cmake --build build-release-arm64 --parallel 4
+ctest --test-dir build-release-arm64 --output-on-failure --parallel 2
+open build-release-arm64/ToonPro.app
+```
+
+After the tests pass, create a ZIP and DMG.
+
+```sh
+.venv/bin/python scripts/package_desktop.py \
+  --build-dir build-release-arm64 --config Release --skip-build \
+  --qt-root .deps/Qt/6.10.3/macos \
+  --output-dir dist/local-macos-arm64 --require-3d --dmg
+```
+
+For an **Intel Mac**, use the same Qt SDK and a separate 2D build.
+
+```sh
+cmake -S . -B build-release-x86_64 \
+  -DCMAKE_PREFIX_PATH="$PWD/.deps/Qt/6.10.3/macos" \
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+  -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 \
+  -DTOON_ENABLE_FILAMENT=OFF -DBUILD_TESTING=ON
+cmake --build build-release-x86_64 --parallel 4
+ctest --test-dir build-release-x86_64 --output-on-failure --parallel 2
+.venv/bin/python scripts/package_desktop.py \
+  --build-dir build-release-x86_64 --config Release --skip-build \
+  --qt-root .deps/Qt/6.10.3/macos \
+  --output-dir dist/local-macos-x86_64 --dmg
+```
+
+Run Intel acceptance checks on an Intel Mac. A cross-build tested through Rosetta provides additional evidence for that emulated environment.
 
 ### Windows
 
-Install Visual Studio 2022 with Desktop development with C++, CMake, and Qt 6.10.3 for MSVC 2022 x64, including Qt SVG and Qt Multimedia. In PowerShell, replacing `C:/Qt` with your SDK location:
+Install Visual Studio 2022 with **Desktop development with C++**, CMake, Python and vcpkg. Use Developer PowerShell for VS 2022. Set `$vcpkgRoot` below to your existing vcpkg installation.
+
+Install the pinned Qt SDK.
 
 ```powershell
-$env:PATH = "C:\Qt\6.10.3\msvc2022_64\bin;$env:PATH"
-cmake -S . -B build -A x64 -DCMAKE_PREFIX_PATH=C:/Qt/6.10.3/msvc2022_64
-cmake --build build --config RelWithDebInfo --parallel
-ctest --test-dir build -C RelWithDebInfo --output-on-failure
-.\build\RelWithDebInfo\ToonPro.exe
+python -m venv .venv
+.venv/Scripts/python.exe -m pip install aqtinstall==3.3.0
+.venv/Scripts/python.exe -m aqt install-qt windows desktop 6.10.3 win64_msvc2022_64 `
+  --outputdir .deps/Qt --modules qtmultimedia `
+  --archives qtbase qtsvg qtmultimedia
 ```
 
-Windows support is a build target; it must be verified on Windows before being called supported in a release.
+Configure zlib with the same Microsoft runtime used by Qt, then build and test.
+
+```powershell
+$vcpkgRoot = "C:/vcpkg"
+$qtRoot = "$PWD/.deps/Qt/6.10.3/msvc2022_64"
+New-Item -ItemType Directory -Force .deps/triplets | Out-Null
+@'
+set(VCPKG_TARGET_ARCHITECTURE x64)
+set(VCPKG_CRT_LINKAGE dynamic)
+set(VCPKG_LIBRARY_LINKAGE static)
+'@ | Set-Content .deps/triplets/toon-x64-windows.cmake
+
+& "$vcpkgRoot/vcpkg.exe" install zlib:toon-x64-windows `
+  "--overlay-triplets=$PWD/.deps/triplets"
+
+cmake -S . -B build-release-windows -A x64 `
+  "-DCMAKE_PREFIX_PATH=$qtRoot" `
+  "-DCMAKE_TOOLCHAIN_FILE=$vcpkgRoot/scripts/buildsystems/vcpkg.cmake" `
+  "-DVCPKG_OVERLAY_TRIPLETS=$PWD/.deps/triplets" `
+  -DVCPKG_TARGET_TRIPLET=toon-x64-windows `
+  -DTOON_ENABLE_FILAMENT=OFF -DBUILD_TESTING=ON
+cmake --build build-release-windows --config Release --parallel 4
+$env:PATH = "$qtRoot/bin;$env:PATH"
+ctest --test-dir build-release-windows -C Release --output-on-failure --parallel 2
+```
+
+After the tests pass, create and check the portable ZIP.
+
+```powershell
+.venv/Scripts/python.exe scripts/package_desktop.py `
+  --build-dir build-release-windows --config Release --skip-build `
+  --qt-root "$qtRoot" --output-dir dist/local-windows-x86_64
+```
+
+Use **Extract All** on the resulting ZIP and open **bin → ToonPro.exe** from the extracted folder. Keep its DLLs and plugins alongside it. Settings and user brush libraries are saved in your Windows user profile.
+
+### Package records and matching sources
+
+Each package folder contains its archives, `package.json`, `SHA256SUMS` and `verification/` reports. Mac packages use ad-hoc signing by default. Windows packages are unsigned. Physical drawing-tablet testing and clean-machine acceptance remain part of release validation.
+
+Collect the matching dependency sources before sharing a package. Use the same Qt SDK path used for that package and a fresh output location.
+
+```text
+python scripts/collect_dependency_sources.py --qt-root <path-to-the-matching-Qt-SDK> --output-dir <new-dependency-source-folder>
+```
+
+The command creates a source archive and adjacent checksum. Publish those with the corresponding application package and its checksums through a manual GitHub Release upload.
 
 ## First session
 
