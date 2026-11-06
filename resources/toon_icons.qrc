@@ -1,5 +1,11 @@
 <RCC>
     <qresource prefix="/icons/lucide">
+        <file alias="list.svg">icons/lucide/list.svg</file>
+        <file alias="folder.svg">icons/lucide/folder.svg</file>
+        <file alias="download.svg">icons/lucide/download.svg</file>
+        <file alias="square.svg">icons/lucide/square.svg</file>
+        <file alias="file.svg">icons/lucide/file.svg</file>
+
         <file alias="pencil.svg">icons/lucide/pencil.svg</file>
         <file alias="sprout.svg">icons/lucide/sprout.svg</file>
         <file alias="trees.svg">icons/lucide/trees.svg</file>

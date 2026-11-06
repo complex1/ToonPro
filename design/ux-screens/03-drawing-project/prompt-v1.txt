@@ -1,0 +1,16 @@
+Use case: ui-mockup
+Asset type: High-fidelity native desktop Toon Pro screen for UX review. One complete flat screen, straight-on, landscape approximately 1600 x 1000. No monitor, perspective, browser, annotations or presentation surround.
+Input image: The supplied project-dashboard image is a STYLE REFERENCE ONLY. Match its native title bar, Toon Pro mark, typography, charcoal surfaces, silver actions, fine borders, spacing and thumbnail treatment. Create the different screen requested below, not a duplicate of the reference.
+Design system: restrained Adobe Spectrum-inspired neutral gray UI, not Adobe branding. Background #222222, panel #282828, cards #303030, border #444444, text #e8e8e8, secondary #b5b5b5, silver #bdbdbd with dark text for primary action. Consistent Lucide-like thin line icons. Modest 6 px corners, readable UI text, comfortable targets, aligned baselines, generous whitespace. No blue or colored chrome. Artwork supplies color. No glass, neon, gradients, oversized shadows, pill-heavy decoration, analytics, account prompts, cloud status or promotional banners. Keep visible labels for important choices and actions. Brand in the slim top native title bar: "Toon Pro".
+This is a dashboard/setup mockup, not an editor. No canvas workspace, brush/tool palette, layers, frames strip, timeline, playback transport, multi-shot editing or NLE clip assembly anywhere. Original anime artwork only, not existing characters. Exact legible text as specified. No watermark.
+
+Screen: Open Drawing project dashboard. Below title bar, a small arrow and exact breadcrumb "Projects / Character Studies". Main title "Character Studies", small secondary label "Drawing project". At top right a silver plus button "New drawing" and a subtle project overflow icon. No New project button here; this is inside a project.
+Controls row: heading "Drawings" at left, on right search field "Search drawings", sort "Last edited", grid/list icon controls with grid selected. Single horizontal rule below.
+Exactly six drawing cards in a spacious 3-column by 2-row gallery. Each has a large original anime still-art thumbnail, title and muted time, plus three-dot menu. Titles/metadata:
+"Aya — Turnaround" / "Edited 1 hour ago", artwork original teenage anime girl model sheet with front side back views on warm white paper.
+"Expression Sheet" / "Edited 2 hours ago", artwork a grid of expressive original faces, delicate pencil and color.
+"Costume Exploration" / "Edited yesterday", artwork three costume sketches, muted warm colors.
+"Station Background" / "Edited yesterday", artwork painterly blue dusk train station.
+"Color Study" / "Edited 3 days ago", artwork colored character portrait with swatch strip.
+"Gesture Sketches" / "Edited last week", artwork lively loose graphite human poses on cream paper.
+Small footer "6 drawings". No folder tree, tags, movie navigation, scene fields, duration or animation controls. Calm focused library of drawings. The images are project documents, not tutorial cards.

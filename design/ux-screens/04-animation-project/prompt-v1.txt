@@ -1,0 +1,16 @@
+Use case: ui-mockup
+Asset type: High-fidelity native desktop Toon Pro screen for UX review. One complete flat screen, straight-on, landscape approximately 1600 x 1000. No monitor, perspective, browser, annotations or presentation surround.
+Input image: The supplied project-dashboard image is a STYLE REFERENCE ONLY. Match its native title bar, Toon Pro mark, typography, charcoal surfaces, silver actions, fine borders, spacing and thumbnail treatment. Create the different screen requested below, not a duplicate of the reference.
+Design system: restrained Adobe Spectrum-inspired neutral gray UI, not Adobe branding. Background #222222, panel #282828, cards #303030, border #444444, text #e8e8e8, secondary #b5b5b5, silver #bdbdbd with dark text for primary action. Consistent Lucide-like thin line icons. Modest 6 px corners, readable UI text, comfortable targets, aligned baselines, generous whitespace. No blue or colored chrome. Artwork supplies color. No glass, neon, gradients, oversized shadows, pill-heavy decoration, analytics, account prompts, cloud status or promotional banners. Keep visible labels for important choices and actions. Brand in the slim top native title bar: "Toon Pro".
+This is a dashboard/setup mockup, not an editor. No canvas workspace, brush/tool palette, layers, frames strip, timeline, playback transport, multi-shot editing or NLE clip assembly anywhere. Original anime artwork only, not existing characters. Exact legible text as specified. No watermark.
+
+Screen: Open Animation project dashboard. Small back arrow and breadcrumb "Projects / Motion Practice" below title bar. Main title "Motion Practice", secondary label "Animation project". Top-right silver plus button "New animation" and a project overflow icon.
+Controls row heading "Shots" and small muted text "Each animation is one shot". On right search "Search animations", sort "Last edited", list/grid icons with list selected. The rest is a clean spacious thumbnail LIST, not a timeline or editor. Six rows with a clear small landscape thumbnail, shot title and muted edited time, then right aligned duration and FPS, and three-dot menu. Subtle separators, no status badges or editing transport. Column headings above rows "Animation", "Duration", "Frame rate".
+Rows:
+"Walk Cycle" / "Edited 1 hour ago" / "3.0 s" / "24 FPS"; thumbnail original rough pencil character walking.
+"Hair in the Wind" / "Edited 2 hours ago" / "4.0 s" / "24 FPS"; anime closeup with flowing hair at sunset.
+"Running Leap" / "Edited yesterday" / "2.5 s" / "24 FPS"; original gestural action pose over cream background.
+"Blink Study" / "Edited yesterday" / "2.0 s" / "24 FPS"; cropped original anime girl's expressive eyes.
+"Rain on the Window" / "Edited 3 days ago" / "5.0 s" / "24 FPS"; painterly violet rainy window.
+"Forest Entrance" / "Edited last week" / "6.0 s" / "24 FPS"; beautiful original green forest composition with tiny traveler.
+Footer "6 animations". No folders, scenes, movie sections, editorial clips, shot assembly, filmstrip, timeline tracks, global playback, production tasks or beginner-expert selector. Selecting a row will later open a separate one-shot editor, but do not depict that editor.

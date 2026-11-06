@@ -27,7 +27,7 @@
     draw: {number:'01 / DRAW',title:'Find your line.',description:'Sketch with raster brushes or keep brush strokes editable on vector layers. Shape the mark with pressure, textures, stamps and dynamics.',points:['Brush presets, tags and size shortcuts','Connected brushes and repeating patterns','Perspective guides and symmetry'],guide:'brushes-and-dynamics',link:'Explore drawing tools ↗',image:'brushes-and-dynamics',alt:'Actual Toon Pro brush controls and dynamics preview',caption:'Real brush controls · sample settings'},
     color: {number:'02 / DEFINE',title:'Build a consistent cast.',description:'Keep character references and approved colors close. Organize model sheets, create lighting variants and preview recoloring across selected drawings.',points:['Turnarounds, expressions and costumes','Skin, hair, costume and shadow colors','Day, night, sunset and interior variants'],guide:'references-and-characters',link:'Explore character workflows ↗',image:'character-colors',alt:'Actual character color model panel with grouped palette colors',caption:'Real character palette controls · sample character'},
     animate: {number:'03 / ANIMATE',title:'Give the drawing a rhythm.',description:'Create a new drawing, set its exposure, then move to the next pose. Reuse cels or add property keys for motion that belongs between your drawings.',points:['Frame-by-frame drawing tracks','Transform, path and camera keys','Reusable Symbols and timed poses'],guide:'frame-by-frame-animation',link:'Explore the timeline ↗',image:'frame-by-frame-animation',alt:'Actual frame-by-frame animation timeline and drawing controls',caption:'Real animation timeline · sample drawing track'},
-    finish: {number:'04 / FINISH',title:'See the whole sequence.',description:'Bring together shot timing, synchronized audio and animated effects. Review Scene or Movie playback, then export the chosen range.',points:['Shot thumbnails and a global playhead','Audio trims, fades and waveforms','Image, production-sheet and movie exports'],guide:'audio-movie-and-export',link:'Explore review & export ↗',image:'audio-movie-and-export',alt:'Actual Toon Pro Scene and Movie review timeline',caption:'Real Scene/Movie review controls · sample sequence'}
+    finish: {number:'04 / FINISH',title:'Finish the moment.',description:'Review the drawing, check cel colors and prepare the shot for output. Keep the editable source while exporting images or an animated result.',points:['Preview repairs before committing','Shot audio, camera and effects','Image, production-sheet and video output'],guide:'audio-movie-and-export',link:'Explore output & export ↗',image:'cel-paint-and-light-table',alt:'Actual Toon Pro Cel Paint Check finishing controls',caption:'Real Cel Paint Check controls · a finishing workflow in the public preview'}
   };
   function selectWorkflow(button) {
     const config = workflow[button.dataset.workflow];
@@ -105,11 +105,12 @@
   function closeSearch() { searchDialog.close();document.body.classList.remove('no-scroll');searchTrigger?.focus(); }
   $$('[data-search]').forEach(button=>button.addEventListener('click',()=>openSearch(button)));
   $('[data-close-search]')?.addEventListener('click',closeSearch);
-  searchDialog?.addEventListener('cancel',()=>document.body.classList.remove('no-scroll'));
+  searchDialog?.addEventListener('cancel',event=>{event.preventDefault();closeSearch();});
   searchDialog?.addEventListener('click',event=>{if(event.target===searchDialog){const box=searchDialog.getBoundingClientRect();if(event.clientX<box.left||event.clientX>box.right||event.clientY<box.top||event.clientY>box.bottom)closeSearch();}});
   let debounce;
   query?.addEventListener('input',()=>{clearTimeout(debounce);++searchRevision;results=[];selected=-1;renderedQuery=null;status('Searching…');debounce=setTimeout(search,100);});
   searchDialog?.addEventListener('keydown',async event=>{
+    if(event.key==='Escape'){event.preventDefault();closeSearch();return;}
     if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();highlightSelection(selected+(event.key==='ArrowDown'?1:-1));query.focus();}
     if(event.key==='Enter'&&document.activeElement===query){
       event.preventDefault();clearTimeout(debounce);
@@ -134,7 +135,7 @@
   $$('[data-zoom]').forEach(img=>{img.tabIndex=0;img.setAttribute('role','button');img.setAttribute('aria-label',`Enlarge: ${img.alt}`);img.addEventListener('click',()=>openImage(img));img.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openImage(img);}});});
   $$('[data-zoom-target]').forEach(button=>button.addEventListener('click',()=>openImage(document.getElementById(button.dataset.zoomTarget),button)));
   $('[data-close-image]')?.addEventListener('click',closeImage);
-  imageDialog?.addEventListener('cancel',()=>document.body.classList.remove('no-scroll'));
+  imageDialog?.addEventListener('cancel',event=>{event.preventDefault();closeImage();});
   imageDialog?.addEventListener('click',event=>{if(event.target===imageDialog)closeImage();});
   $$('[data-print]').forEach(button=>button.addEventListener('click',()=>window.print()));
 

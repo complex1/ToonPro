@@ -1286,7 +1286,7 @@ TimelinePanel::~TimelinePanel(){
 void TimelinePanel::refreshReviewMode(){
     const auto mode=m_controller->movieReview()->mode();
     const QSignalBlocker block(m_reviewModes);m_reviewModes->setCurrentIndex(static_cast<int>(mode));
-    m_reviewModes->setVisible(!m_controller->property("symbolEditor").toBool());
+    m_reviewModes->setVisible(!m_controller->property("symbolEditor").toBool()&&!m_controller->property("focusedEditor").toBool());
     m_reviewModes->setTabEnabled(1,m_controller->document()->isOpen());m_reviewModes->setTabEnabled(2,m_controller->document()->isOpen());
     m_reviewPages->setCurrentIndex(mode==ReviewMode::Shot?0:1);
 }

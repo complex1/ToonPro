@@ -30,6 +30,7 @@ public:
     VideoExportSettings settings() const;
     QVector<VideoExportQueueItem> queueItems() const;
     void setQueuedShotIds(const QStringList &ids);
+    void setSingleShotOnly();
     QString destination() const;
     void setDestination(const QString &path);
 signals:
@@ -39,6 +40,7 @@ public slots:
 protected:
     void closeEvent(QCloseEvent *event) override;
 private:
+    bool m_singleShotOnly = false;
     struct SavedControls {
         VideoExportSettings settings;
         int rangeMode = 0, customFirst = 1, customLast = 1;

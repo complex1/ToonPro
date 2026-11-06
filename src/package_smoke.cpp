@@ -1,4 +1,5 @@
 #include "package_smoke.h"
+#include "managed_project_store.h"
 #include "audio_export.h"
 #include "brush_library.h"
 #include "canvas.h"
@@ -117,6 +118,12 @@ int runPackageSmoke(const QString &outputDirectory, bool require3D) {
         {"capabilities", QJsonObject{{"rasterDrawing", true}, {"vectorDrawing", true},
             {"shotSceneMovieReview", true}, {"embeddedAudio", true}, {"symbolLibrary", true},
             {"requiresPhysicalTabletAcceptance", true}}}};
+    QString managedError;
+    auto managed=ManagedProjectStore::create(output.filePath("managed.toonstudio"),"Package storage","drawing",&managedError);
+    bool managedOk=bool(managed);
+    if(managed){auto doc=newManagedDocument("Drawing",false,160,90,Qt::white,false);auto id=managed->createDocument("Drawing","drawing",doc,{}, {},&managedError);managedOk=!id.isEmpty()&&managed->loadDocument(id,false,&managedError).has_value();}
+    check("managed-sqlite-storage",managedOk,managedError);
+    managed.reset();
     QString error; const auto project = fixture();
     const auto projectPath = output.filePath("smoke.toonproj");
     if (check("project-save", saveProject(project, projectPath, &error), error)) {

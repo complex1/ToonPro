@@ -1,0 +1,23 @@
+[  0%] Built target toon_core_autogen_timestamp_deps
+[  5%] Built target toon_core_autogen
+[ 41%] Built target toon_core
+[ 41%] Built target toon_workspace_autogen_timestamp_deps
+[ 47%] Automatic MOC for target toon_workspace
+[ 47%] Built target toon_workspace_autogen
+[ 47%] Building CXX object CMakeFiles/toon_workspace.dir/src/project_workspace_window.cpp.o
+[ 47%] Linking CXX static library libtoon_workspace.a
+[100%] Built target toon_workspace
+[100%] Built target ToonPro_autogen_timestamp_deps
+[100%] Built target ToonPro_autogen
+[100%] Linking CXX executable ToonPro.app/Contents/MacOS/ToonPro
+[100%] Built target ToonPro
+[  0%] Built target toon_core_autogen_timestamp_deps
+[  5%] Built target toon_core_autogen
+[ 41%] Built target toon_core
+[ 41%] Built target toon_workspace_autogen_timestamp_deps
+[ 47%] Built target toon_workspace_autogen
+[100%] Built target toon_workspace
+[100%] Built target toon_managed_project_tests_autogen_timestamp_deps
+[100%] Built target toon_managed_project_tests_autogen
+[100%] Linking CXX executable toon_managed_project_tests
+[100%] Built target toon_managed_project_tests

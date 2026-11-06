@@ -28,11 +28,14 @@ public:
     int activeShotIndex() const { return m_activeShot; }
     QString activeShotId() const { return m_activeShotId; }
     const Shot &activeShot() const { return m_project.shots.at(m_activeShot); }
+    void setSingleShotEditing(bool enabled) { m_singleShotEditing = enabled; }
+    bool singleShotEditing() const { return m_singleShotEditing; }
     bool selectShot(const QString &id);
     QString createShot(const QString &name = {}, const QString &scene = {});
     QString duplicateShot(const QString &id);
     bool renameShot(const QString &id, const QString &number, const QString &name);
     bool setShotScene(const QString &id, const QString &scene);
+    bool setShotProduction(const QString &id, const QString &episode, const QString &stage, const QString &notes);
     bool moveShot(const QString &id, int destination);
     bool deleteShot(const QString &id);
     int activeLayer() const { return m_active; }
@@ -173,6 +176,7 @@ public:
     bool removeCharacterColorVariant(const QString &characterId, const QString &variantId, QString *error = nullptr);
     bool addStandardCharacterColorVariants(const QString &characterId, QString *error = nullptr);
     void replaceProject(const Project &project, const QString &label, const QJsonObject &action = {});
+    bool insertMotionStudyProject(const Project &project, const QString &label);
     bool replaceSymbolProject(const Project &project, const QString &label);
     const RasterSelection &rasterSelection() const { return m_selection; }
     void setRasterSelection(const QPainterPath &path);
@@ -286,6 +290,7 @@ private:
     QString m_activeAnimationTrackId;
     bool m_animationMutation = false;
     bool m_keyframeSourceEditing = false;
+    bool m_singleShotEditing = false;
     QUndoStack m_history;
     qint64 m_historyBytes = 0;
     std::optional<Project> m_beforeKeyframeEdit;

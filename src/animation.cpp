@@ -145,7 +145,7 @@ QString validateAnimation(const Shot &shot) {
         if (!validId(track.id) || ids.contains(track.id)) return "Animation track identifiers must be valid and unique.";
         ids.insert(track.id);
         const auto root = layers.value(track.rootGroupLayerId);
-        if (!root || !root->group || containers.contains(root->id) || root->annotation)
+        if (!root || !root->group || containers.contains(root->id))
             return "Each animation track needs its own artwork group.";
         QSet<QString> ancestry{root->id};
         auto parentId=root->parentId;

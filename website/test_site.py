@@ -67,6 +67,7 @@ def test_site(base_url: str, output: Path, report_dir: Path, chrome: str):
             trigger = page.get_by_role('button', name='Search the field guide', exact=True)
             trigger.click()
             expect(page.get_by_role('dialog', name='Search the field guide')).to_be_visible()
+            page.get_by_role('searchbox', name='Search guides').fill('drawing')
             page.keyboard.press('Escape')
             expect(page.get_by_role('dialog', name='Search the field guide')).not_to_be_visible()
             expect(trigger).to_be_focused()
@@ -112,13 +113,13 @@ def test_site(base_url: str, output: Path, report_dir: Path, chrome: str):
             assert tabs.count() == 4
             first = tabs.nth(0)
             first.focus()
-            old_title = page.get_by_role('tabpanel').get_by_role('heading').inner_text()
+            old_title = page.locator('#workflow-panel').get_by_role('heading').inner_text()
             for key, expected_index in [('ArrowRight', 1), ('End', 3), ('ArrowRight', 0), ('ArrowLeft', 3), ('Home', 0)]:
                 page.keyboard.press(key)
                 expect(tabs.nth(expected_index)).to_be_focused()
                 expect(tabs.nth(expected_index)).to_have_attribute('aria-selected', 'true')
                 assert tablist.locator('[aria-selected="true"]').count() == 1
-                panel = page.get_by_role('tabpanel')
+                panel = page.locator('#workflow-panel')
                 expect(panel).to_have_attribute('aria-labelledby', tabs.nth(expected_index).get_attribute('id'))
                 image = panel.locator('img')
                 expect(image).to_have_attribute('alt', re.compile('.+'))
@@ -126,10 +127,77 @@ def test_site(base_url: str, output: Path, report_dir: Path, chrome: str):
                 image.evaluate('async e => { if (!e.complete) await e.decode(); }')
                 assert image.evaluate('e => e.naturalWidth') > 0
             tabs.nth(2).click()
-            panel = page.get_by_role('tabpanel')
+            panel = page.locator('#workflow-panel')
             assert panel.get_by_role('heading').inner_text() != old_title
             panel.get_by_role('link').click()
             expect(page.get_by_role('heading', level=1)).to_contain_text('Frame')
+
+        def project_tabs():
+            home()
+            tablist = page.get_by_role('tablist', name='Choose a project workflow')
+            tabs = tablist.get_by_role('tab')
+            assert tabs.count() == 3
+            tabs.first.focus()
+            for key, index in [('ArrowRight', 1), ('End', 2), ('ArrowRight', 0), ('ArrowLeft', 2), ('Home', 0)]:
+                page.keyboard.press(key)
+                expect(tabs.nth(index)).to_be_focused()
+                expect(tabs.nth(index)).to_have_attribute('aria-selected', 'true')
+                assert tablist.locator('[aria-selected="true"]').count() == 1
+                panel = page.locator('#' + tabs.nth(index).get_attribute('aria-controls'))
+                expect(panel).to_be_visible()
+                assert page.locator('[id^="path-panel-"]:visible').count() == 1
+                image = panel.locator('img')
+                image.scroll_into_view_if_needed()
+                image.evaluate('async e => { if (!e.complete) await e.decode(); }')
+                assert image.evaluate('e => e.naturalWidth > 0')
+                expect(image).to_have_attribute('alt', re.compile('Actual local-development'))
+
+        def illustrative_shot():
+            home()
+            play = page.locator('[data-demo-play]')
+            expect(play).to_have_attribute('aria-pressed', 'false')
+            frames = page.locator('[data-demo-frame]')
+            assert frames.count() == 12
+            frames.nth(4).click()
+            pose = page.locator('[data-demo-plane]').get_attribute('transform')
+            expect(page.locator('[data-demo-readout]')).to_contain_text('Drawing 3')
+            frames.nth(5).click()
+            assert page.locator('[data-demo-plane]').get_attribute('transform') == pose
+            frames.nth(5).press('End')
+            expect(frames.last).to_have_attribute('aria-pressed', 'true')
+            expect(frames.last).to_be_focused()
+            frames.last.press('ArrowRight')
+            expect(frames.first).to_have_attribute('aria-pressed', 'true')
+            play.click()
+            expect(play).to_have_attribute('aria-pressed', 'true')
+            expect(page.locator('[data-demo-readout]')).not_to_contain_text('Frame 01')
+            play.click()
+            expect(play).to_have_attribute('aria-pressed', 'false')
+            page.locator('[data-demo-reset]').click()
+            expect(frames.first).to_have_attribute('aria-pressed', 'true')
+            expect(page.locator('[data-demo-readout]')).to_contain_text('Drawing 1')
+
+        def comparisons_and_versions():
+            home()
+            page.goto(urljoin(base_url, 'compare/'), wait_until='networkidle')
+            tablist = page.get_by_role('tablist', name='Compare creative tools')
+            tabs = tablist.get_by_role('tab')
+            assert tabs.count() == 5
+            for tab in tabs.all():
+                tab.click()
+                panel = page.locator('#' + tab.get_attribute('aria-controls'))
+                expect(panel).to_be_visible()
+                assert page.locator('.compare-panel:visible').count() == 1
+                assert panel.locator('.source-links a[href^="https://"]').count() >= 1
+            tabs.last.press('Home')
+            expect(tabs.first).to_be_focused()
+            expect(tabs.first).to_have_attribute('aria-selected', 'true')
+            expect(page.locator('.comparison-status')).to_contain_text('not in the published 0.75')
+            page.goto(urljoin(base_url, 'docs/projects-and-assets/'), wait_until='networkidle')
+            expect(page.locator('.version-notice')).to_contain_text('not included')
+            expect(page.locator('.doc-meta')).to_contain_text('Local development')
+            page.goto(urljoin(base_url, 'docs/getting-started/'), wait_until='networkidle')
+            expect(page.locator('.doc-meta')).to_contain_text('0.75')
 
         def image_dialog_keyboard():
             home()
@@ -203,6 +271,9 @@ def test_site(base_url: str, output: Path, report_dir: Path, chrome: str):
         check('Local search: no results, literal punctuation, recovery and close', search_empty_and_punctuation)
         check('Local search: immediate Enter uses the current query, including after zero results', search_immediate_enter)
         check('Workflow tabs: arrows, wrap, Home/End, changed artwork and real guide navigation', workflow_tabs)
+        check('Project tabs: keyboard selection, one active panel and actual development captures', project_tabs)
+        check('Illustrative shot: no autoplay, two-frame holds, keyboard, playback and reset', illustrative_shot)
+        check('Comparison source links and local/public version boundaries', comparisons_and_versions)
         check('Screenshot preview: keyboard open, image/alt, modal focus containment and focus return', image_dialog_keyboard)
         check('Mobile main and guide menus: open, Escape, focus return and navigation', mobile_navigation)
         check('Guide table of contents and next-guide navigation', guide_sections_and_neighbors)

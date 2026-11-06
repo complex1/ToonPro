@@ -18,6 +18,7 @@ class ShotsPanel : public QWidget {
 public:
     explicit ShotsPanel(Document *document, std::function<bool()> prepareTransition, QWidget *parent = nullptr);
     QStringList selectedShotIds() const;
+    void setProductionFilters(const QString &episode, const QString &stage);
 signals:
     void exportRequested(const QStringList &shotIds);
 protected:
@@ -45,6 +46,7 @@ private:
     QToolButton *m_add, *m_duplicate, *m_delete, *m_up, *m_down, *m_export;
     QStringList m_settledSelection, m_sceneTargets;
     QString m_settledCurrent, m_sceneValue;
+    QString m_episodeFilter, m_stageFilter;
     bool m_refreshing = false, m_processing = false, m_pendingRefresh = false;
     bool m_selectionPending = false, m_followActive = true;
 };

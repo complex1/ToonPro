@@ -2,6 +2,8 @@
 #include "main_window.h"
 #include "project_dialog.h"
 #include "project_templates.h"
+#include "production_panel.h"
+#include "studio_project.h"
 #include "ui_theme.h"
 #include <QAction>
 #include <QCheckBox>
@@ -15,6 +17,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScreen>
+#include <QStackedWidget>
 #include <QTabBar>
 #include <QTemporaryDir>
 #include <QTimer>
@@ -90,6 +93,40 @@ class ProjectCreationWorkspaceTests final:public QObject {
     Q_OBJECT
 private slots:
     void initTestCase(){applyTheme();}
+    void newProductionFolderUsesKindAndVisibleFocus_data(){
+        QTest::addColumn<int>("kind");
+        QTest::newRow("film")<<int(ProjectKind::Film);
+        QTest::newRow("series")<<int(ProjectKind::Series);
+        QTest::newRow("drawing-only")<<int(ProjectKind::DrawingOnly);
+    }
+    void newProductionFolderUsesKindAndVisibleFocus(){
+        QFETCH(int,kind);const auto projectKind=ProjectKind(kind);
+        QTemporaryDir directory;MainWindow window(directory.filePath("workspace.ini"));QVERIFY(expose(window));
+        const auto root=directory.filePath("production.toonstudio");
+        const auto error=interact(window,"newProjectAction",[&](ProjectDialog &dialog){
+            auto *tabs=dialog.findChild<QTabBar *>("projectKindTabs");
+            if(!tabs)return QString("Missing project-type tabs.");
+            for(int i=0;i<tabs->count();++i)if(tabs->tabData(i).toString()==projectKindKey(projectKind)){tabs->setCurrentIndex(i);break;}
+            dialog.findChild<QLineEdit *>("projectPath")->setText(root);return QString();
+        });QVERIFY2(error.isEmpty(),qPrintable(error));
+        QCOMPARE(window.canvas()->project().kind,projectKind);
+        QString loadError;const auto package=StudioProject::open(root,&loadError);QVERIFY2(package,qPrintable(loadError));
+        const auto saved=loadProject(package->artworkPath(),&loadError);QVERIFY2(saved,qPrintable(loadError));
+        QCOMPARE(saved->toJson(),window.canvas()->project().toJson());
+        auto *stack=qobject_cast<QStackedWidget *>(window.centralWidget());QVERIFY(stack);
+        if(projectKind==ProjectKind::DrawingOnly){
+            QCOMPARE(stack->currentWidget(),window.canvas());QCOMPARE(window.activeWorkspaceId(),QString("illustration"));
+            QTRY_COMPARE(QApplication::focusWidget(),window.canvas());
+            QVERIFY(window.canvas()->shot().animationTracks.isEmpty());QCOMPARE(window.canvas()->shot().durationFrames,1);
+            QVERIFY(dock(window,"animationPanel")->isHidden());
+        }else{
+            QCOMPARE(stack->currentWidget(),window.findChild<ProductionPanel *>());
+            auto *open=window.findChild<QPushButton *>("productionOpenDrawing");QVERIFY(open);QVERIFY(open->isVisible());
+            QTRY_COMPARE(QApplication::focusWidget(),open);
+            open->click();QCOMPARE(stack->currentWidget(),window.canvas());QTRY_COMPARE(QApplication::focusWidget(),window.canvas());
+        }
+        QVERIFY(window.canvas()->document()->history()->isClean());QVERIFY(window.close());
+    }
     void newProjectUsesChosenWorkspaceAndSelectsPaintableDrawing_data(){
         QTest::addColumn<QString>("templateId");QTest::addColumn<QString>("workspaceId");QTest::addColumn<QString>("layerName");
         QTest::newRow("blank")<<QString("blank")<<QString("illustration")<<QString("Drawing");
@@ -97,6 +134,19 @@ private slots:
         QTest::newRow("anime")<<QString("anime")<<QString("anime")<<QString("Rough");
         QTest::newRow("storyboard")<<QString("storyboard")<<QString("storyboard")<<QString("Rough");
         QTest::newRow("animatic")<<QString("animatic")<<QString("animatic")<<QString("Rough");
+    }
+    void projectSettingsReturnsFocusToProduction(){
+        QTemporaryDir directory;QString error;auto project=Project::create();project.width=320;project.height=240;
+        const auto root=directory.filePath("film.toonstudio");QVERIFY2(StudioProject::create(root,project,&error),qPrintable(error));
+        MainWindow window(directory.filePath("workspace.ini"));QVERIFY(window.openProject(root));QVERIFY(expose(window));
+        auto *stack=qobject_cast<QStackedWidget *>(window.centralWidget());auto *production=window.findChild<ProductionPanel *>();
+        QCOMPARE(stack->currentWidget(),production);
+        error=interact(window,"projectSettingsAction",[](ProjectDialog &dialog){
+            dialog.findChild<QLineEdit *>("shotName")->setText("Planned establishing shot");return QString();
+        });QVERIFY2(error.isEmpty(),qPrintable(error));
+        QCOMPARE(stack->currentWidget(),production);QCOMPARE(window.canvas()->shot().name,QString("Planned establishing shot"));
+        QTRY_COMPARE(QApplication::focusWidget(),production->findChild<QPushButton *>("productionOpenDrawing"));
+        window.canvas()->document()->history()->undo();QVERIFY(window.close());
     }
     void newProjectUsesChosenWorkspaceAndSelectsPaintableDrawing(){
         QFETCH(QString,templateId);QFETCH(QString,workspaceId);QFETCH(QString,layerName);

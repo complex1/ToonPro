@@ -1,0 +1,27 @@
+Use case: ui-mockup
+Asset type: High-fidelity native desktop Toon Pro screen for UX review. One complete flat screen, straight-on, landscape approximately 1600 x 1000. No monitor, perspective, browser, annotations or presentation surround.
+Input image: The supplied project-dashboard image is a STYLE REFERENCE ONLY. Match its native title bar, Toon Pro mark, typography, charcoal surfaces, silver actions, fine borders, spacing and thumbnail treatment. Create the different screen requested below, not a duplicate of the reference.
+Design system: restrained Adobe Spectrum-inspired neutral gray UI, not Adobe branding. Background #222222, panel #282828, cards #303030, border #444444, text #e8e8e8, secondary #b5b5b5, silver #bdbdbd with dark text for primary action. Consistent Lucide-like thin line icons. Modest 6 px corners, readable UI text, comfortable targets, aligned baselines, generous whitespace. No blue or colored chrome. Artwork supplies color. No glass, neon, gradients, oversized shadows, pill-heavy decoration, analytics, account prompts, cloud status or promotional banners. Keep visible labels for important choices and actions. Brand in the slim top native title bar: "Toon Pro".
+This is a dashboard/setup mockup, not an editor. No canvas workspace, brush/tool palette, layers, frames strip, timeline, playback transport, multi-shot editing or NLE clip assembly anywhere. Original anime artwork only, not existing characters. Exact legible text as specified. No watermark.
+
+Screen: Movie project content dashboard, a clean nested-folder browser of artwork documents, not a movie editor. Small back arrow breadcrumb "Projects / Moonlit Journey". Main title "Moonlit Journey", secondary label "Movie project". Top-right three direct clearly labeled actions: outline folder-plus "New folder", outline paper/brush-plus "New drawing", silver play/stacked-drawing-plus "New animation". Project overflow at far right.
+Below header, split surface: a 245-pixel folder tree on left, remaining spacious content area. Left heading "Folders" with folder-plus icon. Visible expandable user-created nested tree, indentation and chevrons with the following exact names:
+"Moonlit Journey" expanded
+  "Opening" expanded
+    "Station" expanded and selected with neutral gray fill
+      "References"
+      "Layouts"
+    "Forest"
+  "Characters" expanded
+    "Aya"
+  "Shared Assets"
+This must clearly show folder-inside-folder hierarchy with arbitrary descriptive names, without fixed episode/scene scaffolding.
+Main area breadcrumb "Moonlit Journey / Opening / Station". Below search field "Search this folder", sort "Last edited", grid/list icons. Below a modest tag-filter row labelled "Tags" with small neutral text buttons "All", "Storyboard", "Animatics", "Background", "Asset", "Character sheet", and a compact "More"; All selected. Tags are labels, not folders or structural project types.
+Gallery in main area: six cards in 3 columns x 2 rows. First two cards are compact folder tiles, other four have landscape thumbnails. Titles and supporting text:
+folder "References" / "Folder";
+folder "Layouts" / "Folder";
+image "Station Exterior" / small type "Drawing", tag "Background", beautiful blue-dusk original anime station art;
+animation "Train Arrival" / small type "Animation · 5.0 s", tag "Animatics", original anime train platform motion frame;
+image "Opening Boards" / type "Drawing", tag "Storyboard", pencil storyboard panels on paper;
+animation "Platform Wind" / type "Animation · 3.0 s", two tags "Asset" and "Night"; original anime wind-blown foliage and platform at dusk. Use short unobtrusive rectangular neutral tag labels, no vivid colored badges.
+Small footer "2 folders · 4 items". A compact quiet hint near filter row or footer "Custom tags supported" is allowed, but no tutorial paragraph. Custom tag Night demonstrates arbitrary artist labels alongside predefined tags. Each content card has a three-dot menu. Folder cards look clearly different from documents. No shots timeline, global movie playback, clip tracks, scene list, rendering dashboard, audio mixer or editor tools. This is a production file-organizing surface, and each Animation item is a single-shot document.

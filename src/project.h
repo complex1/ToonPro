@@ -4,6 +4,7 @@
 #include <QJsonObject>
 #include <QMap>
 #include <QString>
+#include <QStringList>
 #include <QVector>
 #include <optional>
 #include <functional>
@@ -18,7 +19,7 @@
 
 namespace toon {
 
-inline constexpr int latestProjectFormatVersion = 37;
+inline constexpr int latestProjectFormatVersion = 39;
 inline constexpr int maxProjectSymbols = 128;
 inline constexpr int maxSymbolNestingDepth = 4;
 inline constexpr int maxProjectShots = 10000;
@@ -36,6 +37,12 @@ inline constexpr int maxProjectCharacterColorSlots = 65536;
 inline constexpr int maxProjectDrawingGuides = 256;
 inline constexpr int maxProjectModelResources = 64;
 inline constexpr qint64 maxProjectModelDecodedBytes = 256LL * 1024 * 1024;
+
+enum class ProjectKind { Film, Series, DrawingOnly };
+QString projectKindKey(ProjectKind kind);
+QString projectKindName(ProjectKind kind);
+std::optional<ProjectKind> projectKindFromKey(const QString &key);
+QStringList productionStages();
 
 struct ReferenceImage {
     QString id;
@@ -117,6 +124,9 @@ struct Shot {
     QVector<Camera2DKeyframe> camera2DKeys;
     QVector<SceneCameraAnimation> sceneCameraAnimations;
     QString scene = "Scene 1";
+    QString episode;
+    QString productionStage = "planning";
+    QString productionNotes;
     QVector<TimelineCue> timelineCues;
 };
 
@@ -127,6 +137,7 @@ struct SymbolDefinition {
 
 // Project data contains no workspace zoom, rotation, pan or docking state.
 struct Project {
+    ProjectKind kind = ProjectKind::Film;
     QString movie = "Untitled movie";
     int width = 1920;
     int height = 1080;
@@ -139,7 +150,7 @@ struct Project {
     // Saved drawing aids are separate from the renderable artwork.
     DrawingAids drawingAids;
 
-    static Project create();
+    static Project create(ProjectKind kind = ProjectKind::Film);
     QString validate() const;
     QJsonObject toJson() const;
     // Parses metadata only. Binary artwork and reference pixels are loaded by loadProject.

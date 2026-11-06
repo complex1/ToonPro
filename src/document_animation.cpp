@@ -4,6 +4,12 @@
 #include <algorithm>
 
 namespace toon {
+bool Document::insertMotionStudyProject(const Project &project,const QString &label) {
+    if(!m_open||editingGestureActive()||layerPropertyEditActive())return false;
+    const auto error=project.validate();if(!error.isEmpty()){emit warning(error);return false;}
+    QScopedValueRollback<bool> mutation(m_animationMutation,true);
+    return commit(m_project,project,label);
+}
 namespace {
 QString newId() { return QUuid::createUuid().toString(QUuid::WithoutBraces); }
 int indexOf(const Shot &shot, const QString &id) { for(int i=0;i<shot.layers.size();++i) if(shot.layers[i].id==id) return i; return -1; }

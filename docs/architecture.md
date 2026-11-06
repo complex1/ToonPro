@@ -1,5 +1,7 @@
 # Architecture
 
+The new application entry is `ProjectWorkspaceWindow`, which owns a leased `ManagedProjectStore` and retained embedded `MainWindow` editor tabs. Each tab owns an independent one-shot Document/Canvas/history, while the management catalog owns folder/tag/asset membership and revision pointers. Qt SQL/SQLite and MultimediaWidgets are now build dependencies. See [implemented managed storage/session behavior](managed-workspace.md) and the [broader architecture direction](storage-and-application-architecture.md). The older shared-project editor architecture below remains engine/retained infrastructure documentation.
+
 ## Boundaries
 
 `toon_core` holds project data, validation, JSON persistence, sheet geometry and image exports. `toon_workspace` holds the desktop shell, setup dialog, canvas view and Navigator. `ToonPro` is the executable entry point. `toon_tests` links the same libraries as the application.

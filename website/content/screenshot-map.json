@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "contentVersion": "0.75.0",
+  "contentVersion": "0.75 public preview + 0.76 local development",
   "primaryRendering": "The website generator inserts the matching primary image from assets/screenshots/index.json; guide Markdown contains supplemental images only.",
   "imageProvenance": "Captures are real application or widget views, including historical fixtures for unchanged interfaces. The Blue Hour illustration was generated separately and imported into Toon Pro; it is not claimed as painted in the application. Full capture provenance remains in assets/screenshots/index.json.",
   "guides": [
@@ -307,6 +307,28 @@
         "docs/drawing-tools.md",
         "docs/animation.md",
         "src/vector_edit_panel.cpp"
+      ]
+    },
+    {
+      "slug": "projects-and-assets",
+      "markdown": "projects-and-assets.md",
+      "primary": {
+        "url": "/assets/screenshots/drawing-setup.webp",
+        "caption": "Drawing setup with a live canvas preview and Movie-project tags.",
+        "alt": "Actual local-development New drawing dialog with canvas size, background and tags.",
+        "sourceVersion": "0.76 local development"
+      },
+      "supplemental": [
+        {
+          "url": "/assets/screenshots/project-assets.webp",
+          "caption": "Separate project Assets library with editable tags.",
+          "heading": "Import reference media"
+        }
+      ],
+      "implementationReferences": [
+        "docs/managed-workspace.md",
+        "src/project_workspace_window.cpp",
+        "src/managed_project_store.cpp"
       ]
     }
   ]

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "authenticity": "Real Toon Pro application/widget captures and the application’s actual 3D renderer. Synthetic fixture artwork is used except the explicitly identified imported Blue Hour illustration and original character model sheet. No fabricated UI.",
-  "primaryGuideCount": 16,
+  "primaryGuideCount": 17,
   "screenshots": [
     {
       "slug": "getting-started",
@@ -491,6 +491,132 @@
       "state": "Symbol editor with synthetic lantern drawing",
       "applicationSourceVersion": "0.75.0",
       "processing": "Lossless WebP; uniform downscale only where larger than 1920 × 1400. No UI compositing or retouching."
+    },
+    {
+      "slug": "project-drawing",
+      "file": "project-drawing.webp",
+      "url": "/assets/screenshots/project-drawing.webp",
+      "caption": "Compact Drawing project gallery with real previews from sample documents.",
+      "alt": "Actual local-development Toon Pro capture: Compact Drawing project gallery with real previews from sample documents.",
+      "width": 2880,
+      "height": 1920,
+      "bytes": 386040,
+      "sha256": "597d78d425b99f6da4e8984691003a3d77768acdfee8ef8b3d5fc4a459bf7bb3",
+      "source": "test-artifacts/compact-cards-native/drawing-gallery.png",
+      "sourceSha256": "69c4b232f1914790e628150fe5dd21af2699cf79fafdc1bdb45925253636322d",
+      "sourceDimensions": [
+        2880,
+        1920
+      ],
+      "fixture": "tests/managed_project_tests.cpp",
+      "state": "Local development managed workspace; temporary sample project and imported repository illustration",
+      "applicationSourceVersion": "0.76 local development, 6 November 2026",
+      "processing": "Lossless format conversion only; no UI compositing, resizing or retouching."
+    },
+    {
+      "slug": "project-animation",
+      "file": "project-animation.webp",
+      "url": "/assets/screenshots/project-animation.webp",
+      "caption": "Independent single-shot animation documents with saved duration and FPS.",
+      "alt": "Actual local-development Toon Pro capture: Independent single-shot animation documents with saved duration and FPS.",
+      "width": 2880,
+      "height": 1920,
+      "bytes": 169992,
+      "sha256": "98dee722861343b05c46e41203ea2f1655f4c69dd45ba6afa77eca878029020b",
+      "source": "test-artifacts/compact-cards-native/animation-gallery.png",
+      "sourceSha256": "2e2a627734b670c2a9528afe75bc01971edc172358b693c63f1f58b8a7aba682",
+      "sourceDimensions": [
+        2880,
+        1920
+      ],
+      "fixture": "tests/managed_project_tests.cpp",
+      "state": "Local development managed workspace; temporary sample project and imported repository illustration",
+      "applicationSourceVersion": "0.76 local development, 6 November 2026",
+      "processing": "Lossless format conversion only; no UI compositing, resizing or retouching."
+    },
+    {
+      "slug": "project-movie",
+      "file": "project-movie.webp",
+      "url": "/assets/screenshots/project-movie.webp",
+      "caption": "Movie organization with nested folders and tagged native drawings.",
+      "alt": "Actual local-development Toon Pro capture: Movie organization with nested folders and tagged native drawings.",
+      "width": 2880,
+      "height": 1920,
+      "bytes": 663048,
+      "sha256": "f50a0946e046764ed79d40d3f6cd7c7297672d0ae694ec2a7dd2ee8d246455f0",
+      "source": "test-artifacts/compact-cards-native/movie-gallery.png",
+      "sourceSha256": "6554eb6fbefd6da443f120baa94fd60e4b372bb1294392911f6b0862113bd0b0",
+      "sourceDimensions": [
+        2880,
+        1920
+      ],
+      "fixture": "tests/managed_project_tests.cpp",
+      "state": "Local development managed workspace; temporary sample project and imported repository illustration",
+      "applicationSourceVersion": "0.76 local development, 6 November 2026",
+      "processing": "Lossless format conversion only; no UI compositing, resizing or retouching."
+    },
+    {
+      "slug": "project-assets",
+      "file": "project-assets.webp",
+      "url": "/assets/screenshots/project-assets.webp",
+      "caption": "Separate project Assets library with a selected-asset inspector and editable tags.",
+      "alt": "Actual local-development Toon Pro capture: Separate project Assets library with a selected-asset inspector and editable tags.",
+      "width": 2880,
+      "height": 1920,
+      "bytes": 494082,
+      "sha256": "b83b5654a42bbc36a6bb9088f85b49022749d13fec5ebb8a434d11e4876e115f",
+      "source": "test-artifacts/compact-cards-native/assets-gallery.png",
+      "sourceSha256": "9a656cac39e42f3712a0f3c31d5ae1e853240f8175785e08051da2897d1c4a02",
+      "sourceDimensions": [
+        2880,
+        1920
+      ],
+      "fixture": "tests/managed_project_tests.cpp",
+      "state": "Local development managed workspace; temporary sample project and imported repository illustration",
+      "applicationSourceVersion": "0.76 local development, 6 November 2026",
+      "processing": "Lossless format conversion only; no UI compositing, resizing or retouching."
+    },
+    {
+      "slug": "projects-and-assets",
+      "file": "drawing-setup.webp",
+      "url": "/assets/screenshots/drawing-setup.webp",
+      "caption": "Drawing setup with canvas preview, background, dimensions and Movie-project tags.",
+      "alt": "Actual local-development Toon Pro capture: Drawing setup with canvas preview, background, dimensions and Movie-project tags.",
+      "width": 2080,
+      "height": 1520,
+      "bytes": 27410,
+      "sha256": "90bfa6b98c6c099ae8b1418112181d89ece6ded31b2c1adf2d3ebf6f934b4da6",
+      "source": "test-artifacts/compact-cards-native/new-drawing-movie.png",
+      "sourceSha256": "2a5ca34c1adcc3b3cc27aa91b3f32794dc69cde4d73bad8cd292aca9cf69aca2",
+      "sourceDimensions": [
+        2080,
+        1520
+      ],
+      "fixture": "tests/managed_project_tests.cpp",
+      "state": "Local development managed workspace; temporary sample project and imported repository illustration",
+      "applicationSourceVersion": "0.76 local development, 6 November 2026",
+      "processing": "Lossless format conversion only; no UI compositing, resizing or retouching."
+    },
+    {
+      "slug": "project-home",
+      "file": "project-home.webp",
+      "url": "/assets/screenshots/project-home.webp",
+      "caption": "Projects home with compact cards for Drawing, Animation and Movie sample projects.",
+      "alt": "Actual local-development Toon Pro capture: Projects home with compact cards for Drawing, Animation and Movie sample projects.",
+      "width": 2880,
+      "height": 1920,
+      "bytes": 337662,
+      "sha256": "fdc125a62cb3d6770f0df656b1220b4ef67df6f07fcf6f66f876cfda4590c1dd",
+      "source": "test-artifacts/compact-cards-native/projects-home.png",
+      "sourceSha256": "28604a9987c4a7d94fbd0be849f82b45b215e394ae5bfe4522a32892cd4885fa",
+      "sourceDimensions": [
+        2880,
+        1920
+      ],
+      "fixture": "tests/managed_project_tests.cpp",
+      "state": "Local development managed workspace; temporary sample project and imported repository illustration",
+      "applicationSourceVersion": "0.76 local development, 6 November 2026",
+      "processing": "Lossless format conversion only; no UI compositing, resizing or retouching."
     }
   ]
 }

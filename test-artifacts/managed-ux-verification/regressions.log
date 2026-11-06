@@ -1,0 +1,15 @@
+Test project /Users/shubhammaurya/Desktop/workspace/toon-pro/build
+    Start   1: managed_project
+1/5 Test   #1: managed_project ..................   Passed   10.10 sec
+    Start  35: drawing_workspace
+2/5 Test  #35: drawing_workspace ................   Passed   14.75 sec
+    Start  47: project_save
+3/5 Test  #47: project_save .....................   Passed    6.05 sec
+    Start 134: project_creation_workspace
+4/5 Test #134: project_creation_workspace .......   Passed   11.34 sec
+    Start 245: ui_theme
+5/5 Test #245: ui_theme .........................   Passed    6.96 sec
+
+100% tests passed, 0 tests failed out of 5
+
+Total Test time (real) =  49.20 sec

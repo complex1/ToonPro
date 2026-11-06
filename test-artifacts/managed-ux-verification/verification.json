@@ -1,0 +1,20 @@
+{
+  "app": "build/ToonPro.app",
+  "targeted_ctest_suites_passed": 5,
+  "managed_native_qt_results_passed": 15,
+  "managed_retina_qt_results_passed": 15,
+  "native_16pt_gallery_dialog_results_passed": 3,
+  "visual_review": [
+    "Projects",
+    "project type cards",
+    "Drawing gallery",
+    "Animation rows",
+    "Movie folders",
+    "canvas setup",
+    "Assets inspector",
+    "import review",
+    "Move to Assets",
+    "960px and 16pt layouts"
+  ],
+  "scope": "Local macOS development; temporary test projects and existing repository artwork"
+}

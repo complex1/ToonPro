@@ -1,0 +1,12 @@
+[  0%] Built target toon_core_autogen_timestamp_deps
+[  5%] Built target toon_core_autogen
+[ 41%] Built target toon_core
+[ 41%] Built target toon_workspace_autogen_timestamp_deps
+[ 47%] Built target toon_workspace_autogen
+[100%] Built target toon_workspace
+[100%] Built target toon_managed_project_tests_autogen_timestamp_deps
+[100%] Automatic MOC for target toon_managed_project_tests
+[100%] Built target toon_managed_project_tests_autogen
+[100%] Building CXX object CMakeFiles/toon_managed_project_tests.dir/tests/managed_project_tests.cpp.o
+[100%] Linking CXX executable toon_managed_project_tests
+[100%] Built target toon_managed_project_tests

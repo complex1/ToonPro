@@ -148,7 +148,9 @@ void AudioExportDialog::restoreRange() {
     m_usePlayback->setEnabled(m_hasPlaybackRange && m_previousScope == 0);
     m_changing = false; m_failure.clear(); refresh();
 }
+void AudioExportDialog::setSingleShotOnly(){m_scope->setCurrentIndex(0);m_singleShotOnly=true;m_scope->setTabEnabled(1,false);m_scope->hide();}
 void AudioExportDialog::changeScope(int index) {
+    if(m_singleShotOnly && index!=0){const QSignalBlocker block(m_scope);m_scope->setCurrentIndex(0);return;}
     if (m_changing || m_exporter->busy()) return;
     for (auto *control : {m_first, m_last}) control->commitEditing();
     saveRange(); m_previousScope = index; restoreRange();

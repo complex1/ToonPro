@@ -223,18 +223,56 @@ QVector<CharacterColorVariant> standardCharacterColorVariants(const QVector<Char
     return variants;
 }
 
-Project Project::create() {
+QString projectKindKey(ProjectKind kind) {
+    switch (kind) {
+    case ProjectKind::Film: return "film";
+    case ProjectKind::Series: return "series";
+    case ProjectKind::DrawingOnly: return "drawing-only";
+    }
+    return {};
+}
+
+QString projectKindName(ProjectKind kind) {
+    switch (kind) {
+    case ProjectKind::Film: return "Film";
+    case ProjectKind::Series: return "Series";
+    case ProjectKind::DrawingOnly: return "Drawing only";
+    }
+    return {};
+}
+
+std::optional<ProjectKind> projectKindFromKey(const QString &key) {
+    for (const auto kind : {ProjectKind::Film, ProjectKind::Series, ProjectKind::DrawingOnly})
+        if (projectKindKey(kind) == key) return kind;
+    return {};
+}
+
+QStringList productionStages() {
+    return {"planning", "storyboard", "layout", "animation", "cleanup", "color", "composite", "approved"};
+}
+
+Project Project::create(ProjectKind kind) {
     Project p;
+    p.kind = kind;
     Shot shot;
     shot.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    if (kind == ProjectKind::Series) shot.episode = "Episode 01";
+    if (kind == ProjectKind::DrawingOnly) {
+        p.movie = "Untitled drawing";
+        shot.number = "D001";
+        shot.name = "Background";
+        shot.durationFrames = 1;
+        shot.sheet = {0, 0, 0, 0, 0, 0, false, false, false};
+    }
     shot.layers.append(RasterLayer::create());
     p.shots.append(shot);
     return p;
 }
 
 QString Project::validateStructure() const {
+    if (projectKindKey(kind).isEmpty()) return "Choose a valid project type.";
     if (movie.trimmed().isEmpty() || movie.size() > 200)
-        return "Enter a movie title between 1 and 200 characters.";
+        return "Enter a project title between 1 and 200 characters.";
     if (width < 64 || width > 8192 || height < 64 || height > 8192)
         return "Output dimensions must be between 64 and 8192 pixels in this prototype.";
     if (!std::isfinite(fps) || fps < 1 || fps > 120)
@@ -295,6 +333,12 @@ QString Project::validateStructure() const {
         if (shot->scene.isEmpty() || shot->scene.size() > 100 || shot->scene != shot->scene.trimmed() ||
             std::any_of(shot->scene.cbegin(), shot->scene.cend(), [](QChar ch) { return ch.category() == QChar::Other_Control || ch == QChar::LineSeparator || ch == QChar::ParagraphSeparator; }))
             return "Scene names must contain 1 to 100 characters on one line.";
+        if (!shot->episode.isEmpty() && !validModelSheetName(shot->episode))
+            return "Episode names allow up to 100 characters on one line.";
+        if (!productionStages().contains(shot->productionStage)) return "Choose a valid production stage.";
+        if (shot->productionNotes.size() > 16000 || std::any_of(shot->productionNotes.cbegin(), shot->productionNotes.cend(), [](QChar ch) {
+                return ch.category() == QChar::Other_Control && ch != '\n' && ch != '\r' && ch != '\t';
+            })) return "Production notes allow up to 16,000 characters of text.";
         if (shot->durationFrames < 1 || shot->durationFrames > 1000000)
             return "Shot duration must be between 1 and 1,000,000 frames.";
         const auto cueValidation = validateTimelineCues(*shot);
@@ -593,6 +637,12 @@ QString Project::validate() const {
 }
 
 QJsonObject Project::toJson() const {
+    bool studyTracks=false;
+    for(const auto *shot:projectArtworkShots(*this))for(const auto &track:shot->animationTracks)
+        for(const auto &layer:shot->layers)if(layer.id==track.rootGroupLayerId&&layer.annotation)studyTracks=true;
+    bool productionMetadata = studyTracks || kind != ProjectKind::Film;
+    for (const auto *shot : projectArtworkShots(*this))
+        productionMetadata |= !shot->episode.isEmpty() || shot->productionStage != "planning" || !shot->productionNotes.isEmpty();
     bool sheetPresentation = false;
     for (const auto *shot : projectArtworkShots(*this))
         if (!shot->sheet.showHeader || !shot->sheet.showGuides) sheetPresentation = true;
@@ -622,7 +672,7 @@ QJsonObject Project::toJson() const {
         }
     for (const auto *shot : projectArtworkShots(*this)) for (const auto &clip : shot->audioClips)
         if (audioClipHasFinishing(clip)) audioFinishing = true;
-    bool sceneMetadata = extendedCompositing || nestedTracks || cueMetadata || !symbols.isEmpty() || persistentAids || !characters.isEmpty() || shots.size() > 1 || audioFinishing || advancedBrushTips || imageColorDynamics || modernBrushes;
+    bool sceneMetadata = productionMetadata || extendedCompositing || nestedTracks || cueMetadata || !symbols.isEmpty() || persistentAids || !characters.isEmpty() || shots.size() > 1 || audioFinishing || advancedBrushTips || imageColorDynamics || modernBrushes;
     for (const auto *shot : projectArtworkShots(*this)) sceneMetadata |= shot->scene != "Scene 1";
     QJsonArray list;
     for (const auto *shot : projectArtworkShots(*this)) {
@@ -682,6 +732,11 @@ QJsonObject Project::toJson() const {
             shotMetadata.insert("sheet", sheetMetadata);
         }
         if (sceneMetadata || sheetPresentation) shotMetadata.insert("scene", shot->scene);
+        if (productionMetadata) {
+            shotMetadata.insert("episode", shot->episode);
+            shotMetadata.insert("productionStage", shot->productionStage);
+            shotMetadata.insert("productionNotes", shot->productionNotes);
+        }
         if (!shot->timelineCues.isEmpty()) shotMetadata.insert("timelineCues", timelineCuesToJson(shot->timelineCues));
         if (!shot->animationTracks.isEmpty()) shotMetadata.insert("animationTracks", animationTracksToJson(shot->animationTracks));
         if (!shot->layerAnimations.isEmpty()) shotMetadata.insert("layerAnimations", layerAnimationsToJson(shot->layerAnimations));
@@ -709,11 +764,11 @@ QJsonObject Project::toJson() const {
     for (const auto &id : modelResources(*this).keys()) models.append(QJsonObject{{"id", id}});
     const bool characterColors = std::any_of(characters.cbegin(), characters.cend(), [](const CharacterModel &character) { return !character.colors.isEmpty(); });
     const bool characterVariants = std::any_of(characters.cbegin(), characters.cend(), [](const CharacterModel &character) { return !character.colorVariants.isEmpty(); });
-    QJsonObject result{{"format", "toon-pro"}, {"version", sheetPresentation ? 37 : extendedCompositing ? 36 : nestedTracks ? 35 : symbolPoses ? 34 : cueMetadata ? 33 : symbolClips ? 32 : !symbols.isEmpty() ? 31 : characterVariants ? 30 : persistentAids ? 29 : characterColors ? 28 : !characters.isEmpty() ? 27 : modernBrushes ? 26 : imageColorDynamics ? 25 : advancedBrushTips ? 24 : audioFinishing ? 23 : sceneMetadata ? 22 : extendedBrushDynamics ? 21 : colored ? 20 : 19}, {"movie", movie}, {"brushResources",resources}, {"modelResources",models}, {"audioResources", audioResourcesToJson(*this)},
+    QJsonObject result{{"format", "toon-pro"}, {"version", studyTracks ? 39 : productionMetadata ? 38 : sheetPresentation ? 37 : extendedCompositing ? 36 : nestedTracks ? 35 : symbolPoses ? 34 : cueMetadata ? 33 : symbolClips ? 32 : !symbols.isEmpty() ? 31 : characterVariants ? 30 : persistentAids ? 29 : characterColors ? 28 : !characters.isEmpty() ? 27 : modernBrushes ? 26 : imageColorDynamics ? 25 : advancedBrushTips ? 24 : audioFinishing ? 23 : sceneMetadata ? 22 : extendedBrushDynamics ? 21 : colored ? 20 : 19}, {"movie", movie}, {"brushResources",resources}, {"modelResources",models}, {"audioResources", audioResourcesToJson(*this)},
         {"output", QJsonObject{{"width", width}, {"height", height}, {"fps", fps},
             {"profile", "sRGB"}, {"bitDepth", 8}, {"transparent", transparent}}}, {"shots", list}};
-    if (!symbols.isEmpty() || cueMetadata || nestedTracks || extendedCompositing || sheetPresentation) result.insert("symbols", symbolList);
-    if (!characters.isEmpty() || persistentAids || !symbols.isEmpty() || cueMetadata || nestedTracks || extendedCompositing || sheetPresentation) {
+    if (!symbols.isEmpty() || cueMetadata || nestedTracks || extendedCompositing || sheetPresentation || productionMetadata) result.insert("symbols", symbolList);
+    if (!characters.isEmpty() || persistentAids || !symbols.isEmpty() || cueMetadata || nestedTracks || extendedCompositing || sheetPresentation || productionMetadata) {
         QJsonArray characterList;
         for (const auto &character : characters) {
             QJsonArray sheets;
@@ -721,7 +776,7 @@ QJsonObject Project::toJson() const {
                 sheets.append(QJsonObject{{"id", sheet.id}, {"name", sheet.name}, {"category", modelSheetCategoryKey(sheet.category)},
                     {"width", sheet.image.width()}, {"height", sheet.image.height()}});
             QJsonObject entry{{"id", character.id}, {"name", character.name}, {"sheets", sheets}};
-            if (characterColors || persistentAids || characterVariants || !symbols.isEmpty() || cueMetadata || nestedTracks || extendedCompositing || sheetPresentation) {
+            if (characterColors || persistentAids || characterVariants || !symbols.isEmpty() || cueMetadata || nestedTracks || extendedCompositing || sheetPresentation || productionMetadata) {
                 QJsonArray colors;
                 for (const auto &swatch : character.colors)
                     colors.append(QJsonObject{{"id", swatch.id}, {"name", swatch.name},
@@ -729,7 +784,7 @@ QJsonObject Project::toJson() const {
                         {"color", QColor::fromRgba(swatch.color.rgba()).name(QColor::HexArgb)}});
                 entry.insert("colors", colors);
             }
-            if (characterVariants || !symbols.isEmpty() || cueMetadata || nestedTracks || extendedCompositing || sheetPresentation) {
+            if (characterVariants || !symbols.isEmpty() || cueMetadata || nestedTracks || extendedCompositing || sheetPresentation || productionMetadata) {
                 QJsonArray variants;
                 for (const auto &variant : character.colorVariants) {
                     QJsonObject colors;
@@ -743,7 +798,8 @@ QJsonObject Project::toJson() const {
         }
         result.insert("characters", characterList);
     }
-    if (persistentAids || characterVariants || !symbols.isEmpty() || cueMetadata || nestedTracks || extendedCompositing || sheetPresentation) result.insert("drawingAids", drawingAidsToJson(drawingAids));
+    if (persistentAids || characterVariants || !symbols.isEmpty() || cueMetadata || nestedTracks || extendedCompositing || sheetPresentation || productionMetadata) result.insert("drawingAids", drawingAidsToJson(drawingAids));
+    if (productionMetadata) result.insert("projectKind", projectKindKey(kind));
     return result;
 }
 
@@ -753,9 +809,17 @@ std::optional<Project> Project::fromJson(const QJsonObject &o, QString *error) {
         return std::nullopt;
     };
     if (o.value("format") != "toon-pro" || (o.value("version") != 1 && o.value("version") != 2
-        && o.value("version") != 3 && o.value("version") != 4 && o.value("version") != 5 && o.value("version") != 6 && o.value("version") != 7 && o.value("version") != 8 && o.value("version") != 9 && o.value("version") != 10 && o.value("version") != 11 && o.value("version") != 12 && o.value("version") != 13 && o.value("version") != 14 && o.value("version") != 15 && o.value("version") != 16 && o.value("version") != 17 && o.value("version") != 18 && o.value("version") != 19 && o.value("version") != 20 && o.value("version") != 21 && o.value("version") != 22 && o.value("version") != 23 && o.value("version") != 24 && o.value("version") != 25 && o.value("version") != 26 && o.value("version") != 27 && o.value("version") != 28 && o.value("version") != 29 && o.value("version") != 30 && o.value("version") != 31 && o.value("version") != 32 && o.value("version") != 33 && o.value("version") != 34 && o.value("version") != 35 && o.value("version") != 36 && o.value("version") != 37))
-        return fail("This file is not a supported Toon Pro project (version 1 through 37 required).");
+        && o.value("version") != 3 && o.value("version") != 4 && o.value("version") != 5 && o.value("version") != 6 && o.value("version") != 7 && o.value("version") != 8 && o.value("version") != 9 && o.value("version") != 10 && o.value("version") != 11 && o.value("version") != 12 && o.value("version") != 13 && o.value("version") != 14 && o.value("version") != 15 && o.value("version") != 16 && o.value("version") != 17 && o.value("version") != 18 && o.value("version") != 19 && o.value("version") != 20 && o.value("version") != 21 && o.value("version") != 22 && o.value("version") != 23 && o.value("version") != 24 && o.value("version") != 25 && o.value("version") != 26 && o.value("version") != 27 && o.value("version") != 28 && o.value("version") != 29 && o.value("version") != 30 && o.value("version") != 31 && o.value("version") != 32 && o.value("version") != 33 && o.value("version") != 34 && o.value("version") != 35 && o.value("version") != 36 && o.value("version") != 37 && o.value("version") != 38 && o.value("version") != 39))
+        return fail("This file is not a supported Toon Pro project (version 1 through 39 required).");
     const int version = o.value("version").toInt();
+    if (version < 38) {
+        if (o.contains("projectKind")) return fail("Project types require project format 38.");
+        for (const auto &shot : artworkShotMetadata(o)) {
+            const auto entry = shot.toObject();
+            if (entry.contains("episode") || entry.contains("productionStage") || entry.contains("productionNotes"))
+                return fail("Production planning requires project format 38.");
+        }
+    }
     if (version < 33) for (const auto &shot : artworkShotMetadata(o))
         if (shot.toObject().contains("timelineCues")) return fail("Timeline cues require project format 33.");
     if (version < 31 && o.contains("symbols")) return fail("Symbols require project format 31.");
@@ -874,6 +938,12 @@ std::optional<Project> Project::fromJson(const QJsonObject &o, QString *error) {
     if(version>=8 && !validateResourceManifest(o,error)) return {};
     if(version>=9 && !validateModelManifest(o,error)) return {};
     Project p;
+    if (version >= 38) {
+        if (!o.value("projectKind").isString()) return fail("Missing project type.");
+        const auto kind = projectKindFromKey(o.value("projectKind").toString());
+        if (!kind) return fail("Invalid project type.");
+        p.kind = *kind;
+    }
     p.m_brushResourcesLoaded=version<8 || o.value("brushResources").toArray().isEmpty();
     p.m_sceneResourcesLoaded=version<9 || o.value("modelResources").toArray().isEmpty();
     QMap<QString, AudioAssetPtr> pendingAudio;
@@ -941,6 +1011,13 @@ std::optional<Project> Project::fromJson(const QJsonObject &o, QString *error) {
         if (version >= 22) {
             if (!entry.value("scene").isString()) return fail("A shot needs a valid scene name.");
             shot.scene = entry.value("scene").toString();
+        }
+        if (version >= 38) {
+            for (const auto *key : {"episode", "productionStage", "productionNotes"})
+                if (!entry.value(key).isString()) return fail("Invalid production planning metadata.");
+            shot.episode = entry.value("episode").toString();
+            shot.productionStage = entry.value("productionStage").toString();
+            shot.productionNotes = entry.value("productionNotes").toString();
         }
         auto &s = shot.sheet;
         const auto sheet = entry.value("sheet").toObject();
@@ -1239,6 +1316,8 @@ std::optional<Project> Project::fromJson(const QJsonObject &o, QString *error) {
         p.drawingAids = std::move(*aids);
     }
     if (audioResources(p).keys() != pendingAudio.keys()) return fail("Project contains unused audio resources.");
+    if(version<39)for(const auto *shot:projectArtworkShots(p))for(const auto &track:shot->animationTracks)
+        for(const auto &layer:shot->layers)if(layer.id==track.rootGroupLayerId&&layer.annotation)return fail("Reference animation tracks require project format 39.");
     const auto validation = p.validateStructure();
     if (!validation.isEmpty()) return fail(validation);
     return p;

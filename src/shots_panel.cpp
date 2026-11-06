@@ -210,6 +210,10 @@ QStringList ShotsPanel::selectedShotIds() const {
     return result;
 }
 
+void ShotsPanel::setProductionFilters(const QString &episode, const QString &stage) {
+    m_episodeFilter = episode; m_stageFilter = stage; m_followActive = false; requestRefresh();
+}
+
 void ShotsPanel::setStatus(const QString &text) {
     m_status->setToolTip(text); m_status->setAccessibleName(text);
     m_status->setText(m_status->fontMetrics().elidedText(text, Qt::ElideRight, qMax(1, m_status->width())));
@@ -270,7 +274,9 @@ void ShotsPanel::refresh() {
             item->setIcon(0, active ? appIcon("clapperboard") : QIcon());
             auto font = item->font(1); font.setBold(active); item->setFont(1, font);
             item->setTextAlignment(2, Qt::AlignRight | Qt::AlignVCenter); item->setSizeHint(0, QSize(0, 32));
-            item->setHidden(!filter.isEmpty() && shot.scene != filter); frames += shot.durationFrames;
+            item->setHidden((!filter.isEmpty() && shot.scene != filter)
+                || (!m_episodeFilter.isEmpty() && shot.episode != m_episodeFilter)
+                || (!m_stageFilter.isEmpty() && shot.productionStage != m_stageFilter)); frames += shot.durationFrames;
             if (!item->isHidden()) ++visible;
         }
     }
@@ -293,6 +299,11 @@ void ShotsPanel::refresh() {
     m_summary->setText(!open ? "No movie open" : QString("%1 shots · %2 s%3").arg(m_document->project().shots.size())
         .arg(frames / m_document->project().fps, 0, 'f', 2)
         .arg(filter.isEmpty() ? QString() : QString(" · %1 shown").arg(visible)));
+    const bool drawing = open && m_document->project().kind == ProjectKind::DrawingOnly;
+    m_list->setColumnHidden(2, drawing);
+    m_list->setHeaderLabels(drawing ? QStringList{"Artwork", "Name", "Duration"} : QStringList{"Cut", "Shot", "Duration"});
+    if (drawing) m_summary->setText(QString("%1 artworks · %2 shown").arg(m_document->project().shots.size()).arg(visible));
+    m_sceneFilter->setVisible(!drawing);
     m_summary->setToolTip(m_summary->text());
     m_followActive = false; m_refreshing = false; updateActions();
 }

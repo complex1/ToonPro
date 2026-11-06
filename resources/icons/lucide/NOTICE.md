@@ -45,3 +45,5 @@ The expanded drawing tools additionally use `pipette`, `rectangle-horizontal`, `
 The Timeline uses `play`, `pause`, `chevron-left`, `chevron-right`, `skip-back`, `skip-forward`, and `repeat`, from the same pinned commit, retrieved 2026-10-19.
 
 Audio tracks use `music`, `volume-2`, and `volume-x`, from the same pinned commit, retrieved 2026-10-20.
+
+The project dashboards use `list`, `folder`, `download`, `square` and `file`, from the same pinned commit, retrieved 2026-11-05.

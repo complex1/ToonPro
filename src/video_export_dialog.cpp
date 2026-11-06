@@ -269,7 +269,9 @@ void VideoExportDialog::restoreControls(const SavedControls &state) {
     m_usePlayback->setEnabled(m_hasPlaybackRange && m_previousScope != 1 && (m_previousScope != 2 || m_queueShot == m_activeShot));
     m_changing = false; m_failure.clear(); refresh();
 }
+void VideoExportDialog::setSingleShotOnly(){m_scope->setCurrentIndex(0);m_singleShotOnly=true;m_scope->setTabEnabled(1,false);m_scope->setTabEnabled(2,false);m_scope->hide();}
 void VideoExportDialog::changeScope(int index) {
+    if(m_singleShotOnly && index!=0){const QSignalBlocker block(m_scope);m_scope->setCurrentIndex(0);return;}
     if (m_changing || busy()) return;
     for (auto *control : {m_first, m_last, m_width, m_height}) control->commitEditing();
     saveControls(); m_scopeDestinations[m_previousScope] = m_destination->text();

@@ -97,7 +97,7 @@ bool MovieReviewController::setMode(ReviewMode mode) {
     if(mode!=ReviewMode::Shot&&mode!=ReviewMode::Scene&&mode!=ReviewMode::Movie)return false;
     auto *document=m_timeline->document();
     if(mode!=ReviewMode::Shot){
-        if(m_timeline->property("symbolEditor").toBool()||!document->isOpen()||document->strokeActive())return false;
+        if(m_timeline->property("focusedEditor").toBool()||m_timeline->property("symbolEditor").toBool()||!document->isOpen()||document->strokeActive())return false;
         if(!m_timeline->prepareTimelineEdit())return false;
         m_project=document->project();
         m_segments=moviePlaybackSegments(m_project,mode==ReviewMode::Scene?MoviePlaybackScope::Scene:MoviePlaybackScope::Movie,document->activeShot().scene);

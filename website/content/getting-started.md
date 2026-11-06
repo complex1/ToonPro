@@ -5,6 +5,9 @@ category: "Start here"
 order: 10
 ---
 
+**Build covered: published 0.75.0 preview.** If your app opens the new Projects gallery with Drawing / Animation / Movie cards, use [Projects, drawing tabs & Assets](projects-and-assets.md), the local-development guide. The new flow is not in the current public downloads.
+
+
 Toon Pro brings drawing and animation into one movie project. You can use that project for a single illustration, one animated cut, or several shots. Start with the canvas and drawing structure that suit your work; you can arrange the panels independently afterward.
 
 This guide takes you from the opening window to a saved drawing and two different image exports. You do not need to set up an animation timeline to paint an illustration.

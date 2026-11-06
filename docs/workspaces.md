@@ -1,10 +1,20 @@
-# Project starters and workspaces in 0.74
+# Project types, starters and workspaces
 
-A **project starter** creates canvas settings, the first shot and its initial drawing layers. A **workspace** arranges the editor's panels. Choose them independently: an illustration can use the Anime workspace, and an existing movie can switch workspaces without replacing its drawings.
+**Local implementation update:** the normal app now uses the [managed-project dashboard and document-tab workflow](managed-workspace.md). This page retains the earlier version-1 project/editor behavior for reference; its Film/Series creation flow is not the new default entry. No legacy migration is being implemented.
+
+**Scope note:** the presets below describe retained editor panel arrangements. The new normal entry uses managed project dashboards and separate document tabs; see [managed workspace](managed-workspace.md). Its focused editors enforce single-document authoring independently of layout restoration.
+
+A **project type** selects Film, Series or Drawing only. A **project starter** creates canvas settings, the first shot/artwork and its initial drawing layers. A **workspace** arranges the editor's panels. Choose the starter and panel arrangement independently: an illustration can use the Anime workspace, and an existing movie can switch workspaces without replacing its drawings.
+
+The starter/layout foundation arrived in 0.74. Current source 0.76 adds Project Home, portable project folders, production planning and project Assets. See [production projects](production-projects.md) for those controls and their limits. The published 0.75 app does not include the 0.76 project-management additions.
 
 ## Create a project
 
-Open **File → New movie project**. The dialog starts on **Anime** and provides five template tabs, a live canvas preview and editable project, timing and production-sheet settings.
+Open **File → New project** or use New project on Home. Film is initially selected with the Anime starter. Film and Series provide five template tabs, a live canvas preview and editable project, timing and production-sheet settings. Series adds an Episode label.
+
+Choose **Drawing only** for backgrounds or standalone paintings. It offers Blank and Illustration, starts with one frame and no animation tracks, and hides timing/shot-number fields. It suggests Illustration and opens directly on the canvas. Drawing-only Illustration defaults to 1920 × 1080 with editable dimensions; changing production type preserves dimensions already entered. New drawings have no production margins/header/guides unless those settings are explicitly enabled.
+
+**Create a project folder** defaults on and creates a new .toonstudio directory with artwork and Assets storage. Uncheck it or explicitly enter a .toonproj path for a standalone file. Folder-based Film/Series projects open Project workspace after creation; Open shot enters the drawing editor. Existing project-folder destinations are preserved. The table below describes Film/Series starter defaults.
 
 | Starter | Output dimensions | Timing at 24 FPS | Initial artwork | Suggested workspace |
 | --- | --- | --- | --- | --- |
@@ -14,7 +24,7 @@ Open **File → New movie project**. The dialog starts on **Anime** and provides
 | Storyboard | 1920 × 1080 | 72 frames / 3 seconds | Static Background plus a Boards animation track; Drawing 1 fills the shot's duration | Storyboarding |
 | Animatic | 1920 × 1080 | 240 frames / 10 seconds | Static Background plus a Boards animation track; Drawing 1 is exposed for the first 48 frames | Animatics |
 
-Every starter creates one shot. The Character track uses the Anime layer template: Rough, Sketch, Colors, Shadow, Highlights and Line Art. The Boards tracks use Rough, Sketch and Clean-up. These are editable drawing layers inside a drawing folder and track folder. Creation selects Drawing for Blank, Sketch for Illustration, or Rough for the animation starters.
+Every starter creates one shot or artwork. The Character track uses the Anime layer template: Rough, Sketch, Colors, Shadow, Highlights and Line Art. The Boards tracks use Rough, Sketch and Clean-up. These are editable drawing layers inside a drawing folder and track folder. Creation selects Drawing for Blank, Sketch for Illustration, or Rough for the animation starters.
 
 All starters begin with a white artwork background, sRGB and 8-bit RGBA. **Transparent artwork background** is editable. Production-sheet export continues to use white paper; movie-frame export follows the artwork transparency setting. No starter imports audio, creates motion keys or generates artwork. The Storyboard starter creates one held board within a shot; it does not generate a multi-panel page grid. Use the existing Shots and Timeline controls to extend the project.
 
@@ -34,7 +44,13 @@ Switching starter tabs preserves the entered movie title, cut number, shot name 
 
 Changing the initial duration keeps the starter exposure within the shot. Storyboard's first board continues to cover the entire chosen duration. Anime and Animatic retain their respective 2- and 48-frame initial holds, shortened when the shot is shorter. Frames displayed to the artist start at 1.
 
-**File → Project & shot settings** edits the open project's dimensions/FPS/background and the current shot's metadata, duration and sheet settings. It does not offer starter tabs or replace existing layers. A newly added shot inherits the current shot's sheet settings and duration through the existing Shots workflow.
+**File → Project & shot settings** edits the open project's dimensions/FPS/background and the current shot's metadata, duration and sheet settings. It displays the saved production type without conversion controls, does not offer starter tabs and does not replace existing layers. Drawing-only settings hide timing and use drawing names. A newly added shot inherits the current shot's sheet settings and duration through the existing Shots workflow.
+
+## Production browsing and the drawing editor
+
+The project toolbar and File menu provide **Project Home**, **Project workspace** and **Drawing workspace**. Home remembers Recent/Pinned/Archived entries. Project workspace contains Shots/Artworks planning and the project Assets catalog. Returning to Drawing restores the editor's dock arrangement; these navigation actions are separate from the named panel-layout presets below.
+
+Open projects still use one active document in the window. Drafts, imports and unfinished drawing gestures resolve before a transition. A shot's episode, stage and notes belong to the project; Home organization and editor layouts remain local workspace preferences.
 
 ## Choose a workspace
 

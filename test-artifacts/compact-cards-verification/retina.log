@@ -1,0 +1,12 @@
+********* Start testing of ManagedProjectTests *********
+Config: Using QtTest library 6.10.3, Qt 6.10.3 (arm64-little_endian-lp64 shared (dynamic) release build; by Apple LLVM 16.0.0 (clang-1600.0.26.3)), macos 26.5.1
+PASS   : ManagedProjectTests::initTestCase()
+QWARN  : ManagedProjectTests::dashboardGalleriesFollowProjectTypeAndRenderArtwork() qt.qpa.fonts: Populating font family aliases took 111 ms. Replace uses of missing font family "Sans Serif" with one that exists to avoid this cost. 
+QINFO  : ManagedProjectTests::dashboardGalleriesFollowProjectTypeAndRenderArtwork() qt.multimedia.ffmpeg: Using Qt multimedia with FFmpeg version 7.1.3 LGPL version 2.1 or later
+QWARN  : ManagedProjectTests::dashboardGalleriesFollowProjectTypeAndRenderArtwork() This plugin does not support propagateSizeHints()
+QWARN  : ManagedProjectTests::dashboardGalleriesFollowProjectTypeAndRenderArtwork() This plugin does not support propagateSizeHints()
+QWARN  : ManagedProjectTests::dashboardGalleriesFollowProjectTypeAndRenderArtwork() This plugin does not support propagateSizeHints()
+PASS   : ManagedProjectTests::dashboardGalleriesFollowProjectTypeAndRenderArtwork()
+PASS   : ManagedProjectTests::cleanupTestCase()
+Totals: 3 passed, 0 failed, 0 skipped, 0 blacklisted, 5557ms
+********* Finished testing of ManagedProjectTests *********

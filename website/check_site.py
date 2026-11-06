@@ -79,8 +79,15 @@ class Result:
 
 
 def check_site(root: Path, base: str, release_path: Path | None = None,
-               expected_guides: int = 16, expected_screenshots: int = 23) -> Result:
+               expected_guides: int | None = None, expected_screenshots: int | None = None) -> Result:
     root = root.resolve()
+    source = Path(__file__).resolve().parent
+    source_shots = json.loads((source / 'assets/screenshots/index.json').read_text())
+    if expected_guides is None:
+        expected_guides = sum(path.read_text().startswith('---\n') for path in (source / 'content').glob('*.md'))
+    if expected_screenshots is None:
+        expected_screenshots = len(source_shots['screenshots'])
+    static_pages = len(list((source / 'templates').glob('*.html'))) + 4
     result = Result()
     result.require(root.is_dir(), f'Site output is missing: {root}')
     result.require(base.startswith('/') and base.endswith('/') and '..' not in base,
@@ -89,8 +96,8 @@ def check_site(root: Path, base: str, release_path: Path | None = None,
         return result
     pages = {path.resolve(): Page(path) for path in root.rglob('*.html')}
     result.counts['pages'] = len(pages)
-    result.require(len(pages) == expected_guides + 5,
-                   f'Expected {expected_guides + 5} HTML pages, found {len(pages)}')
+    result.require(len(pages) == expected_guides + static_pages,
+                   f'Expected {expected_guides + static_pages} HTML pages, found {len(pages)}')
     origins = set()
     for page in pages.values():
         for e in page.elements:
@@ -230,7 +237,7 @@ def check_site(root: Path, base: str, release_path: Path | None = None,
     try:
         xml = ET.parse(sitemap)
         locations = [e.text for e in xml.iter() if e.tag.endswith('}loc')]
-        result.require(len(locations) == expected_guides + 4, 'Sitemap page count is incorrect')
+        result.require(len(locations) == expected_guides + static_pages - 1, 'Sitemap page count is incorrect')
         for location in locations:
             reference(location or '', root / 'index.html', 'sitemap.xml')
     except (OSError, ET.ParseError) as error:

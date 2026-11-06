@@ -16,7 +16,7 @@ QString nextNumber(const Project &project) {
     QSet<QString> used;
     for (const auto &shot : project.shots) used.insert(shot.number.toCaseFolded());
     for (int n = 1; n <= maxProjectShots + 1; ++n) {
-        const auto number = QString("C%1").arg(n, 3, 10, QLatin1Char('0'));
+        const auto number = QString(project.kind == ProjectKind::DrawingOnly ? "D%1" : "C%1").arg(n, 3, 10, QLatin1Char('0'));
         if (!used.contains(number.toCaseFolded())) return number;
     }
     return {};
@@ -84,6 +84,7 @@ void Document::rememberShotView() {
 }
 bool Document::shotOperationReady() {
     if (!m_open) return false;
+    if (m_singleShotEditing) { emit warning("Organize documents from the project dashboard."); return false; }
     if (editingGestureActive() || layerPropertyEditActive()) {
         emit warning("Finish the current edit before changing shots."); return false;
     }
@@ -101,10 +102,11 @@ QString Document::createShot(const QString &name, const QString &scene) {
     if (m_project.shots.size() >= maxProjectShots) { emit warning("The movie has reached its 10,000-shot limit."); return {}; }
     try {
         auto after = m_project;
-        auto shot = Project::create().shots.first();
+        auto shot = Project::create(m_project.kind).shots.first();
         shot.number = nextNumber(after);
-        shot.name = name.isEmpty() ? QString("Shot %1").arg(after.shots.size() + 1) : name.trimmed();
+        shot.name = name.isEmpty() ? QString(m_project.kind == ProjectKind::DrawingOnly ? "Artwork %1" : "Shot %1").arg(after.shots.size() + 1) : name.trimmed();
         shot.scene = scene.isEmpty() ? activeShot().scene : scene.trimmed();
+        shot.episode = activeShot().episode;
         shot.sheet = activeShot().sheet; shot.durationFrames = activeShot().durationFrames;
         const auto id = shot.id; const auto selected = shot.layers.first().id;
         after.shots.insert(activeShotIndex() + 1, std::move(shot));
@@ -145,6 +147,16 @@ bool Document::setShotScene(const QString &id, const QString &scene) {
     after.shots[index].scene = clean;
     const auto error = after.validate(); if (!error.isEmpty()) { emit warning(error); return false; }
     return commit(m_project, after, "Move shot to scene", {}, {}, {}, id, id);
+}
+bool Document::setShotProduction(const QString &id, const QString &episode, const QString &stage, const QString &notes) {
+    if (!shotOperationReady()) return false;
+    const int index = shotIndex(m_project, id); if (index < 0) return false;
+    auto after = m_project; auto &shot = after.shots[index];
+    const auto cleanEpisode = episode.trimmed();
+    if (shot.episode == cleanEpisode && shot.productionStage == stage && shot.productionNotes == notes) return true;
+    shot.episode = cleanEpisode; shot.productionStage = stage; shot.productionNotes = notes;
+    const auto error = after.validate(); if (!error.isEmpty()) { emit warning(error); return false; }
+    return commit(m_project, after, "Update production notes");
 }
 bool Document::moveShot(const QString &id, int destination) {
     if (!shotOperationReady()) return false;

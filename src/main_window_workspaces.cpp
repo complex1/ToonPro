@@ -104,7 +104,7 @@ void MainWindow::refreshWorkspaceMenu() {
 
 WorkspaceSnapshot MainWindow::captureWorkspace() const {
     WorkspaceSnapshot result;
-    result.state=m_drawingMode?m_normalLayout:saveState(3);result.compactDrawing=m_compactDrawingWorkspace;
+    result.state=m_drawingMode?m_normalLayout:m_browsingStudio?m_editorLayout:saveState(3);result.compactDrawing=m_compactDrawingWorkspace;
     result.drawerOpen=m_drawingDrawerOpen;result.drawerPage=m_drawingDrawerTabs?m_drawingDrawerTabs->currentIndex():0;
     if(auto *tabs=findChild<QTabBar *>("framePropertiesTabs"))result.inspectorPage=tabs->tabData(tabs->currentIndex()).toString();
     return result;
@@ -120,7 +120,7 @@ bool MainWindow::restoreWorkspaceSnapshot(const WorkspaceSnapshot &snapshot) {
     restoreInspectorPage(snapshot.inspectorPage);
     const auto side=toolBarArea(m_toolboxColumn);
     if(side!=Qt::LeftToolBarArea&&side!=Qt::RightToolBarArea)addToolBar(Qt::LeftToolBarArea,m_toolboxColumn);
-    recoverFloatingPanels();return true;
+    recoverFloatingPanels();enforceManagedBoundary();return true;
 }
 
 void MainWindow::arrangeBuiltinWorkspace(const QString &id) {
@@ -190,10 +190,16 @@ bool MainWindow::applyWorkspace(const QString &requestedId) {
     // A menu action or caller may alias activeWorkspaceId; retain its identity
     // across synchronous layout/selection signals.
     const QString id=requestedId;
+    if(m_managed && (id=="storyboard"||id=="animatic"))return false;
     const auto *entry=m_workspaces->find(id);
     if(!builtin(id)&&!entry){showActionFeedback("That workspace is no longer available.",true);return false;}
     const auto desired=entry?std::optional<WorkspaceSnapshot>(entry->snapshot):std::nullopt;
     if(!canChangeDrawingWorkspace())return false;
+    if(m_browsingStudio){
+        if(!prepareStudioTransition())return false;
+        restoreEditorPanels();
+        if(m_canvas->hasProject())qobject_cast<QStackedWidget *>(centralWidget())->setCurrentWidget(m_canvas);
+    }
     if(m_drawingMode){setDrawingMode(false);if(m_drawingMode)return false;}
     const auto before=captureWorkspace();const auto beforeId=m_activeWorkspaceId;
     m_arrangingWorkspace=true;setUpdatesEnabled(false);m_timeline->setPlaying(false);m_timeline->movieReview()->setMode(ReviewMode::Shot);
@@ -204,7 +210,7 @@ bool MainWindow::applyWorkspace(const QString &requestedId) {
     setDockOptions(options);
     m_arrangingWorkspace=false;
     if(restored){m_previousWorkspace=before;m_previousWorkspaceId=beforeId;rememberWorkspace(id);}
-    refreshDockTabs();refreshDrawingWorkspaceControls();refreshDrawingDrawerVisibility();setUpdatesEnabled(true);
+    enforceManagedBoundary();refreshDockTabs();refreshDrawingWorkspaceControls();refreshDrawingDrawerVisibility();setUpdatesEnabled(true);
     if(!restored){showActionFeedback("This saved workspace could not be restored. Your previous layout is retained.",true);return false;}
     m_canvas->setFocus(Qt::ShortcutFocusReason);return true;
 }
@@ -221,7 +227,7 @@ void MainWindow::restorePreviousWorkspace() {
     setDockOptions(options);
     m_arrangingWorkspace=false;
     if(restored){m_previousWorkspace=before;m_previousWorkspaceId=id;rememberWorkspace(targetId);}
-    refreshDockTabs();refreshDrawingWorkspaceControls();refreshDrawingDrawerVisibility();setUpdatesEnabled(true);
+    enforceManagedBoundary();refreshDockTabs();refreshDrawingWorkspaceControls();refreshDrawingDrawerVisibility();setUpdatesEnabled(true);
     if(!restored)showActionFeedback("The previous layout could not be restored.",true);
     m_canvas->setFocus(Qt::ShortcutFocusReason);
 }

@@ -18,6 +18,7 @@ public:
     AudioExportDialog(const Project &project, int activeShotIndex, int playbackFirst,
                       int playbackLast, bool rangeEnabled, QWidget *parent = nullptr);
     AudioExportSettings settings() const;
+    void setSingleShotOnly();
     QString destination() const;
     void setDestination(const QString &path);
 signals:
@@ -27,6 +28,7 @@ public slots:
 protected:
     void closeEvent(QCloseEvent *event) override;
 private:
+    bool m_singleShotOnly = false;
     struct RangeState { int mode = 0, first = 1, last = 1; };
     void saveRange();
     void restoreRange();

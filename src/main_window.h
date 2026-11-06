@@ -31,12 +31,20 @@ class ToolSession;
 class IconColumn;
 class QuickAccessToolbar;
 class TimelineController;
+class ProjectHome;
+class ProductionPanel;
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
-    explicit MainWindow(const QString &settingsPath = {}, QWidget *parent = nullptr);
+    explicit MainWindow(const QString &settingsPath = {}, QWidget *parent = nullptr, bool managed = false);
     ~MainWindow() override;
     bool openProject(const QString &path);
+    void setManagedDocument(const Project &, const std::function<bool()> &save, const std::function<void()> &recovery);
+    bool prepareManagedLeave();
+    bool managedDirty() const { return m_dirty; }
+    bool saveManaged() { return save(); }
+    void markManagedSaved();
+    void enforceManagedBoundary();
     Canvas *canvas() const { return m_canvas; }
     ToolCatalog *toolCatalog() const { return m_toolCatalog; }
     bool drawingMode() const { return m_drawingMode; }
@@ -48,6 +56,9 @@ public:
     bool saveWorkspaceAs(const QString &name, QString *error = nullptr);
     bool updateCurrentWorkspace(QString *error = nullptr);
 public slots:
+    void showProjectHome();
+    void showProductionWorkspace();
+    void showDrawingWorkspacePage();
     void setDrawingMode(bool enabled);
     void applyDrawingWorkspace(bool compact = false);
     void toggleDrawingControls();
@@ -56,12 +67,23 @@ protected:
     bool event(QEvent *) override;
     bool eventFilter(QObject *, QEvent *) override;
 private:
+    bool m_managed = false;
+    std::function<bool()> m_managedSave;
+    std::function<void()> m_managedRecovery;
     void newProject();
     void editProject();
     bool save(bool choosePath = false);
     bool confirmDiscard();
     bool resolveCelWorkflows();
-    void displayProject(const Project &project, const QString &path, bool dirty);
+    void displayProject(const Project &project, const QString &path, bool dirty, const QString &studioRoot = {});
+    void createProductionWorkspace();
+    bool prepareStudioTransition();
+    void hideEditorPanels();
+    void restoreEditorPanels();
+    void rememberCurrentProject();
+    bool saveStudioCopy();
+    bool createStudioFolder(const Project &, const QString &root, const QString &sourceRoot, QString *error);
+    void importArtworkFile(const QString &path);
     void updateTitle();
     void exportImage(bool sheet);
     void exportAnimation();
@@ -110,12 +132,17 @@ private:
     ToolCatalog *m_toolCatalog;
     ToolSession *m_toolSession;
     QWidget *m_welcome;
+    ProductionPanel *m_production = nullptr;
+    QString m_studioRoot;
+    bool m_browsingStudio = false, m_studioWriting = false;
+    QByteArray m_editorLayout;
+    QList<QPair<QPointer<QWidget>, bool>> m_editorVisibility;
     QLabel *m_status = nullptr;
     QLabel *m_statusIcon = nullptr;
     QWidget *m_statusFeedback = nullptr;
     QTimer *m_statusMessageTimer = nullptr;
     QTimer *m_statusHighlightTimer = nullptr;
-    QString m_viewStatus = "Ready · choose New movie project to begin";
+    QString m_viewStatus = "Ready · choose New project to begin";
     QString m_interactionHint;
     QString m_actionFeedback;
     bool m_feedbackIsBlockedAttempt = false;

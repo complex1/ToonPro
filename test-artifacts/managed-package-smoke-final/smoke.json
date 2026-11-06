@@ -1,0 +1,140 @@
+{
+    "applicationVersion": "0.76.0",
+    "architecture": "arm64",
+    "builtInBrushCount": 219,
+    "capabilities": {
+        "embeddedAudio": true,
+        "rasterDrawing": true,
+        "reference3DRendered": true,
+        "reference3DUnavailable": false,
+        "requiresPhysicalTabletAcceptance": true,
+        "shotSceneMovieReview": true,
+        "symbolLibrary": true,
+        "vectorDrawing": true
+    },
+    "checks": [
+        {
+            "detail": "",
+            "name": "managed-sqlite-storage",
+            "passed": true
+        },
+        {
+            "detail": "",
+            "name": "project-save",
+            "passed": true
+        },
+        {
+            "detail": "",
+            "name": "project-reopen-artwork-symbols-colors",
+            "passed": true
+        },
+        {
+            "detail": "",
+            "name": "workspace-open",
+            "passed": true
+        },
+        {
+            "detail": "",
+            "name": "workspace-screenshot",
+            "passed": true
+        },
+        {
+            "detail": "",
+            "name": "embedded-icons",
+            "passed": true
+        },
+        {
+            "detail": "",
+            "name": "default-brush-library",
+            "passed": true
+        },
+        {
+            "detail": "",
+            "name": "raster-stroke-commit",
+            "passed": true
+        },
+        {
+            "detail": "",
+            "name": "raster-stroke-undo",
+            "passed": true
+        },
+        {
+            "detail": "",
+            "name": "movie-review-controller",
+            "passed": true
+        },
+        {
+            "detail": "",
+            "name": "scene-review-order",
+            "passed": true
+        },
+        {
+            "detail": "",
+            "name": "movie-review-global-seek",
+            "passed": true
+        },
+        {
+            "detail": "",
+            "name": "movie-review-render",
+            "passed": true
+        },
+        {
+            "detail": "",
+            "name": "movie-symbol-thumbnail",
+            "passed": true
+        },
+        {
+            "detail": "",
+            "name": "movie-continuous-playback",
+            "passed": true
+        },
+        {
+            "detail": "",
+            "name": "movie-return-to-drawing",
+            "passed": true
+        },
+        {
+            "detail": "",
+            "name": "wav-export",
+            "passed": true
+        },
+        {
+            "detail": "",
+            "name": "h264-aac-export",
+            "passed": true
+        },
+        {
+            "detail": "",
+            "name": "h264-decode-pixels",
+            "passed": true
+        },
+        {
+            "detail": "",
+            "name": "aac-decode-samples",
+            "passed": true
+        },
+        {
+            "detail": "",
+            "name": "3d-reference-render",
+            "passed": true
+        }
+    ],
+    "decodedAudioFrames": 24512,
+    "decodedAudioRms": 3736.07648619905,
+    "devicePixelRatio": 1,
+    "elapsedMs": 5576,
+    "kernelVersion": "25.5.0",
+    "libraryPaths": [
+        "/Users/shubhammaurya/Desktop/workspace/toon-pro/.deps/Qt/6.10.3/macos/plugins",
+        "/Users/shubhammaurya/Desktop/workspace/toon-pro/build/ToonPro.app/Contents/MacOS"
+    ],
+    "osProduct": "macOS Tahoe (26.5.1)",
+    "platform": "offscreen",
+    "profileIsolation": "explicit output-directory profile",
+    "qtPrefix": "/Users/shubhammaurya/Desktop/workspace/toon-pro/.deps/Qt/6.10.3/macos",
+    "qtVersion": "6.10.3",
+    "renderer3D": "rendered",
+    "require3D": false,
+    "schemaVersion": 2,
+    "success": true
+}

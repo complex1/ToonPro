@@ -16,6 +16,10 @@
 #include "symbol_editor_dialog.h"
 #include "symbols.h"
 #include "project_save.h"
+#include "project_home.h"
+#include "production_panel.h"
+#include "project_assets_panel.h"
+#include "studio_project.h"
 #include <QEventLoop>
 #include "palette_library.h"
 #include "color_panel.h"
@@ -53,6 +57,7 @@
 #include "value_slider.h"
 #include "property_row.h"
 #include "icons.h"
+#include "motion_study_window.h"
 #include "ui_theme.h"
 #include "ui_metrics.h"
 #include <QShortcut>
@@ -170,7 +175,9 @@ private:
     QString m_name, m_value;
 };
 }
-MainWindow::MainWindow(const QString &settingsPath, QWidget *parent) : QMainWindow(parent) {
+MainWindow::MainWindow(const QString &settingsPath, QWidget *parent, bool managed) : QMainWindow(parent) {
+    m_managed=managed;
+    if(managed){setWindowFlags(Qt::Widget);menuBar()->setNativeMenuBar(false);}
     setObjectName("mainWindow");
     setWindowTitle("Toon Pro");
     resize(1320, 860);
@@ -233,54 +240,31 @@ MainWindow::MainWindow(const QString &settingsPath, QWidget *parent) : QMainWind
     connect(m_toolCatalog, &ToolCatalog::warning, this, [this](const QString &message) {
         statusBar()->showMessage(message, 10000);
     });
-    m_welcome = new QWidget;
-    auto *welcome = new QVBoxLayout(m_welcome);
-    welcome->setContentsMargins(80, 70, 80, 70);
-    welcome->addStretch();
-    auto *eyebrow = new QLabel("TOON PRO  /  DESKTOP PREVIEW");
-    eyebrow->setObjectName("sectionLabel");
-    welcome->addWidget(eyebrow);
-    auto *title = new QLabel("Every film begins\nwith a blank sheet.");
-    title->setStyleSheet(QString("font-size: 42px; font-weight: bold; color: %1;").arg(ui::text));
-    welcome->addWidget(title);
-    auto *subtitle = new QLabel("A workspace for your hand-drawn anime.\nCreate a movie, set up its first shot, and arrange your panels.");
-    subtitle->setObjectName("muted");
-    subtitle->setStyleSheet("font-size: 16px; line-height: 1.5;");
-    welcome->addWidget(subtitle);
-    welcome->addSpacing(20);
-    auto *row = new QHBoxLayout;
-    auto *create = new QPushButton("New movie project");
-    create->setObjectName("newProjectButton");
-    create->setDefault(true);
-    auto *open = new QPushButton("Open project…");
-    create->setIcon(appIcon("file-plus")); open->setIcon(appIcon("folder-open"));
-    create->setToolTip("New movie project (" + QKeySequence(QKeySequence::New).toString(QKeySequence::NativeText) + ")");
-    open->setToolTip("Open project (" + QKeySequence(QKeySequence::Open).toString(QKeySequence::NativeText) + ")");
-    row->addWidget(create); row->addWidget(open); row->addStretch();
-    welcome->addLayout(row);
-    welcome->addSpacing(35);
-    auto *scope = new QLabel("Drawing and frame animation · brushes, editable paths, posed 3D references and recoverable saves.\nOpen Timeline and Frame Properties from the Panels menu to animate your drawings.");
-    scope->setObjectName("muted");
-    scope->setWordWrap(true);
-    welcome->addWidget(scope);
-    welcome->addStretch();
+    auto *home = new ProjectHome(m_settings.get());
+    m_welcome = home;
     stack->addWidget(m_welcome);
     stack->addWidget(m_canvas);
     setCentralWidget(stack);
 
     auto *file = menuBar()->addMenu("&File");
-    auto *newAction = file->addAction("New movie project…", QKeySequence::New);
+    auto *newAction = file->addAction("New project…", QKeySequence::New);
     newAction->setObjectName("newProjectAction");
     auto *openAction = file->addAction("Open project…", QKeySequence::Open);
     newAction->setIcon(appIcon("file-plus")); openAction->setIcon(appIcon("folder-open"));
     auto openDialog = [this] {
-        const auto path = QFileDialog::getOpenFileName(this, "Open movie project", {}, "Toon Pro project (*.toonproj)");
+        const auto path = QFileDialog::getOpenFileName(this, "Open project", {}, "Toon Pro projects (*.toonproj *.toonstudio)");
         if (!path.isEmpty()) openProject(path);
     };
     connect(newAction, &QAction::triggered, this, &MainWindow::newProject);
-    connect(create, &QPushButton::clicked, this, &MainWindow::newProject);
+    connect(home, &ProjectHome::newProjectRequested, this, &MainWindow::newProject);
     connect(openAction, &QAction::triggered, this, openDialog);
-    connect(open, &QPushButton::clicked, this, openDialog);
+    connect(home, &ProjectHome::openFileRequested, this, openDialog);
+    connect(home, &ProjectHome::openFolderRequested, this, [this] {
+        const auto folder = QFileDialog::getExistingDirectory(this, "Open Toon Pro project folder");
+        if (!folder.isEmpty()) openProject(folder);
+    });
+    connect(home, &ProjectHome::projectRequested, this, [this](const QString &path) { openProject(path); });
+    connect(home, &ProjectHome::resumeRequested, this, &MainWindow::showDrawingWorkspacePage);
     file->addSeparator();
     auto *saveAction = file->addAction("Save project", QKeySequence::Save);
     saveAction->setObjectName("saveProjectAction");
@@ -321,28 +305,8 @@ MainWindow::MainWindow(const QString &settingsPath, QWidget *parent) : QMainWind
     m_projectActions.append(importAudio);
     connect(importAudio, &QAction::triggered, m_timeline, &TimelineController::importAudio);
     connect(importArtwork, &QAction::triggered, this, [this] {
-        if (!m_canvas->hasProject() || m_canvas->document()->editingGestureActive()) return;
-        m_timeline->setPlaying(false);
-        m_canvas->document()->commitLayerPropertyEdit();
         const auto path = QFileDialog::getOpenFileName(this, "Import artwork image", {}, "Images (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff)");
-        if (path.isEmpty()) return;
-        QImageReader reader(path); reader.setAutoTransform(true);
-        const auto size = reader.size();
-        if (!size.isValid() || qint64(size.width()) * size.height() > 64000000) {
-            statusBar()->showMessage("Choose an image of up to 64 million pixels.", 6000); return;
-        }
-        auto image = reader.read();
-        if (image.isNull()) { statusBar()->showMessage("Could not read image: " + reader.errorString(), 6000); return; }
-        const auto &project = m_canvas->project();
-        const bool fitted = image.width() > project.width || image.height() > project.height;
-        if (fitted) image = image.scaled(project.width, project.height, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-        const QPointF origin((project.width - image.width()) / 2.0, (project.height - image.height()) / 2.0);
-        if (ClipboardTools::importImage(m_canvas->document(), image, QFileInfo(path).completeBaseName(), origin)) {
-            m_canvas->document()->clearRasterSelection();
-            m_canvas->setTool(Canvas::Tool::Transform);
-            m_canvas->setFocus(Qt::OtherFocusReason);
-            if (fitted) statusBar()->showMessage("Image fitted to the canvas. Drag the transform handles to position it.", 5000);
-        }
+        if (!path.isEmpty()) importArtworkFile(path);
     });
     for (auto *action : m_projectActions) action->setEnabled(false);
     file->addSeparator();
@@ -571,6 +535,21 @@ MainWindow::MainWindow(const QString &settingsPath, QWidget *parent) : QMainWind
     toolbar->setMovable(false);
     toolbar->setIconSize(QSize(20, 20));
     toolbar->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    auto *homeAction = file->addAction(appIcon("grid-2x2"), "Project Home");
+    homeAction->setObjectName("projectHomeAction");
+    connect(homeAction, &QAction::triggered, this, &MainWindow::showProjectHome);
+    auto *productionAction = file->addAction(appIcon("folder-open"), "Project workspace");
+    productionAction->setObjectName("productionWorkspaceAction");
+    connect(productionAction, &QAction::triggered, this, &MainWindow::showProductionWorkspace);
+    auto *drawingAction = file->addAction(appIcon("brush"), "Drawing workspace");
+    drawingAction->setObjectName("studioDrawingAction");
+    connect(drawingAction, &QAction::triggered, this, &MainWindow::showDrawingWorkspacePage);
+    auto *packageAction = file->addAction(appIcon("folder-plus"), "Save project folder as…");
+    packageAction->setObjectName("saveStudioFolderAction");
+    connect(packageAction, &QAction::triggered, this, [this] { saveStudioCopy(); });
+    for (auto *action : {productionAction,drawingAction,packageAction}) { action->setEnabled(false); m_projectActions.append(action); }
+    toolbar->addAction(homeAction); toolbar->addAction(productionAction); toolbar->addAction(drawingAction);
+    toolbar->addSeparator();
     toolbar->addAction(newAction);
     toolbar->addAction(openAction);
     toolbar->addAction(saveAction);
@@ -599,6 +578,7 @@ MainWindow::MainWindow(const QString &settingsPath, QWidget *parent) : QMainWind
     // are hidden for drawing mode. These are the same actions, not duplicates.
     addActions({newAction, openAction, saveAction, saveAsAction, undo, redo, fit, actualSize, quit});
     createPanels();
+    createProductionWorkspace();
     const auto updateToolTitle = [this] {
         auto *properties = findChild<QDockWidget *>("propertiesPanel");
         const auto *tool = m_toolCatalog->tool(m_toolCatalog->activeToolId());
@@ -625,7 +605,7 @@ MainWindow::MainWindow(const QString &settingsPath, QWidget *parent) : QMainWind
         connect(shortcut, &QShortcut::activated, this, [this, entry] { m_toolSession->activateEngine(entry.tool); });
     }
     connect(m_canvas, &Canvas::toolChanged, this, [this] {
-        if (!m_drawingMode && !m_compactDrawingWorkspace &&
+        if (!m_drawingMode && !m_browsingStudio && !m_compactDrawingWorkspace &&
             m_canvas->hasProject() && m_canvas->toolAvailable()) {
             auto *properties = findChild<QDockWidget *>("propertiesPanel"); properties->show(); properties->raise();
         }
@@ -755,6 +735,7 @@ MainWindow::MainWindow(const QString &settingsPath, QWidget *parent) : QMainWind
     // Tab toggles drawing mode from the canvas. In panels it remains ordinary
     // keyboard focus navigation, including sliders, tabs and icon actions.
     qApp->installEventFilter(this);
+    hideEditorPanels();
 }
 MainWindow::~MainWindow() {
     qApp->removeEventFilter(this);
@@ -838,6 +819,9 @@ bool MainWindow::event(QEvent *event) {
 }
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
+    if(m_managed && event->type()==QEvent::Show && watched==findChild<QDockWidget *>("shotsPanel")) {
+        if(auto *widget=qobject_cast<QWidget *>(watched))widget->hide();return true;
+    }
     if (watched == m_canvas && (event->type() == QEvent::Resize || event->type() == QEvent::Move || event->type() == QEvent::Show)) {
         refreshDrawingDrawerGeometry();
     }
@@ -899,11 +883,12 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
 
 void MainWindow::setDrawingMode(bool enabled) {
     if (!m_quickAccess || m_changingDrawingMode) return;
+    if (enabled && m_browsingStudio) { showDrawingWorkspacePage(); if(m_browsingStudio)return; }
     if (enabled == m_drawingMode || !m_canvas->hasProject() ||
         m_canvas->document()->editingGestureActive() || m_canvas->document()->layerPropertyEditActive() ||
         m_canvas->selectionGestureActive() || m_canvas->holdShapePending() ||
         m_canvas->drawingTools()->active() || m_canvas->scene3D()->editing() || pendingValueEntry(this) ||
-        QApplication::mouseButtons() != Qt::NoButton || QApplication::activeModalWidget() || QApplication::activePopupWidget()) {
+        (!m_managed && QApplication::mouseButtons() != Qt::NoButton) || QApplication::activeModalWidget() || QApplication::activePopupWidget()) {
         m_quickAccess->setDrawingMode(m_drawingMode);
         return;
     }
@@ -926,16 +911,16 @@ void MainWindow::setDrawingMode(bool enabled) {
         m_timeline->movieReview()->setMode(ReviewMode::Shot);
         for (const auto &entry : m_normalVisibility) if (entry.first) entry.first->hide();
         m_quickAccess->show();
-        showFullScreen();
+        if(!m_managed)showFullScreen();
     } else {
         m_drawingMode = false;
-        if (!(m_normalWindowState & Qt::WindowFullScreen)) {
+        if (!m_managed && !(m_normalWindowState & Qt::WindowFullScreen)) {
             setWindowState(m_normalWindowState);
             restoreGeometry(m_normalGeometry);
         }
         restoreState(m_normalLayout, 3);
         for (const auto &entry : m_normalVisibility) if (entry.first) entry.first->setVisible(entry.second);
-        setWindowState(m_normalWindowState);
+        if(!m_managed)setWindowState(m_normalWindowState);
         m_normalVisibility.clear();
     }
     m_quickAccess->setDrawingMode(m_drawingMode);
@@ -993,6 +978,13 @@ void MainWindow::refreshDockTabs() {
         if (tabs->usesScrollButtons() == dailyGroup) tabs->setUsesScrollButtons(!dailyGroup);
         const auto elide = dailyGroup ? Qt::ElideRight : Qt::ElideNone;
         if (tabs->elideMode() != elide) tabs->setElideMode(elide);
+        // Assign help and compact styling even to retained, currently hidden bars.
+        // Qt may reuse them after navigation or dock customization.
+        if (m_browsingStudio || (m_managed && (tabs->count() < 2 ||
+            (menuBar()->isVisible() && tabs->geometry().intersects(menuBar()->geometry()))))) {
+            // Deferred orphan strips must not cover Home or an embedded editor menu.
+            tabs->hide();
+        }
     }
 }
 
@@ -1423,7 +1415,7 @@ bool MainWindow::canChangeDrawingWorkspace() {
     if (m_canvas->document()->editingGestureActive() || m_canvas->document()->layerPropertyEditActive() || m_timeline->hasPendingEdits() || pendingValueEntry(this) ||
         m_canvas->selectionGestureActive() || m_canvas->holdShapePending() ||
         m_canvas->document()->stampPlacementActive() || m_canvas->drawingTools()->active() ||
-        m_canvas->scene3D()->editing() || QApplication::mouseButtons() != Qt::NoButton ||
+        m_canvas->scene3D()->editing() || (!m_managed && QApplication::mouseButtons() != Qt::NoButton) ||
         QApplication::activeModalWidget() || QApplication::activePopupWidget()) {
         showActionFeedback("Finish or cancel the current edit before changing the drawing layout.", true);
         refreshDrawingWorkspaceControls();
@@ -1566,6 +1558,7 @@ void MainWindow::refreshDrawingDrawerGeometry() {
 }
 
 void MainWindow::refreshDrawingDrawerVisibility() {
+    if(m_browsingStudio){if(m_drawingDrawer)m_drawingDrawer->hide();return;}
     if (!m_drawingDrawer) return;
     const bool visible = m_compactDrawingWorkspace && m_drawingDrawerAttached && m_drawingDrawerOpen &&
         !m_drawingMode && m_canvas->hasProject();
@@ -1699,25 +1692,28 @@ void MainWindow::recoverFloatingPanels() {
 }
 
 void MainWindow::newProject() {
-    std::optional<Project> project;QString path,workspaceId,layerId;bool returnFocus=false;
+    if(m_managed)return;
+    std::optional<Project> project;QString path,workspaceId,layerId;bool returnFocus=false,folder=false;
     {
         ProjectDialog dialog(Project::create(),true,this);
         if(dialog.exec()==QDialog::Accepted){
-            project=dialog.resultProject();path=dialog.filePath();
+            project=dialog.resultProject();path=dialog.filePath();folder=dialog.projectFolderRequested();
             workspaceId=dialog.requestedWorkspaceId();layerId=dialog.requestedLayerId();
         }
         returnFocus=dialog.closedWithFocus();
     }
     if(project&&confirmDiscard()){
-        const bool replace=!QFileInfo::exists(path)||QMessageBox::question(this,"Replace project?",
+        const bool replace=folder||!QFileInfo::exists(path)||QMessageBox::question(this,"Replace project?",
             "This file already exists. Replace it with the new project?",QMessageBox::Yes|QMessageBox::No,
             QMessageBox::No)==QMessageBox::Yes;
         if(replace){
             QString error;
-            if(saveProject(*project,path,&error)){
-                displayProject(*project,path,false);
+            const bool saved=folder?createStudioFolder(*project,path,{},&error):saveProject(*project,path,&error);
+            if(saved){
+                displayProject(*project,folder?QDir(path).filePath("project.toonproj"):path,false,folder?path:QString());
                 if(!workspaceId.isEmpty())applyWorkspace(workspaceId);
                 for(int i=0;i<m_canvas->shot().layers.size();++i)if(m_canvas->shot().layers[i].id==layerId){m_canvas->document()->selectLayer(i);break;}
+                if(folder&&project->kind!=ProjectKind::DrawingOnly)showProductionWorkspace();
             }else QMessageBox::warning(this,"Could not create project",error);
         }
     }
@@ -1728,14 +1724,26 @@ void MainWindow::newProject() {
         if(!QApplication::activeWindow()&&QGuiApplication::applicationState()==Qt::ApplicationActive)
             QApplication::setActiveWindow(this);
         if(isActiveWindow()){
-            if(m_canvas->hasProject())m_canvas->setFocus(Qt::OtherFocusReason);
-            else if(auto *create=m_welcome->findChild<QPushButton *>("newProjectButton"))create->setFocus(Qt::OtherFocusReason);
+            if(m_canvas->hasProject()&&!m_browsingStudio)m_canvas->setFocus(Qt::OtherFocusReason);
+            else if(qobject_cast<QStackedWidget *>(centralWidget())->currentWidget()==m_production) {
+                if(auto *open=m_production->findChild<QPushButton *>("productionOpenDrawing"))open->setFocus(Qt::OtherFocusReason);
+            } else if(auto *create=m_welcome->findChild<QPushButton *>("newProjectButton"))create->setFocus(Qt::OtherFocusReason);
         }
     }
 }
-bool MainWindow::openProject(const QString &path) {
+bool MainWindow::openProject(const QString &requestedPath) {
+    if(m_managed)return false;
     if (!confirmDiscard()) return false;
-    QString error;
+    QString error, root, path = requestedPath;
+    if (QFileInfo(path).isDir() || path.endsWith(".toonstudio",Qt::CaseInsensitive)) {
+        const auto studio=StudioProject::open(path,&error);
+        if(!studio){QMessageBox::warning(this,"Could not open project folder",error);return false;}
+        root=studio->rootPath();path=studio->artworkPath();
+    } else if(QFileInfo(path).fileName()=="project.toonproj" && QFileInfo::exists(QFileInfo(path).absoluteDir().filePath("project.toonstudio"))) {
+        const auto studio=StudioProject::open(QFileInfo(path).absolutePath(),&error);
+        if(!studio){QMessageBox::warning(this,"Could not open project folder",error);return false;}
+        root=studio->rootPath();path=studio->artworkPath();
+    }
     auto project = loadProject(path, &error);
     if (!project) { QMessageBox::warning(this, "Could not open project", error); return false; }
     bool recovered = false;
@@ -1750,10 +1758,14 @@ bool MainWindow::openProject(const QString &path) {
             if (answer == QMessageBox::Yes) { project = recovery; recovered = true; }
         } else QMessageBox::warning(this, "Recovery unavailable", "The recovery snapshot could not be read. The saved project will open.\n" + error);
     }
-    displayProject(*project, path, recovered);
+    displayProject(*project, path, recovered, root);
+    if(project->kind==ProjectKind::DrawingOnly)applyWorkspace("illustration");
+    else if(!root.isEmpty())showProductionWorkspace();
     return true;
 }
-void MainWindow::displayProject(const Project &project, const QString &path, bool dirty) {
+void MainWindow::displayProject(const Project &project, const QString &path, bool dirty, const QString &studioRoot) {
+    restoreEditorPanels();
+    m_studioRoot=studioRoot;
     m_recoverySave->cancel();
     ++m_projectGeneration; ++m_documentRevision;
     m_timeline->setPlaying(false);
@@ -1771,6 +1783,8 @@ void MainWindow::displayProject(const Project &project, const QString &path, boo
     if (dirty) m_canvas->document()->history()->resetClean();
     refreshDrawingDrawerVisibility();
     refreshStatusFeedback();
+    m_production->setProjectRoot(m_studioRoot);
+    rememberCurrentProject();
     updateTitle();
 }
 void MainWindow::editProject() {
@@ -1781,6 +1795,7 @@ void MainWindow::editProject() {
     std::optional<Project> changed;bool returnFocus=false;
     {
         ProjectDialog dialog(m_canvas->project(),false,this,m_canvas->document()->activeShotIndex());
+        if(m_managed)dialog.setFocusedDocumentControls();
         if(dialog.exec()==QDialog::Accepted)changed=dialog.resultProject();
         returnFocus=dialog.closedWithFocus();
     }
@@ -1788,10 +1803,17 @@ void MainWindow::editProject() {
     if(returnFocus&&isVisible()&&!QApplication::activeModalWidget()&&!QApplication::activePopupWidget()){
         if(!QApplication::activeWindow()&&QGuiApplication::applicationState()==Qt::ApplicationActive)
             QApplication::setActiveWindow(this);
-        if(isActiveWindow())m_canvas->setFocus(Qt::OtherFocusReason);
+        if(isActiveWindow()){
+            if(!m_browsingStudio)m_canvas->setFocus(Qt::OtherFocusReason);
+            else if(qobject_cast<QStackedWidget *>(centralWidget())->currentWidget()==m_production){
+                if(auto *open=m_production->findChild<QPushButton *>("productionOpenDrawing"))open->setFocus(Qt::OtherFocusReason);
+            }else if(auto *create=m_welcome->findChild<QPushButton *>("newProjectButton"))create->setFocus(Qt::OtherFocusReason);
+        }
     }
 }
 bool MainWindow::resolveCelWorkflows() {
+    if(m_studioWriting)return false;
+    if(m_production && (!m_production->finishEditing() || !m_production->assetsPanel()->finishEditing()))return false;
     const auto *shading = findChild<CelShadingPanel *>();
     const auto *check = findChild<CelPaintCheckPanel *>();
     if (((shading && shading->pending()) || (check && check->pending())) && m_canvas->document()->strokeActive()) {
@@ -1819,6 +1841,7 @@ bool MainWindow::resolveCelWorkflows() {
     return true;
 }
 bool MainWindow::save(bool choosePath) {
+    if(choosePath&&!m_studioRoot.isEmpty())return saveStudioCopy();
     if (!resolveCelWorkflows()) return false;
     if (!m_canvas->hasProject()) return false;
     m_timeline->setPlaying(false); m_timeline->finishEditing();
@@ -1830,6 +1853,7 @@ bool MainWindow::save(bool choosePath) {
     m_canvas->drawingTools()->finishGesture();
     m_canvas->finishStroke();
     for (auto *references : findChildren<ReferencePanel *>()) if (!references->finishEditing()) return false;
+    if(m_managed) return !choosePath && m_managedSave && m_managedSave();
     QString path = m_path;
     if (choosePath || path.isEmpty()) {
         path = QFileDialog::getSaveFileName(this, "Save movie project", m_path, "Toon Pro project (*.toonproj)");
@@ -1863,7 +1887,7 @@ bool MainWindow::save(bool choosePath) {
             m_canvas->document()->markDrawingAidsSaved();
         }
         else m_canvas->document()->history()->resetClean();
-        m_dirty = !exact; updateTitle();
+        m_dirty = !exact; updateTitle(); rememberCurrentProject();
     }
     statusBar()->showMessage(exact ? "Project saved" : "Snapshot saved; newer edits remain unsaved", 5000);
     return exact;
@@ -1885,8 +1909,8 @@ bool MainWindow::confirmDiscard() {
     return save();
 }
 void MainWindow::updateTitle() {
-    setWindowModified(m_dirty);
-    setWindowTitle(m_canvas->hasProject() ? QString("%1 — %2[*] — Toon Pro").arg(m_canvas->project().movie, m_canvas->shot().number) : "Toon Pro");
+    setWindowModified(m_dirty && !m_managed);
+    setWindowTitle(m_managed && m_canvas->hasProject() ? m_canvas->project().movie + (m_dirty?" *":"") : m_canvas->hasProject() ? QString("%1 — %2[*] — Toon Pro").arg(m_canvas->project().movie, m_canvas->shot().number) : "Toon Pro");
 }
 void MainWindow::exportImage(bool sheet) {
     if (!resolveCelWorkflows()) return;
@@ -1943,6 +1967,7 @@ void MainWindow::exportAudio() {
     if (!m_canvas->hasProject() || !m_timeline->prepareTimelineEdit()) return;
     AudioExportDialog dialog(m_canvas->project(), m_canvas->document()->activeShotIndex(),
         m_timeline->playbackFirstFrame(), m_timeline->playbackLastFrame(), m_timeline->playbackRangeEnabled(), this);
+    if(m_managed)dialog.setSingleShotOnly();
     connect(&dialog, &AudioExportDialog::exported, this, [this](const QString &path) {
         statusBar()->showMessage("Audio exported to " + path, 10000);
     });
@@ -1960,13 +1985,15 @@ void MainWindow::exportShots(const QStringList &shotIds) {
     if (!m_canvas->resolvePendingTransform()) return;
     VideoExportDialog dialog(m_canvas->project(), m_canvas->document()->activeShotIndex(), m_timeline->playbackFirstFrame(),
         m_timeline->playbackLastFrame(), m_timeline->playbackRangeEnabled(), this);
-    if (!shotIds.isEmpty()) dialog.setQueuedShotIds(shotIds);
+    if(m_managed)dialog.setSingleShotOnly();
+    if (!m_managed && !shotIds.isEmpty()) dialog.setQueuedShotIds(shotIds);
     connect(&dialog, &VideoExportDialog::exported, this, [this](const QString &path) {
         statusBar()->showMessage("Video exported to " + path, 10000);
     });
     dialog.exec();
 }
 void MainWindow::writeRecovery() {
+    if(m_managed){if(m_managedRecovery)m_managedRecovery();return;}
     const auto *document = m_canvas->document();
     // Pixel and advanced transforms keep previews outside the committed project.
     // Brush/retouch strokes and editable-object drags mutate the live project
@@ -1983,11 +2010,40 @@ void MainWindow::writeRecovery() {
     }
     m_recoverySave->start(snapshot, m_path + ".recovery");
 }
+void MainWindow::setManagedDocument(const Project &project,const std::function<bool()> &saveCallback,const std::function<void()> &recovery) {
+    m_managed=true;m_managedSave=saveCallback;m_managedRecovery=recovery;
+    m_timeline->setProperty("focusedEditor",true);
+    displayProject(project,{},false);m_canvas->document()->setSingleShotEditing(true);
+    applyWorkspace(project.shots[0].animationTracks.isEmpty()?"illustration":"anime");
+    for(int i=project.shots[0].layers.size()-1;i>=0;--i)if(!project.shots[0].layers[i].group&&!project.shots[0].layers[i].locked){m_canvas->document()->selectLayer(i);break;}
+    enforceManagedBoundary();m_canvas->fitSheet();
+}
+bool MainWindow::prepareManagedLeave(){
+    if(m_canvas->document()->strokeActive())return false;
+    if(!resolveCelWorkflows()||!m_timeline->prepareTimelineEdit())return false;
+    return canChangeDrawingWorkspace();
+}
+void MainWindow::markManagedSaved(){m_canvas->document()->history()->setClean();m_canvas->document()->markDrawingAidsSaved();m_dirty=false;updateTitle();}
+void MainWindow::enforceManagedBoundary(){
+    if(!m_managed)return;
+    for(const auto *id:{"newProjectAction","projectHomeAction","productionWorkspaceAction","studioDrawingAction","saveStudioFolderAction","saveProjectAsAction","storyboardWorkspacePresetAction","animaticWorkspacePresetAction"})
+        if(auto *a=findChild<QAction *>(id)){a->setEnabled(false);a->setVisible(false);}
+    // Open/Quit are unnamed legacy actions: their callbacks cannot change this
+    // embedded document. The shell owns opening and closing document tabs.
+    for(auto *a:findChildren<QAction *>())if(a->shortcut()==QKeySequence(QKeySequence::Open)||a->shortcut()==QKeySequence(QKeySequence::Quit)){a->setEnabled(false);a->setVisible(false);}
+    if(auto *dock=findChild<QDockWidget *>("shotsPanel")){dock->hide();dock->setEnabled(false);dock->toggleViewAction()->setEnabled(false);dock->toggleViewAction()->setVisible(false);}
+    if(auto *a=findChild<QAction *>("frameExportAction")){a->setText("Export current frame PNG…");a->setToolTip(a->text());}
+    if(auto *a=findChild<QAction *>("projectSettingsAction")){a->setText("Drawing && timing settings…");a->setToolTip("Drawing and timing settings");}
+    if(auto *a=findChild<QAction *>("saveProjectAction")){a->setText("Save document");a->setToolTip("Save document ("+QKeySequence(QKeySequence::Save).toString(QKeySequence::NativeText)+")");}
+    refreshDockTabs();
+}
 void MainWindow::closeEvent(QCloseEvent *event) {
+    if(m_managed){if(!prepareManagedLeave()||!confirmDiscard())event->ignore();else event->accept();return;}
+    for(auto *study:findChildren<MotionStudyWindow *>())if(study->isVisible()&&!study->close()){event->ignore();return;}
     if (!confirmDiscard()) { event->ignore(); return; }
     m_settings->setValue("geometry", m_drawingMode ? m_normalGeometry : saveGeometry());
     m_toolSession->flush();
-    m_settings->setValue("layoutV3", m_drawingMode ? m_normalLayout : saveState(3));
+    m_settings->setValue("layoutV3", m_drawingMode ? m_normalLayout : m_browsingStudio ? m_editorLayout : saveState(3));
     m_settings->setValue("workspace/compactDrawing", m_compactDrawingWorkspace);
     m_settings->setValue("workspace/drawingDrawerOpen", m_drawingDrawerOpen);
     m_settings->setValue("workspace/drawingDrawerPage", m_drawingDrawerTabs->currentIndex());

@@ -30,14 +30,16 @@ const QVector<ProjectStarterTemplate> &projectStarterTemplates() {
         {"animatic","Animatic","A clean frame and a timed board track, ready for audio","play","animatic"}
     };return templates;
 }
-std::optional<Project> projectFromStarterTemplate(const QString &id) {
+std::optional<Project> projectFromStarterTemplate(const QString &id, ProjectKind kind) {
     bool known=false;for(const auto &item:projectStarterTemplates())if(item.id==id){known=true;break;}
     if(!known)return {};
-    auto project=Project::create();auto &shot=project.shots[0];shot.layers.clear();
+    if (kind == ProjectKind::DrawingOnly && id != "blank" && id != "illustration") return {};
+    auto project=Project::create(kind);auto &shot=project.shots[0];shot.layers.clear();
     if(id=="blank"){
         plainSheet(shot);shot.durationFrames=1;shot.layers.append(RasterLayer::create("Drawing"));
     }else if(id=="illustration"){
-        project.width=project.height=2048;plainSheet(shot);shot.durationFrames=1;
+        if (kind != ProjectKind::DrawingOnly) project.width=project.height=2048;
+        plainSheet(shot);shot.durationFrames=1;
         for(const auto &name:{"Colors","Sketch","Ink"})shot.layers.append(RasterLayer::create(name));
     }else if(id=="anime"){
         shot.durationFrames=120;shot.layers.append(RasterLayer::create("Background"));addDrawingTrack(shot,"Character",DrawingTemplate::Anime,2);

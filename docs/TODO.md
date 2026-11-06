@@ -1,8 +1,68 @@
 # Toon Pro development checklist
 
-Updated 4 November 2026. Current implementation: **0.75.0** Scene/Movie playback, shot thumbnails and a global playhead with continuous shot audio. The app builds and all **130 regression suites pass**. Nine native Mac suites and nine Retina suites each pass **140 checks**, with no failures/skips. Results are recorded in [the development log](DEVELOPMENT.md). Earlier release results below are historical.
+Updated 6 November 2026. Current source implementation: **0.76.0**, with the managed Drawing / Animation / Movie project flow and independent editor tabs described below. The earlier Film / Series foundation is retained as implementation history. Current build and verification evidence is recorded in [the development log](DEVELOPMENT.md); earlier release counts below are historical. Public downloads remain **0.75.0**. GitHub Actions is disabled; build and release work stays local/manual.
+
+## Product communication — local website update
+
+- [x] Explain the drawing-first purpose, independent single-shot editor and separate project organization in the README, vision and getting-started documentation.
+- [x] Add interactive project exploration, an illustrative timing demo, sourced comparisons and version-appropriate artist learning paths.
+- [x] Verify all 24 site routes at desktop/mobile widths and retain screenshot provenance and browser evidence; see the development log.
+- [ ] Publish the reviewed website through the authorized manual process, then verify the live pages. Local output does not change public downloads or the deployed website.
+
+## Managed project implementation — current local development
+
+The [implemented workflow and limitations](managed-workspace.md) supersede the earlier UI-only plan. The artist explicitly omitted legacy migration. Multiple retained editor tabs are now part of the requested flow. Backup/recovery remain data-safety foundations for newly created work.
+
+- [x] New-format project folders, SQLite catalog, independent one-document payloads, guarded saves and per-document dimensions/timing.
+- [x] Projects startup, Drawing/Animation/Movie dashboards, drawing setup and Editor/Back navigation.
+- [x] Multiple native documents in tabs with independent undo/view/dirty state and Save/Discard/Cancel on close.
+- [x] Simple single-shot animation creation and focused current-shot export scope.
+- [x] Nested folder creation, tags, item metadata edits, identity-preserving Move to Assets and organization undo.
+- [x] Batch external image/video/audio import, searchable/type-filtered library, asynchronous image previews and explicit audio/video preview.
+- [x] Background recovery, bounded retained snapshots, reversible item removal, writer lease and manual saved-project backup.
+- [x] Match the agreed dashboard hierarchy with real thumbnails, project-type cards, canvas preview/ratio/swap, tag chips, asset inspector and focused import/move dialogs.
+- [ ] Add mixed-state batch tag editing, per-file import tags and drag/drop import.
+- [ ] Add folder rename/reparent, organization redo, explicit native-copy commands and supported asset-to-document placement UX.
+- [ ] Verify fresh relocated distribution packages with Qt SQL/SQLite and MultimediaWidgets on supported macOS/Windows targets; package smoke now exercises managed storage.
+- [ ] Validate physical Huion input, larger real projects and inactive-tab memory budgets.
+- [ ] Add emergency save/recovery for an unavailable project disk and broader filesystem/power-loss fault injection.
+
+Legacy conversion/import of existing version-1 project collections is **out of scope**, per artist instruction. Later capability roadmap: deeper shot finishing, story/board handoffs, reviewed production revisions and validated delivery. The focused editor always represents one drawing or one animated shot.
+
+## Production-project foundation — 0.76
+
+- [x] Add Film, Series and Drawing-only project types with conditional format 38 and legacy Film defaults.
+- [x] Let Drawing only start plain, one-frame artwork with Blank/Illustration layers and an illustration-oriented workspace; hide timing setup.
+- [x] Add Project Home with Recent/Pinned/Archived, open-file/open-folder actions and a return to the active drawing. Archive/removal affects Home entries only.
+- [x] Add portable project folders containing the existing artwork container, an atomic media catalog and copied originals; preserve standalone .toonproj projects and source-safe Save As.
+- [x] Add project Assets with type/folder/search filters, tags, image/audio/video previews, explicit shot attachments, image/audio copy placement and Removed/Restore.
+- [x] Reuse Shots/Artworks organization and add episode labels for Series, stage filtering and undoable production notes.
+- [x] Keep Home/Project/Drawing navigation within one window and restore drawing-panel arrangements after production browsing.
+- [x] Document current scope and limits in [production projects](production-projects.md); retain the 300 MiB artwork-container limit.
+- [x] Build 0.76 locally; pass 17 affected regression suites, five Retina suites, and seven native Mac focus checks. The final Project-settings focus fix also passes the complete creation-workspace suite at 1× and 2×. See [verification details](DEVELOPMENT.md#0760--production-project-foundation-5-november-2026).
+- [ ] Validate the full project-to-drawing workflow with the artist's physical Huion and production files.
+
+Earlier production-extension candidates remain separate and are now prioritized by the focused-editor plan above:
+
+- [ ] Dedicated storyboard panels/pages and storyboard-to-animatic promotion.
+- [ ] Script/checklist tools and a nested production hierarchy beyond episode/scene labels.
+- [ ] Global media reuse, asset versions, missing-media relinking and automatic dependency tracking.
+- [ ] Approved shot revision pinning; evaluate any separate sequence editor only after the focused-editor milestones, outside drawing/animation authoring.
+- [ ] Lazy shot loading and production-scale artwork storage beyond the existing container budget.
+
+## Motion Study — local 0.76 follow-up
+
+- [x] Independent windows, video timestamp/FPS reading, background decoding, Ones/Twos/Threes and individual frame restoration.
+- [x] Source/Study preview, scrubbing, looping playback and portable saved studies retaining skipped frames.
+- [x] Editable timeline cels and locked reference tracks beneath artwork, with FPS conversion and one-step Undo.
+- [x] Conditional format 39 for reference animation tracks; movie-render exclusion and save/reopen checks.
+- [x] Eleven final Qt checks pass offscreen, native Mac and Retina; affected workspace/storage suites pass. See the development log.
+- [ ] Bundle/verify video decoder tools for distribution; current import uses local FFmpeg/ffprobe.
+- [ ] Full-resolution/range-based import, thumbnails, audio, editable-study Undo and live linked references. Current studies use 640-pixel images and at most 1,800 source frames.
 
 ## Website and illustrated documentation
+
+The following records the published website work. Actions is now disabled and the public site remains at its last deployment; local 0.76 documentation changes are not a website redeployment.
 
 - [x] Build the responsive product website with original anime artwork, real app captures and 16 detailed guides.
 - [x] Verify all 21 routes, search, image previews, keyboard focus and mobile navigation (49 browser checks).
@@ -23,7 +83,7 @@ Current distribution scope: **Windows and macOS**. Linux release work is deferre
 - [x] Pass all 246 Windows suites and seven focused diagnostics, including save, export and brush regressions.
 - [x] Pass all 247 native Intel Mac suites, including AAC export. Verify a copied Intel DMG under Rosetta.
 - [ ] Complete the native Intel Mac package check.
-- [ ] Complete the active Windows/macOS candidates and record final results in [release verification](release-0.75.0.md).
+- [ ] Resume remaining Windows/macOS candidate work locally/manual when requested and record final results in [release verification](release-0.75.0.md).
 - [ ] Test physical Huion input and real production projects on each supported operating system.
 - [ ] Validate clean-machine installation on supported OS baselines, including an actual Intel Mac and Windows compiler-runtime installation.
 - [ ] Complete dependency-source coverage/replacement review and choose application distribution terms.

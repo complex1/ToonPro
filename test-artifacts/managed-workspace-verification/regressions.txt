@@ -1,0 +1,39 @@
+Test project /Users/shubhammaurya/Desktop/workspace/toon-pro/build
+      Start 133: workspace_presets
+      Start   1: managed_project
+      Start   5: production_workspace
+ 1/17 Test   #5: production_workspace .............   Passed    7.01 sec
+      Start 134: project_creation_workspace
+ 2/17 Test   #1: managed_project ..................   Passed    7.60 sec
+      Start   6: studio_navigation_extra
+ 3/17 Test   #6: studio_navigation_extra ..........   Passed    2.08 sec
+      Start 136: movie_review_controller
+ 4/17 Test #136: movie_review_controller ..........   Passed    0.62 sec
+      Start 137: movie_review_panel
+ 5/17 Test #137: movie_review_panel ...............   Passed    0.36 sec
+      Start 131: workspace_library
+ 6/17 Test #131: workspace_library ................   Passed    0.40 sec
+      Start  47: project_save
+ 7/17 Test  #47: project_save .....................   Passed    5.31 sec
+      Start   2: project_kind
+ 8/17 Test   #2: project_kind .....................   Passed    0.25 sec
+      Start 116: audio_export_dialog
+ 9/17 Test #116: audio_export_dialog ..............   Passed    0.60 sec
+      Start 103: video_export_dialog
+10/17 Test #103: video_export_dialog ..............   Passed    0.75 sec
+      Start   3: studio_project
+11/17 Test   #3: studio_project ...................   Passed    0.11 sec
+      Start 195: drawing
+12/17 Test #134: project_creation_workspace .......   Passed   11.20 sec
+      Start 151: animation_storage
+13/17 Test #133: workspace_presets ................   Passed   18.24 sec
+      Start 150: animation_document
+14/17 Test #151: animation_storage ................   Passed    0.06 sec
+      Start 149: animation
+15/17 Test #150: animation_document ...............   Passed    0.05 sec
+16/17 Test #149: animation ........................   Passed    0.04 sec
+17/17 Test #195: drawing ..........................   Passed    3.45 sec
+
+100% tests passed, 0 tests failed out of 17
+
+Total Test time (real) =  21.54 sec

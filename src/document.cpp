@@ -343,6 +343,7 @@ bool Document::commit(const Project &before, const Project &afterInput, const QS
     return true;
 }
 void Document::replaceProject(const Project &project, const QString &label, const QJsonObject &action) {
+    if (m_singleShotEditing && (project.shots.size()!=1 || project.shots[0].id!=m_activeShotId)) { emit warning("The editor can edit only its own single document."); return; }
     if (!m_open || editingGestureActive() || layerPropertyEditActive()) return;
     const auto error = project.validate();
     if (!error.isEmpty()) { emit warning(error); return; }
