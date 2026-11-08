@@ -1,0 +1,210 @@
+{
+  "application": "Toon Pro",
+  "version": "0.76.0",
+  "platform": "Qt offscreen, scale factor 1",
+  "method": "Fresh captures of real application widgets. Temporary fixture documents; no mockups.",
+  "screenshots": [
+    {
+      "slug": "projects-home",
+      "file": "projects-home.webp",
+      "width": 1440,
+      "height": 960,
+      "caption": "Projects dashboard with sample drawing, animation and movie projects.",
+      "provenance": "Real app capture with imported sample illustration; the illustration was not created in Toon Pro.",
+      "source": "dashboard/projects-home.png",
+      "sha256": "48b0b06a3135b9bbee438140750f877b71e885cf72035cede32492809a639712"
+    },
+    {
+      "slug": "new-project",
+      "file": "new-project.webp",
+      "width": 752,
+      "height": 535,
+      "caption": "Create a project: drawing, animation or movie.",
+      "provenance": "Real app capture using a temporary synthetic sample document.",
+      "source": "dashboard/new-project-cards.png",
+      "sha256": "9dfde2afa7a5d4c9e711894f0cd7b92c13fcd8a697590abd176fbd24f8de04bc"
+    },
+    {
+      "slug": "drawing-setup",
+      "file": "drawing-setup.webp",
+      "width": 752,
+      "height": 736,
+      "caption": "Drawing setup with canvas presets, custom dimensions and background preview.",
+      "provenance": "Real app capture using a temporary synthetic sample document.",
+      "source": "dashboard/new-drawing-movie.png",
+      "sha256": "8fd481594072be185bdc60553eccf2d8b9bf085a4796be8203d3857a9648d9f3"
+    },
+    {
+      "slug": "drawing-gallery",
+      "file": "drawing-gallery.webp",
+      "width": 1440,
+      "height": 960,
+      "caption": "Drawing project gallery with independent documents.",
+      "provenance": "Real app capture with imported sample illustration; the illustration was not created in Toon Pro.",
+      "source": "dashboard/drawing-gallery.png",
+      "sha256": "cf0c64c4886ca623208825915081054abb783ed3fd13563d2157d13ae0758120"
+    },
+    {
+      "slug": "assets-gallery",
+      "file": "assets-gallery.webp",
+      "width": 1440,
+      "height": 960,
+      "caption": "Project-owned assets with folders, tags and media previews.",
+      "provenance": "Real app capture with imported sample illustration; the illustration was not created in Toon Pro.",
+      "source": "dashboard/assets-gallery.png",
+      "sha256": "af895214457f4b732a6fadca2617d337e18a443854fd6abcfd0f6722a0710c2a"
+    },
+    {
+      "slug": "editor-tabs",
+      "file": "editor-tabs.webp",
+      "width": 1440,
+      "height": 960,
+      "caption": "Independent document tabs in the managed workspace.",
+      "provenance": "Real app capture using a temporary synthetic sample document.",
+      "source": "dashboard/editor-tabs.png",
+      "sha256": "be6e1258891b9c854c34eb23bd73ed0f8499f6ccd8faa4005f5b7b61a49db533"
+    },
+    {
+      "slug": "animation-workspace",
+      "file": "animation-workspace.webp",
+      "width": 1440,
+      "height": 960,
+      "caption": "Single-shot animation document open in the managed workspace.",
+      "provenance": "Real app capture using a temporary synthetic sample document.",
+      "source": "dashboard/animation-tab.png",
+      "sha256": "ff003b318b06d51dcdcf786c368e8a51da1f01a9ebb3de699e6f212f9a2634aa"
+    },
+    {
+      "slug": "drawing-workspace",
+      "file": "drawing-workspace.webp",
+      "width": 1500,
+      "height": 950,
+      "caption": "Drawing workspace with direct tool controls, canvas and layers.",
+      "provenance": "Real app capture using a temporary synthetic sample document.",
+      "source": "composition/screenshots/002-workspace-drawing-preset-daily-controls-adjacent.png",
+      "sha256": "a98a97e7633600a4d2d2f42c1e99cbbacda9ef0a7f231f7ba11005f4a78fe828"
+    },
+    {
+      "slug": "layers",
+      "file": "layers.webp",
+      "width": 264,
+      "height": 480,
+      "caption": "Layers dock with visibility, opacity and layer actions.",
+      "provenance": "Real app capture using a temporary synthetic sample document.",
+      "source": "density/screenshots/008-layers-standard-drawing-dock.png",
+      "sha256": "4a1a5c2f908969b1ac6cfb61761ee74f7b927ae01e52746bbeb28e22e9f068d1"
+    },
+    {
+      "slug": "brush-settings",
+      "file": "brush-settings.webp",
+      "width": 480,
+      "height": 600,
+      "caption": "Advanced brush settings: General category.",
+      "provenance": "Real app capture using a temporary synthetic sample document.",
+      "source": "advanced/screenshots/002-advanced-brush-general.png",
+      "sha256": "0bc1623cadc08ef21849cf62328a40d7c71feca2ff8fbf8c2e96c286e5e7cfe2"
+    },
+    {
+      "slug": "brush-dynamics",
+      "file": "brush-dynamics.webp",
+      "width": 480,
+      "height": 600,
+      "caption": "Shape dynamics with editable input-response controls.",
+      "provenance": "Real app capture using a temporary synthetic sample document.",
+      "source": "advanced/screenshots/009-advanced-brush-shape-dynamics.png",
+      "sha256": "3dc249e17676011a9aa4a8790f34d8ea465b07c9f7727a0b72b3553441cd1df7"
+    },
+    {
+      "slug": "guides",
+      "file": "guides.webp",
+      "width": 260,
+      "height": 480,
+      "caption": "Guide inspector with multiple editable assistants.",
+      "provenance": "Real app capture using a temporary synthetic sample document.",
+      "source": "inspectors/screenshots/002-guides-multiple-assistants.png",
+      "sha256": "7caf99cb4603a6a8a6804fa8c686a8413c472adf85a95cd07cbe47fda9ee22f7"
+    },
+    {
+      "slug": "selection",
+      "file": "selection.webp",
+      "width": 260,
+      "height": 400,
+      "caption": "Selection inspector and selection modes.",
+      "provenance": "Real app capture using a temporary synthetic sample document.",
+      "source": "inspectors/screenshots/025-selection-and-transform-selection.png",
+      "sha256": "13516a0654d41502e7d5b48ec4c24d2476f6095112a3962c95b96348f8c17740"
+    },
+    {
+      "slug": "vector",
+      "file": "vector.webp",
+      "width": 260,
+      "height": 480,
+      "caption": "Vector editing inspector with an editable brush path selected.",
+      "provenance": "Real app capture using a temporary synthetic sample document.",
+      "source": "inspectors/screenshots/039-vector-properties-tool-22.png",
+      "sha256": "9285007e7b4c4592168a4637aec77922f78c63f42339d55932173d3088ac18d6"
+    },
+    {
+      "slug": "reference-3d",
+      "file": "reference-3d.webp",
+      "width": 1280,
+      "height": 800,
+      "caption": "Native 3D reference layer with an anime model and dog in the drawing canvas.",
+      "provenance": "Real app capture using a temporary synthetic sample document.",
+      "source": "reference3d/main-app-toolbar.png",
+      "sha256": "62ce900f6b7b81ea5cf92827d17eda90447bae0734cbc30fa87c79ce41146385"
+    },
+    {
+      "slug": "fill-reference",
+      "file": "fill-reference.webp",
+      "width": 220,
+      "height": 300,
+      "caption": "Fill tool using marked reference layers as boundaries.",
+      "provenance": "Real app capture using a temporary synthetic sample document.",
+      "source": "fill/fill-reference-properties.png",
+      "sha256": "381b941b0e43486b22413b83a9d504e0c18267a29da42e19b7f3b8805a131253"
+    },
+    {
+      "slug": "perspective-detection",
+      "file": "perspective-detection.webp",
+      "width": 1080,
+      "height": 730,
+      "caption": "Review detected perspective directions before adding editable guides.",
+      "provenance": "Real app capture using a temporary synthetic sample document.",
+      "source": "perspective/perspective-detection-dialog.png",
+      "sha256": "4ff0e899a21d64f4a35c8f9a8d130ac61ea962cf9cb2ce6af98c110edd856b59"
+    },
+    {
+      "slug": "puppet-warp",
+      "file": "puppet-warp.webp",
+      "width": 1280,
+      "height": 840,
+      "caption": "Puppet Warp with mesh pins in a temporary raster fixture.",
+      "provenance": "Real app capture using a temporary synthetic sample document.",
+      "source": "puppet/puppet-workspace.png",
+      "sha256": "84c870130fc316f7a3ac535450f6d2bfe7d6502c3312773bfdb30d34ef5416fb"
+    },
+    {
+      "slug": "layer-outline",
+      "file": "layer-outline.webp",
+      "width": 240,
+      "height": 350,
+      "caption": "Live layer-outline controls.",
+      "provenance": "Real app capture using a temporary synthetic sample document.",
+      "source": "outline/outline-controls.png",
+      "sha256": "2cb4ae822eccd5429eff81146f289d9421e94e8376403718ca789f3ffa33e8fc"
+    },
+    {
+      "slug": "line-conversion",
+      "file": "line-conversion.webp",
+      "width": 1080,
+      "height": 740,
+      "caption": "Raster line and tone conversion preview using imported sample artwork.",
+      "provenance": "Real app capture with imported sample illustration; the illustration was not created in Toon Pro.",
+      "source": "conversion/image-conversion.png",
+      "sha256": "5b412b48e4d93e2f35dca14cd885c1cd10de11ab8d45bb7bb24236e64c4118fa"
+    }
+  ],
+  "capturedAt": "2026-11-08T03:56:55.227184+00:00",
+  "captureCommand": "python3 scripts/capture_website.py --build"
+}

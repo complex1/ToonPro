@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://complex1.github.io/ToonPro/sitemap.xml
