@@ -90,12 +90,15 @@ The local implementation converts selected image/drawing layers into editable ra
 - [ ] Complete physical-tablet, photographic production-reference, large-mesh and additional platform/package acceptance.
 - [ ] Add editable vector lines, retained conversion recipes/presets and more advanced per-object line/shadow styling separately.
 
-## Product communication — local website update
+## Product communication — rebuilt website published
 
-- [x] Explain the drawing-first purpose, independent single-shot editor and separate project organization in the README, vision and getting-started documentation.
-- [x] Add interactive project exploration, an illustrative timing demo, sourced comparisons and version-appropriate artist learning paths.
-- [x] Verify all 24 site routes at desktop/mobile widths and retain screenshot provenance and browser evidence; see the development log.
-- [ ] Publish the reviewed website through the authorized manual process, then verify the live pages. Local output does not change public downloads or the deployed website.
+- [x] Rebuild the README around product purpose, local requirements/setup/run, implemented features, official-source comparisons and current limits.
+- [x] Replace the old website with 35 manual chapters, 141 feature entries, 20 actual app captures and a 10-card visual showcase.
+- [x] Improve type size, contrast, screenshot enlargement, keyboard access, search, filtering and locally saved features.
+- [x] Verify all 42 generated HTML routes and ten browser check groups locally and on the public GitHub Pages site at desktop/mobile/tablet widths.
+- [x] Push the full 0.76 application and website source to `main`; publish prebuilt output through `gh-pages` with `.nojekyll`, keeping Actions disabled and desktop releases manual.
+
+The website is live at [Toon Pro](https://complex1.github.io/ToonPro/). Published desktop downloads remain 0.75.0; the new site explicitly documents the current 0.76 source boundary.
 
 ## Managed project implementation — current local development
 
@@ -150,7 +153,7 @@ Earlier production-extension candidates remain separate and are now prioritized 
 
 ## Website and illustrated documentation
 
-The following records the published website work. Actions is now disabled and the public site remains at its last deployment; local 0.76 documentation changes are not a website redeployment.
+The checklist below records the earlier 0.75 website deployment. It is historical: the site was replaced by the 35-chapter/141-feature source documentation above on 8 November 2026, published manually through `gh-pages` while Actions remains disabled.
 
 - [x] Build the responsive product website with original anime artwork, real app captures and 16 detailed guides.
 - [x] Verify all 21 routes, search, image previews, keyboard focus and mobile navigation (49 browser checks).

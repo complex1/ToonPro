@@ -6,9 +6,9 @@ Toon Pro combines raster painting, editable vector strokes, character references
 
 This repository is the **0.76.0 development source**. Published **0.75.0 preview packages** use the earlier workflow and do not contain every feature described here. Match the version and build evidence when comparing source, screenshots and downloads. Current work prioritizes the drawing workspace and UX; implemented animation tools remain available.
 
-[Website source and local preview](website/README.md) · [Detailed manual and feature content](website/data/manual.json) · [Public website](https://complex1.github.io/ToonPro/) · [Source](https://github.com/complex1/ToonPro)
+[Website](https://complex1.github.io/ToonPro/) · [Documentation](https://complex1.github.io/ToonPro/docs/) · [Features](https://complex1.github.io/ToonPro/features/) · [Local website development](website/README.md) · [Source](https://github.com/complex1/ToonPro)
 
-The rebuilt website is included in this checkout; the public site changes only after a separate deployment.
+The rebuilt website is published from the repository’s prebuilt `gh-pages` branch. Application source is on `main`; website publication does not publish desktop packages.
 
 ![The current Toon Pro drawing workspace](website/assets/screenshots/current/drawing-workspace.webp)
 

@@ -1,5 +1,15 @@
 # Development plan
 
+## Full source push and GitHub Pages publication — 8 November 2026
+
+Pushed the complete reviewed 0.76 working tree to `main` and `codex/076-drawing-and-website` as source commit `ab8103925ef707897f7b37847c7be8c4e3b0b891`. This includes the current drawing/reference implementation, required model assets and notices, tests/fixtures, documentation, README and rebuilt website. Generated new 3D review captures stay local; existing tracked review evidence is preserved.
+
+Published [Toon Pro](https://complex1.github.io/ToonPro/) from generated static files on **`gh-pages` at `/`, with `.nojekyll`**. The initial artifact commit is `436d8b79c15f4dd963d33c8685e8135942937365`; the configured-source trigger commit is `3587d7b64626aaf0f7223a89af2d41c61b591a06`. Pages uses the branch/legacy build type with HTTPS still enforced. Repository Actions remains disabled; desktop packages/releases are unchanged. The retained Pages workflow is manual build/validation only, without the old desktop-release completion trigger.
+
+**Live verification passed:** deployment metadata identifies the intended source revision, and all **82 public files match the validated build hashes** on their canonical URLs, without cache-busting or retries. This includes all 42 HTML pages, 20 captures and four font binaries. All **ten browser check groups pass against the public HTTPS site**, covering search, tabs, saved features, clipboard, screenshots, canvas drawing/clear/download, every route/image, responsive widths and readable local fonts/text contrast. No browser errors or failed requests were recorded.
+
+The website was rebuilt and statically validated from a Git archive containing committed files only. Required source/resource/fixture references and model checksums were reviewed before push; no source asset exceeds GitHub's normal per-file limit. Evidence: `build/pages-publication-static.json`, `build/pages-committed-browser/report.json`, `build/pages-live-browser/report.json` and `build/pages-live-integrity.json`. Published `deployment.json` and `deployment-files.json` identify the built source and file hashes. Later documentation-only commits record publication without changing the deployed website payload.
+
 ## Website readability and feature imagery — 8 November 2026
 
 Refined the rebuilt website after artist review. Self-hosted **Bricolage Grotesque** headings and **Space Grotesk** reading/interface text replace the earlier type treatment. Main documentation prose is 18 px on desktop / 16 px on mobile; functional controls, side navigation, metadata and captions are enlarged. Brighter semantic text roles, clearer borders/focus, comfortable line spacing and a wider documentation layout address low contrast and cramped reading. Narrow screenshot panels retain their aspect ratio; the image dialog also links to the original image for native-resolution inspection.

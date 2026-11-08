@@ -72,6 +72,8 @@ On Windows/Linux supply the corresponding Chrome/Chromium executable. Keep brows
 
 ## Publication
 
+Published and verified on **8 November 2026**: source `ab8103925ef707897f7b37847c7be8c4e3b0b891`, 82 matching public files and all ten live browser check groups passing. The live site exposes `deployment.json` and `deployment-files.json` for source/file provenance.
+
 The repository uses a manual GitHub Pages deployment: **prebuilt files on the `gh-pages` branch, at `/`, with `.nojekyll`**. The public URL is [Toon Pro](https://complex1.github.io/ToonPro/), so generate the site with `--base /ToonPro/`. GitHub Actions stays disabled; this publication path does not run or publish desktop release candidates. The retained `pages.yml` is an optional manual build/validation workflow only.
 
 For a website update:
