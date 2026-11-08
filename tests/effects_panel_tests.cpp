@@ -203,7 +203,7 @@ private slots:
         auto project=fixture();project.shots[0].layers[0].name="Character with a long production name";
         Canvas canvas;canvas.setProject(project);EffectsPanel panel(&canvas);panel.resize(180,320);panel.show();settle();
         auto *tabs=panel.findChild<QTabBar *>("effectsTabs");auto *target=panel.findChild<QLabel *>("effectsTargetName");
-        auto *status=panel.findChild<QLabel *>("effectsStatus");QVERIFY(tabs&&target&&status);QCOMPARE(tabs->count(),5);
+        auto *status=panel.findChild<QLabel *>("effectsStatus");QVERIFY(tabs&&target&&status);QCOMPARE(tabs->count(),6);
         for(int i=0;i<tabs->count();++i){QVERIFY(tabs->rect().contains(tabs->tabRect(i)));QVERIFY(tabs->tabRect(i).width()>=ui::metrics::actionTarget);}
         const int history=canvas.document()->history()->count();
         auto font=panel.font();font.setPixelSize(24);panel.setFont(font);panel.resize(240,420);settle();

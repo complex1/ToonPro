@@ -595,7 +595,7 @@ static void celWorkflowCaptures(Capture &cap, MainWindow &window) {
 }
 
 int main(int argc,char **argv) {
- QApplication app(argc,argv);QApplication::setApplicationName("Toon Pro UX Capture");QApplication::setApplicationVersion("0.65.0");QStandardPaths::setTestModeEnabled(true);applyTheme();
+ QApplication app(argc,argv);QApplication::setApplicationName("Toon Pro UX Capture");QApplication::setApplicationVersion(qEnvironmentVariable("TOON_CAPTURE_APP_VERSION", "development"));QStandardPaths::setTestModeEnabled(true);applyTheme();
  const auto args=app.arguments();if(args.size()<2)return 2;Capture cap;cap.directory=QDir(args[1]).absolutePath();QDir().mkpath(cap.directory+"/screenshots");QTemporaryDir tmp;
  MainWindow window(tmp.filePath("workspace.ini"));window.resize(1500,950);window.show();settle();cap.shot(&window,"Workspace","Welcome — no project");
  if(args.contains("--cel-workflows")){celWorkflowCaptures(cap,window);return cap.errors.isEmpty()?0:1;}

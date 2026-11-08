@@ -1,4 +1,5 @@
 #include "canvas.h"
+#include "tool_catalog_legacy_fixture.h"
 #include "drawing_tool_controller.h"
 #include "drawing_tool_panel.h"
 #include "object_tools.h"
@@ -37,7 +38,7 @@ const RasterLayer &active(const Canvas &canvas){return canvas.shot().layers[canv
 QJsonObject read(const QString &path){QFile file(path);if(!file.open(QIODevice::ReadOnly))return {};return QJsonDocument::fromJson(file.readAll()).object();}
 bool write(const QString &path,const QJsonObject &root){QFile file(path);if(!file.open(QIODevice::WriteOnly))return false;const auto data=QJsonDocument(root).toJson();return file.write(data)==data.size();}
 QJsonObject withoutArc(QJsonObject root){
-    root["version"]=9;QJsonArray tools,entries;
+    root=test_fixture::toolCatalogBefore14(root,9);QJsonArray tools,entries;
     for(const auto &value:root["tools"].toArray())if(value.toObject()["engine"].toInt()!=int(Canvas::Tool::Arc))tools.append(value);
     for(const auto &value:root["entries"].toArray()){
         auto entry=value.toObject();QJsonArray ids;
@@ -142,7 +143,7 @@ private slots:
         QCOMPARE(group->tags,QStringList{"clean"});QCOMPARE(group->color,QColor("#ff9944"));
         QCOMPARE(group->lastToolId,QString("ellipse"));QCOMPARE(catalog.activeToolId(),QString("ellipse"));
         QVERIFY(group->tools.contains("arc"));QVERIFY(catalog.removeTool("group/shapes","arc"));QVERIFY(catalog.save());
-        QCOMPARE(read(path)["version"].toInt(),10);QVERIFY2(catalog.load(&error),qPrintable(error));
+        QCOMPARE(read(path)["version"].toInt(),14);QVERIFY2(catalog.load(&error),qPrintable(error));
         QVERIFY(!catalog.entry("group/shapes")->tools.contains("arc"));
         Canvas canvas;setup(canvas);ToolSession session(&canvas,&catalog);QVERIFY(catalog.addStandalone("arc").size()>0);
         QVERIFY(catalog.activateTool("arc"));QCOMPARE(canvas.tool(),Canvas::Tool::Arc);

@@ -23,6 +23,8 @@ bool opaqueColor(const QJsonValue &json, QColor *color) {
 }
 }
 QString validateLayerEffects(const LayerEffects &e) {
+    if(!bounded(e.outlineWidth,0,128))return "Outline width must be between 0 and 128 pixels.";
+    if(!e.outlineColor.isValid()||e.outlineColor.alpha()!=255)return "Outline color must be opaque.";
     if (!bounded(e.blurRadius, 0, 128) || !bounded(e.shadowRadius, 0, 128) || !bounded(e.glowRadius, 0, 128))
         return "Effect radii must be between 0 and 128 pixels.";
     if (!bounded(e.shadowOffset.x(), -512, 512) || !bounded(e.shadowOffset.y(), -512, 512))
@@ -35,8 +37,9 @@ QString validateLayerEffects(const LayerEffects &e) {
     return {};
 }
 bool hasLayerEffects(const LayerEffects &e) {
-    return e.enabled && (e.blurEnabled || e.shadowEnabled || e.glowEnabled || e.colorEnabled);
+    return e.enabled && (e.blurEnabled || e.shadowEnabled || e.glowEnabled || e.colorEnabled || e.outlineEnabled);
 }
+bool hasLayerOutlineSettings(const LayerEffects &e){return e.outlineEnabled||e.outlineWidth!=3||e.outlineColor!=QColor(Qt::white);}
 QString validateLayerMask(const LayerMask &mask, bool pixelsRequired) {
     if (mask.defaultValue < 0 || mask.defaultValue > 255) return "Invalid layer mask default value.";
     if (!bounded(mask.position.x(), -32768, 32768) || !bounded(mask.position.y(), -32768, 32768)
@@ -57,7 +60,7 @@ QString validateLayerMask(const LayerMask &mask, bool pixelsRequired) {
     return {};
 }
 QJsonObject layerEffectsToJson(const LayerEffects &e) {
-    return {{"enabled", e.enabled}, {"blurEnabled", e.blurEnabled}, {"blurRadius", e.blurRadius},
+    QJsonObject result{{"enabled", e.enabled}, {"blurEnabled", e.blurEnabled}, {"blurRadius", e.blurRadius},
         {"shadowEnabled", e.shadowEnabled}, {"shadowRadius", e.shadowRadius},
         {"shadowOffset", QJsonArray{e.shadowOffset.x(), e.shadowOffset.y()}},
         {"shadowColor", e.shadowColor.name(QColor::HexRgb)}, {"shadowOpacity", e.shadowOpacity},
@@ -65,12 +68,19 @@ QJsonObject layerEffectsToJson(const LayerEffects &e) {
         {"glowColor", e.glowColor.name(QColor::HexRgb)}, {"glowOpacity", e.glowOpacity},
         {"colorEnabled", e.colorEnabled}, {"exposure", e.exposure}, {"contrast", e.contrast},
         {"saturation", e.saturation}, {"hue", e.hue}};
+    if(hasLayerOutlineSettings(e)){result["outlineEnabled"]=e.outlineEnabled;result["outlineWidth"]=e.outlineWidth;result["outlineColor"]=e.outlineColor.name(QColor::HexRgb);}
+    return result;
 }
 bool layerEffectsFromJson(const QJsonObject &json, LayerEffects *effects, QString *error) {
     auto fail = [error](const QString &message) { if (error) *error = message; return false; };
     if (!effects) return fail("Missing effect destination.");
     LayerEffects parsed;
-    const auto expected = layerEffectsToJson(parsed);
+    auto expected = layerEffectsToJson(parsed);
+    if(json.contains("outlineEnabled")||json.contains("outlineWidth")||json.contains("outlineColor")){
+        expected["outlineEnabled"]=false;expected["outlineWidth"]=3.;expected["outlineColor"]="#ffffff";
+        if(!json["outlineEnabled"].isBool()||!json["outlineWidth"].isDouble()||!opaqueColor(json["outlineColor"],&parsed.outlineColor))return fail("Invalid outline settings.");
+        parsed.outlineEnabled=json["outlineEnabled"].toBool();parsed.outlineWidth=json["outlineWidth"].toDouble();
+    }
     QSet<QString> keys; for (auto it = expected.constBegin(); it != expected.constEnd(); ++it) keys.insert(it.key());
     if (!keysMatch(json, keys)) return fail("Invalid layer effect fields.");
     for (auto it = expected.constBegin(); it != expected.constEnd(); ++it)

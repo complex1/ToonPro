@@ -1,4 +1,5 @@
 #include "scene3d_controller.h"
+#include "feature_flags.h"
 #include "canvas.h"
 #include "camera_tool.h"
 #include "mask_tool.h"
@@ -38,6 +39,8 @@ bool selectionTool(Canvas::Tool tool) {
 }
 QString samplingReason(const Canvas *canvas) {
     const auto &settings = canvas->drawingTools()->fillSettings;
+    if (settings.source == RasterSampleSource::MarkedReferences)
+        return RasterTools::referenceSourceReason(canvas->document());
     if (settings.source != RasterSampleSource::ReferenceLayer) return {};
     for (const auto &layer : canvas->shot().layers)
         if (layer.id == settings.referenceLayerId)
@@ -69,6 +72,7 @@ QString Canvas::toolBlockReason() const {
         return "Finish or cancel the current edit first.";
 
     if (tool == Tool::SceneObject || tool == Tool::SceneCamera || tool == Tool::SceneRig) {
+        if (!features::legacy3DEditor) return "Legacy 3D editing is retired.";
         if (tool != Tool::SceneCamera && !soloReason().isEmpty()) return soloReason();
         if (!m_scene3D->scene()) return "Add a model from Panels → 3D Library first.";
         if (!m_scene3D->canEdit()) return "Show and unlock the 3D layer and its position.";
@@ -103,9 +107,12 @@ QString Canvas::toolBlockReason() const {
     const auto &layers = shot().layers;
     const int active = m_document->activeLayer();
     const auto &layer = layers[active];
+    if(layer.puppetWarp&&tool!=Tool::AdvancedTransform&&tool!=Tool::Eyedropper&&tool!=Tool::MagicWand&&tool!=Tool::ColorRange)
+        return "This layer has an editable Puppet Warp. Edit its mesh or Bake warp before painting or transforming pixels.";
+    if(layer.kind==LayerKind::Reference3D)return "Use the 3D reference controls to pose this layer, or choose a drawing layer above it to paint.";
     if(layer.kind==LayerKind::Symbol)return "Edit this symbol in the Symbols panel to draw inside it, or use its Transform control to move the instance.";
     if(layer.adjustment)return "Use Effects to edit this adjustment layer or its mask; choose a drawing layer to paint.";
-    if(tool!=Tool::VectorNode&&tool!=Tool::VectorWidth&&tool!=Tool::Text){
+    if(tool!=Tool::VectorNode&&tool!=Tool::VectorWidth&&tool!=Tool::VectorNudge&&tool!=Tool::Text){
         const auto animationReason=keyframeRasterEditReason(m_document);if(!animationReason.isEmpty())return animationReason;
     }
     const auto owner = animationOwner(shot(), layer.id);
@@ -122,7 +129,11 @@ QString Canvas::toolBlockReason() const {
         && !m_transformFailure.isEmpty())
         return m_transformFailure;
     if (tool == Tool::AdvancedTransform) {
-        if (tools->warpMode && m_document->rasterSelection().active
+        bool retained=false;
+        if(tools->puppetMode)for(int i=0;i<layers.size();++i)if(layers[i].puppetWarp)for(const auto &id:transformLayerIds)retained|=layers[i].id==id||layerIsDescendant(layers,i,id);
+        if(!retained&&tools->warpMode&&tools->puppetMode&&m_document->rasterSelection().active&&m_document->rasterSelection().path.elementCount()>512)
+            return "This selection is too detailed for Puppet Warp. Simplify it or deselect first.";
+        if (!retained&&tools->warpMode && m_document->rasterSelection().active
             && m_document->rasterSelection().path.elementCount() > 4096)
             return "This selection is too detailed for mesh warp. Use Perspective Transform or deselect it first.";
         const bool boundary = tools->selectionBoundary;
@@ -184,13 +195,19 @@ QString Canvas::toolBlockReason() const {
     if (pixelSelectionApplies && m_document->rasterSelection().active && m_document->rasterSelection().path.isEmpty())
         return "The selection is empty. Clear it or select an area to paint.";
     const bool vectorEdit = tool == Tool::VectorNode || tool == Tool::VectorSimplify
-        || tool == Tool::VectorWidth || tool == Tool::VectorEraser;
+        || tool == Tool::VectorWidth || tool == Tool::VectorEraser || tool == Tool::VectorNudge;
     if (vectorEdit) {
         if (layer.kind != LayerKind::Vector) return "Choose a vector layer for this tool.";
         if (layer.objects.isEmpty()) return "Draw a vector path on this layer first.";
-        if (layerPositionLocked(layers, active) && (tool == Tool::VectorSimplify
+        if (layerPositionLocked(layers, active) && (tool == Tool::VectorSimplify || tool == Tool::VectorNudge
             || (tool == Tool::VectorNode && tools->pathEditMode != DrawingToolController::PathEditMode::Width)))
             return "Unlock the layer or folder position to edit path geometry.";
+        if(tool==Tool::VectorNudge){
+            if(const auto*animation=layerAnimation(shot(),layer.id);animation&&!animation->paths.isEmpty())
+                return "Disable path animation on this layer before nudging its source geometry.";
+            if(!m_document->keyframeSourceEditing()&&!worldLayerTransform(shot(),layer.id,m_document->currentFrame()).isInvertible())
+                return "Restore a nonzero layer scale before nudging strokes.";
+        }
         return {};
     }
     if (tool == Tool::Bucket || tool == Tool::Gradient || tool == Tool::Retouch) {
@@ -252,9 +269,14 @@ bool Canvas::prepareToolTransform(const QStringList &layerIds) {
         [&failure](const QString &message) { failure = message; });
     const auto resolvedIds = m_tool == Tool::AdvancedTransform ? resolvedTransformLayerIds(layerIds)
         : hasProject() ? QStringList{shot().layers[m_document->activeLayer()].id} : QStringList();
-    const bool ready = m_tool == Tool::AdvancedTransform
+    bool ready = m_tool == Tool::AdvancedTransform
         ? m_drawingTools->transform()->begin(m_document, resolvedIds, m_drawingTools->selectionBoundary)
         : m_document->beginTransform();
+    if(ready&&m_tool==Tool::AdvancedTransform&&m_drawingTools->warpMode&&m_drawingTools->puppetMode){
+        ready=m_drawingTools->transform()->beginPuppet(m_drawingTools->puppetDensity);
+        if(!ready)m_drawingTools->transform()->cancel();
+        else m_drawingTools->puppetDensity=m_drawingTools->transform()->puppetDensity();
+    }
     disconnect(connection);
     m_transformFailure = ready ? QString() : failure;
     m_transformFailureLayerIds = resolvedIds;

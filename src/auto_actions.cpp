@@ -47,7 +47,7 @@ bool sameProject(const Project &a,const Project &b) {
 QJsonObject properties(const RasterLayer &l) {
     return {{"name",l.name},{"visible",l.visible},{"locked",l.locked},{"annotation",l.annotation},
         {"opacity",l.opacity},{"blend",layerBlendModeKey(l.blendMode)},{"alphaLocked",l.alphaLocked},
-        {"positionLocked",l.positionLocked},{"clipped",l.clipped},{"effects",layerEffectsToJson(l.effects)}};
+        {"positionLocked",l.positionLocked},{"clipped",l.clipped},{"fillReference",l.fillReference},{"effects",layerEffectsToJson(l.effects)}};
 }
 bool validStep(const AutoActionStep &s) {
     if(s.label.trimmed().isEmpty() || s.label.size()>160)return false;
@@ -56,15 +56,17 @@ bool validStep(const AutoActionStep &s) {
     if(s.operation=="transform")return p.size()==5&&real(p["translationX"],-32768,32768)&&real(p["translationY"],-32768,32768)
         &&real(p["scaleX"],.01,16)&&real(p["scaleY"],.01,16)&&real(p["rotation"],-180,180);
     if(s.operation=="bucket") {
-        if(!keys(p,{"x","y","color","source","tolerance","gapClosing","referenceOffset"})
+        if(!keys(p,{"x","y","color","source","tolerance","gapClosing","referenceOffset","expansion"})
             ||!real(p["x"],-32768,32768)||!real(p["y"],-32768,32768)||!validColor(p["color"])
-            ||!integer(p["source"],0,2)||!integer(p["tolerance"],0,255)||!integer(p["gapClosing"],0,20))return false;
-        return p["source"].toInt()==2 ? p.size()==7&&integer(p["referenceOffset"],1-maxAnimationLayers,maxAnimationLayers-1) : p.size()==6&&!p.contains("referenceOffset");
+            ||!integer(p["source"],0,3)||!integer(p["tolerance"],0,255)||!integer(p["gapClosing"],0,20)
+            ||(p.contains("expansion")&&!integer(p["expansion"],-20,20)))return false;
+        const int expansion=p.contains("expansion")?1:0;
+        return p["source"].toInt()==2 ? p.size()==7+expansion&&integer(p["referenceOffset"],1-maxAnimationLayers,maxAnimationLayers-1) : p.size()==6+expansion&&!p.contains("referenceOffset");
     }
     if(s.operation=="selectRelative")return p.size()==1 && integer(p["offset"],-1024,1024) && p["offset"].toInt()!=0;
     if(s.operation=="newLayer")return p.size()==1 && p["annotation"].isBool();
     if(s.operation=="group"||s.operation=="duplicate"||s.operation=="delete")return p.isEmpty();
-    if(s.operation!="properties"||p.isEmpty()||!keys(p,{"name","visible","locked","annotation","opacity","blend","alphaLocked","positionLocked","clipped","effects"}))return false;
+    if(s.operation!="properties"||p.isEmpty()||!keys(p,{"name","visible","locked","annotation","opacity","blend","alphaLocked","positionLocked","clipped","fillReference","effects"}))return false;
     for(auto it=p.begin();it!=p.end();++it) {
         if(it.key()=="name") {if(!it->isString()||it->toString().trimmed().isEmpty()||it->toString().size()>100)return false;}
         else if(it.key()=="opacity") {if(!it->isDouble()||!std::isfinite(it->toDouble())||it->toDouble()<0||it->toDouble()>1)return false;}
@@ -92,6 +94,7 @@ bool applyStep(Document &d,const AutoActionStep &s,QString *error) {
     if(s.operation=="bucket") {
         RasterFillSettings settings;settings.source=RasterSampleSource(p["source"].toInt());
         settings.tolerance=p["tolerance"].toInt();settings.gapClosing=p["gapClosing"].toInt();
+        settings.expansion=p["expansion"].toInt(0);
         if(settings.source==RasterSampleSource::ReferenceLayer) {
             const int target=d.activeLayer()+p["referenceOffset"].toInt();
             if(target<0||target>=count){*error="The recorded reference layer is outside this layer stack.";return false;}
@@ -136,6 +139,7 @@ bool applyStep(Document &d,const AutoActionStep &s,QString *error) {
     if(p.contains("alphaLocked"))d.setLayerAlphaLocked(p["alphaLocked"].toBool());
     if(p.contains("positionLocked"))d.setLayerPositionLocked(p["positionLocked"].toBool());
     if(p.contains("clipped"))d.setLayerClipped(p["clipped"].toBool());
+    if(p.contains("fillReference")&&!d.setFillReferences({originalId},p["fillReference"].toBool()))return false;
     if(p.contains("effects")){LayerEffects e;if(!layerEffectsFromJson(p["effects"].toObject(),&e,error))return false;d.setLayerEffects(originalId,e);}
     if(p.contains("locked")&&p["locked"].toBool())d.setLayersLocked({originalId},true);
     const auto result=properties(active());
@@ -241,7 +245,7 @@ void AutoActions::committed(const Project &before,const Project &after,const QSt
         const auto prev=properties(*old),next=properties(*now);
         for(auto it=next.begin();it!=next.end();++it)if(prev[it.key()]!=it.value())step.parameters[it.key()]=it.value();
         auto &p=l[index];p.name=now->name;p.visible=now->visible;p.locked=now->locked;p.annotation=now->annotation;p.opacity=now->opacity;
-        p.blendMode=now->blendMode;p.alphaLocked=now->alphaLocked;p.positionLocked=now->positionLocked;p.clipped=now->clipped;p.effects=now->effects;
+        p.blendMode=now->blendMode;p.alphaLocked=now->alphaLocked;p.positionLocked=now->positionLocked;p.clipped=now->clipped;p.fillReference=now->fillReference;p.effects=now->effects;
         bool samePixels=true;for(int j=0;j<a.size();++j)if(a[j].tiles!=b[j].tiles||a[j].mask!=b[j].mask)samePixels=false;
         if(step.parameters.isEmpty()||!samePixels||projected.toJson()!=after.toJson()){unsupported();return;}
         step.operation="properties";
@@ -278,7 +282,9 @@ bool AutoActions::save(QString *error){
     QJsonArray actions;
     for(const auto &a:m_actions){QJsonArray steps;for(const auto &s:a.steps)steps.append(QJsonObject{{"operation",s.operation},{"label",s.label},{"parameters",s.parameters},{"enabled",s.enabled}});actions.append(QJsonObject{{"id",a.id},{"name",a.name},{"steps",steps}});}
     bool extended=false;for(const auto &a:m_actions)for(const auto &s:a.steps)extended|=pixelOperation(s.operation);
-    const auto bytes=QJsonDocument(QJsonObject{{"version",extended?2:1},{"actions",actions}}).toJson();
+    bool references=false;for(const auto &a:m_actions)for(const auto &s:a.steps)references|=s.parameters.contains("fillReference")||(s.operation=="bucket"&&s.parameters["source"].toInt()==3);
+    bool expansion=false;for(const auto &a:m_actions)for(const auto &s:a.steps)expansion|=s.operation=="bucket"&&s.parameters.contains("expansion");
+    const auto bytes=QJsonDocument(QJsonObject{{"version",expansion?4:references?3:extended?2:1},{"actions",actions}}).toJson();
     if(bytes.size()>maxBytes)return unsaved("The action library exceeds its 4 MB limit.");
     if(!QDir().mkpath(QFileInfo(m_path).absolutePath()))return unsaved("Cannot create the action-library folder.");
     QSaveFile file(m_path);if(!file.open(QIODevice::WriteOnly)||file.write(bytes)!=bytes.size()||!file.commit())return unsaved("Could not save: "+file.errorString());
@@ -290,7 +296,7 @@ bool AutoActions::load(QString *error){
     const auto invalid=[&](const QString &why){m_loadFailed=true;return fail("Could not load actions: "+why+" Existing actions were kept.",error);};
     if(!file.open(QIODevice::ReadOnly)||file.size()>maxBytes)return invalid("file is unreadable or exceeds 4 MB.");
     QJsonParseError parse;const auto json=QJsonDocument::fromJson(file.readAll(),&parse);if(parse.error!=QJsonParseError::NoError||!json.isObject())return invalid("invalid JSON.");
-    const auto root=json.object();if(!keys(root,{"version","actions"})||!integer(root["version"],1,2)||!root["actions"].isArray())return invalid("unsupported format.");
+    const auto root=json.object();if(!keys(root,{"version","actions"})||!integer(root["version"],1,4)||!root["actions"].isArray())return invalid("unsupported format.");
     const auto list=root["actions"].toArray();if(list.size()>maxActions)return invalid("too many actions.");
     QVector<AutoAction> decoded;QSet<QString> ids;
     for(const auto &value:list){if(!value.isObject())return invalid("invalid action.");const auto o=value.toObject();
@@ -298,7 +304,7 @@ bool AutoActions::load(QString *error){
         AutoAction a{o["id"].toString(),o["name"].toString(),{}};ids.insert(a.id);
         for(const auto &v:o["steps"].toArray()){if(!v.isObject())return invalid("invalid step.");const auto s=v.toObject();
             if(!keys(s,{"operation","label","parameters","enabled"})||!s["operation"].isString()||!s["label"].isString()||!s["parameters"].isObject()||!s["enabled"].isBool())return invalid("invalid step fields.");
-            AutoActionStep step{s["operation"].toString(),s["label"].toString(),s["parameters"].toObject(),s["enabled"].toBool()};if(!validStep(step)||(root["version"].toInt()==1&&pixelOperation(step.operation)))return invalid("unsupported or invalid step parameters.");a.steps.append(step);
+            AutoActionStep step{s["operation"].toString(),s["label"].toString(),s["parameters"].toObject(),s["enabled"].toBool()};if(!validStep(step)||(root["version"].toInt()==1&&pixelOperation(step.operation)))return invalid("unsupported or invalid step parameters.");if(root["version"].toInt()<3&&(step.parameters.contains("fillReference")||(step.operation=="bucket"&&step.parameters["source"].toInt()==3)))return invalid("marked references require action version 3.");if(root["version"].toInt()<4&&step.operation=="bucket"&&step.parameters.contains("expansion"))return invalid("fill expansion requires action version 4.");a.steps.append(step);
         }decoded.append(a);
     }
     m_actions=std::move(decoded);m_loadFailed=false;m_saveError.clear();emit changed();return true;

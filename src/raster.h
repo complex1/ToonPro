@@ -8,8 +8,11 @@
 #include "brush_settings.h"
 #include "editable_object.h"
 #include "scene3d.h"
+#include "reference3d.h"
 #include "layer_effects.h"
 #include "symbol_types.h"
+#include "puppet_warp.h"
+#include "puppet_warp_state.h"
 
 namespace toon {
 constexpr int tileSize = 256;
@@ -29,10 +32,12 @@ struct RasterLayer {
     LayerKind kind = LayerKind::Raster;
     QVector<EditableObject> objects;
     std::optional<Scene3D> scene3d;
+    std::optional<ReferenceScene> reference3d;
     std::optional<SymbolInstance> symbol;
     bool visible = true;
     bool locked = false;
     bool annotation = false;
+    bool fillReference = false;
     // Siblings are ordered bottom-to-top by their position in the shot's flat list.
     QString parentId;
     bool group = false;
@@ -43,6 +48,7 @@ struct RasterLayer {
     QColor rowColor;
     qreal opacity = 1;
     QMap<TileKey, QImage> tiles;
+    std::optional<PuppetWarpState> puppetWarp;
     LayerEffects effects;
     std::optional<LayerMask> mask;
     bool adjustment = false;
@@ -57,7 +63,10 @@ struct RasterLayerPreview {
     QTransform transform;
     QVector<RasterLayerPreview> additional;
     QRectF warpBounds;
-    QVector<QPointF> warpNodes; // Nine row-major control points; empty for a matrix transform.
+    QVector<QPointF> warpNodes; // Destination vertices; empty for a matrix transform.
+    // Empty for the legacy nine-handle grid; otherwise explicit puppet topology.
+    QVector<QPointF> warpSourceNodes;
+    QVector<WarpTriangle> warpTriangles;
     // Set only by document transform preparation: the unsplit document pixels
     // are exact while this preview's transform is unchanged. Custom previews
     // remain opt-out, since they may carry content different from the document.

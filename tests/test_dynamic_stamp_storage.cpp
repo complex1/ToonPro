@@ -4,6 +4,7 @@
 #include "document.h"
 #include "object_tools.h"
 #include "tool_catalog.h"
+#include "tool_catalog_legacy_fixture.h"
 #include "ui_theme.h"
 #include "value_slider.h"
 #include "vector_brush.h"
@@ -62,9 +63,9 @@ private slots:
     json["version"]=5;QVERIFY(write(library.path(),json));QVERIFY(!restored.load(&error));QVERIFY(error.contains("format 6"));QCOMPARE(restored.presets().last().brush,b);
     ToolCatalog catalog(nullptr,dir.filePath("tools.json"));QVERIFY(catalog.load());
     const auto id=catalog.createBrush("Dynamic stamp",BrushType::DynamicStamp,{b,0,{}});QVERIFY(!id.isEmpty());QVERIFY(catalog.save(&error));
-    json=read(catalog.path());QCOMPARE(json["version"].toInt(),11);ToolCatalog loaded(nullptr,catalog.path());QVERIFY(loaded.load(&error));
+    json=read(catalog.path());QCOMPARE(json["version"].toInt(),14);ToolCatalog loaded(nullptr,catalog.path());QVERIFY(loaded.load(&error));
     QCOMPARE(loaded.tool(id)->state.brush,b);QCOMPARE(loaded.tool(id)->brushType,BrushType::DynamicStamp);
-    json["version"]=10;QVERIFY(write(catalog.path(),json));QVERIFY(!loaded.load(&error));QVERIFY(error.contains("version 11"));QCOMPARE(loaded.tool(id)->state.brush,b);
+    json=test_fixture::toolCatalogBefore14(json,10);QVERIFY(write(catalog.path(),json));QVERIFY(!loaded.load(&error));QVERIFY(error.contains("version 11"));QCOMPARE(loaded.tool(id)->state.brush,b);
  }
  void unifiedTipVariationsAndImageColorOptIn(){
     Canvas canvas;canvas.setProject(Project::create());auto b=brush();b.colorDynamics.applyToColorTip=false;canvas.setBrushSettings(b);

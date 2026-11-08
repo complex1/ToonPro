@@ -115,7 +115,7 @@ EditableObject EditableObject::create(ObjectKind kind) {
     return result;
 }
 QString layerKindKey(LayerKind kind) {
-    switch (kind) { case LayerKind::Raster: return "raster"; case LayerKind::Vector: return "vector"; case LayerKind::Text: return "text"; case LayerKind::Scene3D: return "scene3d"; case LayerKind::Symbol: return "symbol"; }
+    switch (kind) { case LayerKind::Raster: return "raster"; case LayerKind::Vector: return "vector"; case LayerKind::Text: return "text"; case LayerKind::Scene3D: return "scene3d"; case LayerKind::Symbol: return "symbol"; case LayerKind::Reference3D: return "reference3d"; }
     return {};
 }
 std::optional<LayerKind> layerKindFromKey(const QString &key) {
@@ -124,6 +124,7 @@ std::optional<LayerKind> layerKindFromKey(const QString &key) {
     if (key == "text") return LayerKind::Text;
     if (key == "scene3d") return LayerKind::Scene3D;
     if (key == "symbol") return LayerKind::Symbol;
+    if (key == "reference3d") return LayerKind::Reference3D;
     return {};
 }
 QString validateEditableObject(const EditableObject &o) {

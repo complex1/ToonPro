@@ -25,7 +25,7 @@
 namespace toon {
 namespace {
 constexpr GuideType types[] = {GuideType::Perspective, GuideType::VanishingPoint, GuideType::TwoPoint,
-                               GuideType::ParallelRuler, GuideType::ThreePoint, GuideType::Fisheye};
+                               GuideType::ParallelRuler, GuideType::ThreePoint, GuideType::Fisheye, GuideType::Ellipse};
 constexpr int typeCount = sizeof(types) / sizeof(types[0]);
 constexpr FeatureIcon typeIcons[] = {FeatureIcon::PerspectiveGrid, FeatureIcon::VanishingPoint, FeatureIcon::TwoPointPerspective, FeatureIcon::ParallelGuide, FeatureIcon::ThreePointPerspective, FeatureIcon::Fisheye};
 QString typeLabel(GuideType type) {
@@ -41,6 +41,7 @@ QString placementHelp(GuideType type) {
     case GuideType::ParallelRuler: return "Place 2 endpoints to set the ruler direction.";
     case GuideType::ThreePoint: return "Place 4 handles: three vanishing points, then the grid anchor.";
     case GuideType::Fisheye: return "Place 3 handles: two axis endpoints, then the curve height.";
+    case GuideType::Ellipse: return "Place 3 handles: two axis endpoints, then the ellipse height.";
     }
     return {};
 }
@@ -48,8 +49,10 @@ QString placementToolTip(GuideType type) {
     auto help = placementHelp(type);
     if (type == GuideType::ThreePoint)
         help += " Keep the three vanishing points off one straight line and the anchor away from their connecting lines.";
-    if (type == GuideType::Fisheye)
-        help += " The third handle sets the perpendicular height of the ellipse. Hold Shift while placing or dragging it for a circular grid. Drag the endpoints to resize or rotate the grid.";
+    if (type == GuideType::Fisheye || type == GuideType::Ellipse)
+        help += type == GuideType::Ellipse
+            ? " Start drawing within 12 screen pixels of the ellipse to follow its curve. Hold Shift at the height handle for a circle. Drag the endpoints to resize or rotate, or the center to move."
+            : " The third handle sets the perpendicular height of the ellipse. Hold Shift while placing or dragging it for a circular grid. Drag the endpoints to resize or rotate the grid.";
     return help;
 }
 class GuideTypeTabs final : public QTabBar {
@@ -142,11 +145,11 @@ GuidePanel::GuidePanel(Canvas *canvas, QWidget *parent) : QWidget(parent), m_can
     m_types = new GuideTypeTabs;
     m_types->setObjectName("guideTypes"); m_types->setAccessibleName("New guide type");
     m_types->setExpanding(true); m_types->setDrawBase(false); m_types->setIconSize({ui::metrics::tabIcon, ui::metrics::tabIcon});
-    // Keep six direct targets visible in a narrow dock without an overflow menu.
+    // Seven direct targets fit the shared 220-pixel minimum without overflow.
     m_types->setUsesScrollButtons(false);
     m_types->setProperty("compactDrawingTabs", true);
     for (int i = 0; i < typeCount; ++i) {
-        m_types->addTab(featureIcon(typeIcons[i]), {});
+        m_types->addTab(types[i] == GuideType::Ellipse ? appIcon("circle") : featureIcon(typeIcons[i]), {});
         m_types->setTabToolTip(i, guideTypeName(types[i]) + " — " + placementToolTip(types[i]));
         m_types->setAccessibleTabName(i, guideTypeName(types[i]));
     }
@@ -179,8 +182,9 @@ GuidePanel::GuidePanel(Canvas *canvas, QWidget *parent) : QWidget(parent), m_can
     m_remove = iconButton("removeGuide", "trash", "Delete the selected guide (Delete)");
     m_load = iconButton("loadGuideSet", "folder-open", "Add guides from a saved guide set…");
     m_save = iconButton("saveGuideSet", "save", "Save all guides as a reusable guide set…");
+    m_detect = iconButton("detectPerspective", "sparkles", "Detect editable perspective guides from a layer or image…");
     actions->addWidget(m_duplicate); actions->addWidget(m_remove); actions->addStretch();
-    actions->addWidget(m_load); actions->addWidget(m_save); layout->addLayout(actions);
+    actions->addWidget(m_detect); actions->addWidget(m_load); actions->addWidget(m_save); layout->addLayout(actions);
 
     m_properties = new GuidePropertyTabs; m_properties->setObjectName("guidePropertyTabs");
     m_properties->setDocumentMode(true); m_properties->setIconSize({ui::metrics::tabIcon, ui::metrics::tabIcon});
@@ -272,6 +276,7 @@ GuidePanel::GuidePanel(Canvas *canvas, QWidget *parent) : QWidget(parent), m_can
     connect(m_remove, &QToolButton::clicked, m_canvas, &Canvas::removeSelectedGuide);
     connect(m_load, &QToolButton::clicked, this, &GuidePanel::loadSet);
     connect(m_save, &QToolButton::clicked, this, &GuidePanel::saveSet);
+    connect(m_detect, &QToolButton::clicked, this, &GuidePanel::detectPerspectiveRequested);
     connect(m_list, &QTreeWidget::currentItemChanged, this, [this](QTreeWidgetItem *item) {
         if (!m_refreshing && item) m_canvas->selectGuide(item->data(0, Qt::UserRole).toString());
     });
@@ -379,6 +384,7 @@ void GuidePanel::refresh() {
     m_properties->setEnabled(!creating);
     if (selected) {
         m_name->setText(selected->name); m_density->setValueSilently(selected->subdivisions);
+        m_density->parentWidget()->setVisible(selected->type != GuideType::Ellipse);
         m_vertical->setVisible(selected->type == GuideType::TwoPoint); m_vertical->setChecked(selected->vertical);
         m_limited->setChecked(selected->limited); m_areaControls->setVisible(selected->limited);
         const double values[] = {selected->area.x(), selected->area.y(), selected->area.width(), selected->area.height()};
@@ -396,6 +402,7 @@ void GuidePanel::refresh() {
         colorChip(m_color, selected->color); m_opacity->setValueSilently(selected->opacity * 100);
     } else {
         m_name->clear(); m_vertical->hide(); m_areaControls->hide();
+        m_density->parentWidget()->show();
         m_colorControls->hide();m_opacity->parentWidget()->hide();
     }
     m_visible->setChecked(settings.visible); m_snapping->setChecked(settings.snapping); m_handles->setChecked(settings.handles);

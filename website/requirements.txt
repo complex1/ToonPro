@@ -1,2 +1,2 @@
-Markdown==3.11.2
-PyYAML==6.0.3
+# The website builder and static validator use Python 3.10+ standard library only.
+# Optional browser QA: pip install playwright

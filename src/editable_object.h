@@ -10,7 +10,7 @@
 #include <optional>
 
 namespace toon {
-enum class LayerKind { Raster, Vector, Text, Scene3D, Symbol };
+enum class LayerKind { Raster, Vector, Text, Scene3D, Symbol, Reference3D };
 enum class ObjectKind { Path, Text };
 struct BezierNode {
     QPointF anchor;

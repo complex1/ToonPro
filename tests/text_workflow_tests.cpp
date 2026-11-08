@@ -7,6 +7,7 @@
 #include "timeline_controller.h"
 #include "tool_catalog.h"
 #include "tool_session.h"
+#include "tool_catalog_legacy_fixture.h"
 #include "ui_theme.h"
 #include "value_slider.h"
 #include <QDoubleSpinBox>
@@ -49,13 +50,13 @@ private slots:
         QVERIFY(current.load()); QVERIFY(current.tool("text"));
         QCOMPARE(current.tool("text")->engine,Canvas::Tool::Text);
         QVERIFY(current.entry("entry/text")); QVERIFY(current.save());
-        QCOMPARE(read(current.path())["version"].toInt(),12);
+        QCOMPARE(read(current.path())["version"].toInt(),14);
 
         // A pre-text catalog must contain legacy-compatible brushes. Relabeling
         // today's connected/surface presets as version 7 is intentionally invalid.
         ToolCatalog catalog(nullptr,directory.filePath("legacy-tools.json"));
         QVERIFY(catalog.load()); QVERIFY(catalog.save());
-        auto legacy=read(catalog.path()); legacy["version"]=7;
+        auto legacy=test_fixture::toolCatalogBefore14(read(catalog.path()),7);
         QJsonArray tools,entries;
         for(const auto &value:legacy["tools"].toArray())
             if(value.toObject()["id"]!="text") tools.append(value);

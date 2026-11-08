@@ -1,3 +1,4 @@
+#include "feature_flags.h"
 #include "timeline_test_geometry.h"
 #include "camera_panel.h"
 #include "camera_animation.h"
@@ -94,6 +95,7 @@ private slots:
         QVERIFY(controller.setFrame(6));button(panel,"cameraAdd")->click();QCOMPARE(frames(canvas),(QVector<int>{0,6,14}));button(panel,"cameraRemove")->click();QCOMPARE(frames(canvas),(QVector<int>{0,14}));
     }
     void sceneTargetSwitchFlushesDraftAndHonorsLocks(){
+        if (!features::legacy3DEditor) QSKIP("Legacy 3D authoring is retired; compatibility coverage remains enabled.");
         Canvas canvas;canvas.setProject(fixture(true));TimelineController controller(&canvas);FramePropertiesPanel panel(&controller);panel.resize(240,680);panel.show();
         const auto first=canvas.shot().layers[canvas.shot().layers.size()-2].id,last=canvas.shot().layers.last().id;const auto artwork=controller.selectedPropertyLayerId();
         QVERIFY(controller.selectCamera(last));settle();QCOMPARE(panel.findChild<QTabBar *>("framePropertiesTabs")->currentIndex(),3);QCOMPARE(panel.findChild<QTabBar *>("cameraMode")->currentIndex(),1);
@@ -118,7 +120,8 @@ private slots:
     void timelineSelectionDragClipboardAndSceneSeek(){
         Canvas canvas;canvas.setProject(fixture(true));TimelineController controller(&canvas);const auto artwork=controller.selectedPropertyLayerId();
         QVERIFY(controller.selectCamera());QVERIFY(controller.setCameraEnabled(true));QVERIFY(controller.setFrame(10));QVERIFY(controller.setCameraKey());
-        const auto scene=canvas.shot().layers.last().id;QVERIFY(controller.selectCamera(scene));QVERIFY(controller.setCameraEnabled(true));
+        const auto scene=canvas.shot().layers.last().id;
+        if (features::legacy3DEditor) { QVERIFY(controller.selectCamera(scene));QVERIFY(controller.setCameraEnabled(true)); }
         QVERIFY(controller.selectPropertyLayer(artwork));TimelinePanel panel(&controller);FramePropertiesPanel properties(&controller);panel.resize(760,450);properties.resize(240,650);panel.show();properties.show();settle();
         auto *grid=panel.findChild<QAbstractScrollArea *>("timelineGrid");grid->verticalScrollBar()->setValue(0);grid->horizontalScrollBar()->setValue(0);
         const int row=cameraRow(canvas);QTest::mouseClick(grid->viewport(),Qt::LeftButton,Qt::NoModifier,cell(grid,row,10));
@@ -126,6 +129,7 @@ private slots:
         const int before=canvas.document()->history()->count();drag(grid,cell(grid,row,10),cell(grid,row,14));QCOMPARE(frames(canvas),(QVector<int>{0,14}));QCOMPARE(controller.currentFrame(),14);QCOMPARE(canvas.document()->history()->count(),before+1);
         QTest::mouseClick(grid->viewport(),Qt::LeftButton,Qt::NoModifier,cell(grid,row,0));QTest::mouseClick(grid->viewport(),Qt::LeftButton,Qt::ShiftModifier,cell(grid,row,14));QCOMPARE(controller.selectedKeys().size(),2);
         QTest::keyClick(grid,Qt::Key_C,Qt::ControlModifier);QVERIFY(controller.setFrame(20));QTest::keyClick(grid,Qt::Key_V,Qt::ControlModifier);QCOMPARE(frames(canvas),(QVector<int>{0,14,20,34}));
+        if (!features::legacy3DEditor) { QVERIFY(!controller.selectCamera(scene)); return; }
         grid->horizontalScrollBar()->setValue(0);QTest::mouseClick(grid->viewport(),Qt::LeftButton,Qt::NoModifier,cell(grid,row+2,10));
         QVERIFY(controller.cameraSelected());QCOMPARE(controller.selectedCameraLayerId(),scene);QCOMPARE(controller.currentFrame(),10);QCOMPARE(controller.selectedPropertyLayerId(),artwork);
         QCOMPARE(properties.findChild<QLabel *>("cameraTargetName")->text(),QString("City reference 2"));
@@ -153,7 +157,7 @@ private slots:
     void narrowAccessibleLayoutAndScreenshots(){
         Canvas canvas;canvas.setProject(fixture(true));TimelineController controller(&canvas);FramePropertiesPanel panel(&controller);panel.resize(240,650);panel.show();panel.findChild<QTabBar *>("framePropertiesTabs")->setCurrentIndex(3);settle();
         const QString output=qEnvironmentVariable("TOON_UI_PREVIEW","test-artifacts");QVERIFY(QDir().mkpath(output));
-        for(int mode:{0,1}){
+        for(int mode=0;mode<panel.findChild<QTabBar *>("cameraMode")->count();++mode){
             panel.findChild<QTabBar *>("cameraMode")->setCurrentIndex(mode);settle();QCOMPARE(panel.width(),240);
             for(auto *spin:panel.findChildren<QDoubleSpinBox *>()){QCOMPARE(spin->width(),48);QVERIFY(spin->suffix().isEmpty());}
             for(auto *control:panel.findChildren<QToolButton *>())if(control->isVisibleTo(&panel)){

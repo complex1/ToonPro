@@ -1,4 +1,5 @@
 #include "scene3d_panel.h"
+#include "feature_flags.h"
 #include "scene3d_controller.h"
 #include "drawing_panels.h"
 #include "brush_settings_panel.h"
@@ -50,16 +51,16 @@ QWidget *drawingPanel(Canvas *canvas, const QString &kind) {
                 tabs->setProperty("compactDrawingTabs", true);
                 tabs->setIconSize({ui::metrics::tabIcon, ui::metrics::tabIcon});
             }
-        auto *scenePanel = new Scene3DPanel(canvas->scene3D());
-        stack->addWidget(scenePanel);
+        auto *scenePanel = features::legacy3DEditor ? new Scene3DPanel(canvas->scene3D()) : nullptr;
+        if (scenePanel) stack->addWidget(scenePanel);
         const auto updatePage = [canvas, stack, scenePanel] {
             stack->setEnabled(canvas->hasProject() && canvas->toolAvailable());
             const auto tool = canvas->tool();
             const bool selection = tool == Canvas::Tool::RectangleSelect || tool == Canvas::Tool::LassoSelect
                 || tool == Canvas::Tool::Transform || canvas->document()->transformActive();
-            const bool vectorEdit = tool == Canvas::Tool::VectorNode || tool == Canvas::Tool::VectorSimplify || tool == Canvas::Tool::VectorWidth;
-            const bool scene = tool == Canvas::Tool::SceneObject || tool == Canvas::Tool::SceneCamera || tool == Canvas::Tool::SceneRig;
-            if(tool == Canvas::Tool::SceneRig) scenePanel->setRigMode();
+            const bool vectorEdit = tool == Canvas::Tool::VectorNode || tool == Canvas::Tool::VectorSimplify || tool == Canvas::Tool::VectorWidth || tool == Canvas::Tool::VectorNudge;
+            const bool scene = scenePanel && (tool == Canvas::Tool::SceneObject || tool == Canvas::Tool::SceneCamera || tool == Canvas::Tool::SceneRig);
+            if(scene && tool == Canvas::Tool::SceneRig) scenePanel->setRigMode();
             else if(scene) scenePanel->setCameraMode(tool == Canvas::Tool::SceneCamera);
             const int page = scene ? 5 : vectorEdit ? 4 : selection ? 1 : tool == Canvas::Tool::Guides ? 2 : tool>=Canvas::Tool::Eyedropper ? 3 : 0;
             if (stack->currentIndex() != page) {

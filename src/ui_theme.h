@@ -7,6 +7,8 @@ namespace ui {
 // Spectrum-inspired neutral surfaces, refined for the compact drawing workspace.
 // Selection and focus use silver so the artist's work supplies the color.
 inline constexpr char canvas[] = "#1b1b1b";
+inline constexpr char transparencyLight[] = "#f2f2f2";
+inline constexpr char transparencyDark[] = "#d5d5d5";
 inline constexpr char panel[] = "#282828";
 inline constexpr char base[] = "#222222";
 inline constexpr char raised[] = "#303030";

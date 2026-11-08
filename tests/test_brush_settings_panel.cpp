@@ -259,6 +259,48 @@ private slots:
         dialog->close();
     }
 
+    void stabilizationModesAreDirectAndAdvancedTuningStaysSynchronized() {
+        Canvas canvas; canvas.setProject(Project::create()); BrushSettingsPanel panel(&canvas);
+        panel.resize(220, 220); panel.show(); QCoreApplication::processEvents();
+        auto *quick = panel.findChild<QTabBar *>("quickBrushStabilizationMode");
+        auto *advanced = panel.findChild<QTabBar *>("brushStabilizationMode");
+        auto *deadZone = panel.findChild<ValueSlider *>("brushStabilizationDeadZone");
+        auto *finish = panel.findChild<QCheckBox *>("brushStabilizationFinish");
+        QVERIFY(quick && advanced && deadZone && finish); QCOMPARE(quick->count(), 2);
+        QVERIFY(quick->isVisible());
+        for (int i = 0; i < quick->count(); ++i) {
+            QVERIFY(quick->rect().contains(quick->tabRect(i)));
+            QVERIFY(!quick->tabToolTip(i).isEmpty()); QVERIFY(!quick->accessibleTabName(i).isEmpty());
+        }
+        QCOMPARE(quick->style()->styleHint(QStyle::SH_ToolTip_WakeUpDelay, nullptr, quick), 600);
+        QTest::mouseClick(quick, Qt::LeftButton, Qt::NoModifier, quick->tabRect(1).center());
+        QCOMPARE(canvas.stabilizationMode(), StrokeFilterMode::Stabilizer);
+        QCOMPARE(advanced->currentIndex(), 1);
+        panel.openAdvancedSettings(); QCoreApplication::processEvents();
+        QVERIFY(deadZone->isVisible());
+        deadZone->setValue(3.5); finish->setChecked(false);
+        QCOMPARE(canvas.stabilizationDeadZone(), 3.5); QVERIFY(!canvas.stabilizationFinishAtEndpoint());
+        QVERIFY(deadZone->findChild<QSlider *>()); QCOMPARE(deadZone->findChild<QDoubleSpinBox *>()->width(), 48);
+        canvas.setStabilizationMode(StrokeFilterMode::Smooth);
+        QCOMPARE(quick->currentIndex(), 0); QCOMPARE(advanced->currentIndex(), 0); QVERIFY(!deadZone->isVisible());
+        auto settings = canvas.brush; settings.smoothingEnabled = false; canvas.setBrushSettings(settings);
+        QVERIFY(!quick->isEnabled()); QVERIFY(!advanced->isEnabled()); QVERIFY(!finish->isEnabled());
+        QCOMPARE(canvas.document()->history()->count(), 0);
+        panel.findChild<QDialog *>("advancedBrushDialog")->close();
+    }
+
+    void stabilizationControlPreviews() {
+        const auto output = qEnvironmentVariable("TOON_UI_PREVIEW"); if (output.isEmpty()) return;
+        QVERIFY(QDir().mkpath(output));
+        Canvas canvas; canvas.setProject(Project::create()); canvas.setStabilization(80);
+        canvas.setStabilizationMode(StrokeFilterMode::Stabilizer); canvas.setStabilizationDeadZone(2);
+        BrushSettingsPanel panel(&canvas); panel.resize(220, 220); panel.show(); QCoreApplication::processEvents();
+        QVERIFY(panel.grab().save(QDir(output).filePath("stabilization-quick.png")));
+        panel.openAdvancedSettings(); auto *dialog = panel.findChild<QDialog *>("advancedBrushDialog");
+        dialog->resize(400, 520); QCoreApplication::processEvents();
+        QVERIFY(dialog->grab().save(QDir(output).filePath("stabilization-options.png"))); dialog->close();
+    }
+
     void quickRowsStayInlineAndFitAShortDrawingDock() {
         Canvas canvas; canvas.setProject(Project::create()); BrushSettingsPanel panel(&canvas);
         panel.show();

@@ -1,4 +1,5 @@
 #include "timeline_panel.h"
+#include "feature_flags.h"
 #include "movie_review_controller.h"
 #include "movie_review_panel.h"
 #include "timeline_ripple_dialog.h"
@@ -287,7 +288,7 @@ QVector<TimelineRow> timelineRows(TimelineController *controller){
     for(const auto *layer:children.value(QString()))appendLayer(*layer,0);
     for(const auto &clip:shot->audioClips)rows.append({"audio:"+clip.id,clip.name,nullptr,false,!clip.muted,{},{},{},clip.id});
     if(!controller->property("symbolEditor").toBool())rows.append({"camera:2d","2D camera",nullptr,false,true,{},{},{},{},TimelineKeyKind::Camera2D});
-    for(const auto &layer:shot->layers)if(layer.scene3d)
+    for(const auto &layer:shot->layers)if(features::legacy3DEditor && layer.scene3d)
         rows.append({"camera:3d:"+layer.id,"3D camera · "+layer.name,nullptr,!sceneCameraEditError(*shot,layer.id).isEmpty(),layer.visible,layer.id,{},{},{},TimelineKeyKind::Camera3D});
     return rows;
 }
@@ -1193,6 +1194,9 @@ TimelinePanel::TimelinePanel(TimelineController *controller,QWidget *parent,Draw
     m_add=timelineButton(this,"timelineAddTrack","plus","Add a static, frame-by-frame or keyframe track");m_blank=timelineButton(this,"timelineNewDrawing","file-plus","New blank drawing at the current frame");
     m_duplicate=timelineButton(this,"timelineDuplicateDrawing","copy","Duplicate the current or previous drawing at this frame");m_remove=timelineButton(this,"timelineRemoveExposure","trash","Remove selected exposures; keep drawings for reuse");
     for(auto *button:{m_add,m_blank,m_duplicate,m_remove}){button->setFixedWidth(28);editing->addWidget(button);}editing->addStretch();
+    auto *inbetweens=timelineButton(this,"timelineInbetweens","sparkles","Generate in-betweens between two pose cels");
+    editing->insertWidget(editing->count()-1,inbetweens);
+    connect(inbetweens,&QToolButton::clicked,this,&TimelinePanel::inbetweensRequested);
     m_frame=new ValueSlider("Current frame",1,1,1);m_frame->setObjectName("timelineCurrentFrame");m_editingLayout->addWidget(m_frame,1);
     m_headerLayout->addWidget(m_transportRow,0,0);m_headerLayout->addWidget(m_editingRow,1,0);
     m_grid=new TimelineGrid(controller,this);layout->addWidget(m_grid,1);

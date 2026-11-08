@@ -1,6 +1,7 @@
 #include "canvas.h"
 #include "main_window.h"
 #include "guide_geometry.h"
+#include "guide_tool.h"
 #include <cmath>
 #include <QDir>
 #include <QFocusEvent>
@@ -59,6 +60,90 @@ private slots:
         QCOMPARE(canvas.document()->history()->count(), 2);
         canvas.document()->history()->undo(); QCOMPARE(canvas.drawingGuides().size(), 1);
         canvas.document()->history()->redo(); QCOMPARE(canvas.drawingGuides().last(), fish);
+    }
+    void ellipsePlacementHandlesLocksAndUndoFollowMirroredRotatedView() {
+        Canvas canvas; setup(canvas); canvas.setRotation(29); canvas.setZoom(1.2); canvas.setCanvasMirrored(true);
+        const auto artwork = renderMovieFrame(canvas.project()); canvas.beginGuideCreation(GuideType::Ellipse);
+        for (const auto point : {QPointF(150, 180), QPointF(470, 300), QPointF(350, 150)})
+            QTest::mouseClick(&canvas, Qt::LeftButton, Qt::NoModifier, view(canvas, point));
+        QVERIFY(!canvas.guideCreating()); QCOMPARE(canvas.drawingGuides().size(), 1);
+        auto guide = canvas.drawingGuides().first(); QCOMPARE(guide.type, GuideType::Ellipse); QVERIFY(validGuideGeometry(guide));
+        QCOMPARE(canvas.document()->history()->count(), 1); QCOMPARE(renderMovieFrame(canvas.project()), artwork);
+        const auto original = guide; const auto middle = (guide.points[0] + guide.points[1]) / 2;
+        const auto moveStart = view(canvas, middle), moveEnd = moveStart + QPoint(25, -17);
+        const auto delta = canvas.artworkPoint(moveEnd) - canvas.artworkPoint(moveStart);
+        QTest::mousePress(&canvas, Qt::LeftButton, Qt::NoModifier, moveStart); dragMove(canvas, moveEnd);
+        QTest::mouseRelease(&canvas, Qt::LeftButton, Qt::NoModifier, moveEnd);
+        QCOMPARE(canvas.document()->history()->count(), 2); guide = canvas.drawingGuides().first();
+        for (int i = 0; i < 3; ++i) QVERIFY(QLineF(guide.points[i], original.points[i] + delta).length() < .01);
+        canvas.document()->history()->undo(); QCOMPARE(canvas.drawingGuides().first(), original);
+        const auto axisStart = view(canvas, original.points[1]), axisEnd = axisStart + QPoint(-35, 22);
+        QTest::mousePress(&canvas, Qt::LeftButton, Qt::NoModifier, axisStart); dragMove(canvas, axisEnd);
+        QTest::mouseRelease(&canvas, Qt::LeftButton, Qt::NoModifier, axisEnd); guide = canvas.drawingGuides().first();
+        const auto newCenter = (guide.points[0] + guide.points[1]) / 2, newAxis = guide.points[1] - guide.points[0];
+        QVERIFY(std::abs(QPointF::dotProduct(guide.points[2] - newCenter, newAxis)) < .01);
+        QVERIFY(std::abs(QLineF(newCenter, guide.points[2]).length() - QLineF(middle, original.points[2]).length()) < .01);
+        canvas.document()->history()->undo(); guide = canvas.drawingGuides().first();
+        const auto heightStart = view(canvas, guide.points[2]), heightEnd = heightStart + QPoint(15, 18);
+        QTest::mousePress(&canvas, Qt::LeftButton, Qt::NoModifier, heightStart); dragMove(canvas, heightEnd);
+        QTest::mouseRelease(&canvas, Qt::LeftButton, Qt::ShiftModifier, heightEnd); guide = canvas.drawingGuides().first();
+        QVERIFY(std::abs(QLineF((guide.points[0] + guide.points[1]) / 2, guide.points[2]).length() - QLineF(guide.points[0], guide.points[1]).length() / 2) < .01);
+        guide.locked = true; canvas.updateGuide(guide); const int history = canvas.document()->history()->count();
+        const auto locked = canvas.drawingGuides().first(); const auto lockedHandle = view(canvas, locked.points[0]);
+        QTest::mousePress(&canvas, Qt::LeftButton, Qt::NoModifier, lockedHandle); dragMove(canvas, lockedHandle + QPoint(30, 20));
+        QTest::mouseRelease(&canvas, Qt::LeftButton, Qt::NoModifier, lockedHandle + QPoint(30, 20));
+        QCOMPARE(canvas.drawingGuides().first(), locked); QCOMPARE(canvas.document()->history()->count(), history);
+    }
+    void fixedEllipseCapturesInitialDabAndCompletesLoops_data() {
+        QTest::addColumn<qreal>("smoothing"); QTest::addColumn<bool>("mirrored");
+        for (qreal smoothing : {qreal(0), qreal(100)}) for (bool mirrored : {false, true})
+            QTest::newRow(qPrintable(QString("%1-%2").arg(smoothing).arg(mirrored))) << smoothing << mirrored;
+    }
+    void fixedEllipseCapturesInitialDabAndCompletesLoops() {
+        QFETCH(qreal, smoothing); QFETCH(bool, mirrored);
+        Canvas canvas; setup(canvas); canvas.setRotation(23); canvas.setZoom(1.2); canvas.setCanvasMirrored(mirrored);
+        canvas.addDefaultGuide(GuideType::Ellipse); auto guide = canvas.drawingGuides().first();
+        const qreal rotation = .33; const QPointF center(320, 240);
+        const QPointF axis(std::cos(rotation) * 180, std::sin(rotation) * 180), height(-std::sin(rotation) * 64, std::cos(rotation) * 64);
+        guide.points = {center - axis, center + axis, center + height}; guide.visible = false; guide.locked = true; canvas.updateGuide(guide);
+        auto settings = canvas.guideSettings(); settings.snapping = true; settings.visible = false; canvas.setGuideSettings(settings);
+        canvas.setTool(Canvas::Tool::Brush); canvas.brush.size = 4; canvas.brush.color = Qt::black;
+        canvas.setPressureSize(false); canvas.setStabilization(smoothing);
+        const auto ellipse = guideSnapConstraints(guide, center + axis).first();
+        const qreal first = 170 * std::acos(-1.0) / 180;
+        const auto onCurve = guideEllipsePoint(ellipse, first);
+        const auto away = onCurve + (onCurve - center) / QLineF(center, onCurve).length() * 6;
+        const auto contact = view(canvas, away); const auto actualContact = canvas.artworkPoint(contact);
+        const auto projectedContact = projectOntoGuideConstraint(actualContact, ellipse);
+        const int before = canvas.document()->history()->count();
+        QTest::mousePress(&canvas, Qt::LeftButton, Qt::NoModifier, contact);
+        auto frame = renderMovieFrame(canvas.project());
+        QVERIFY(frame.pixelColor(qRound(projectedContact.x()), qRound(projectedContact.y())).alpha() > 0);
+        QCOMPARE(frame.pixelColor(qRound(actualContact.x()), qRound(actualContact.y())).alpha(), 0);
+        for (int i = 1; i <= 72; ++i) {
+            const auto point = guideEllipsePoint(ellipse, first + i * std::acos(-1.0) / 18);
+            dragMove(canvas, view(canvas, point));
+        }
+        QTest::mouseRelease(&canvas, Qt::LeftButton, Qt::NoModifier, view(canvas, onCurve)); frame = renderMovieFrame(canvas.project());
+        for (int i = 0; i < 12; ++i) {
+            const auto point = guideEllipsePoint(ellipse, i * std::acos(-1.0) / 6);
+            QVERIFY2(frame.pixelColor(qRound(point.x()), qRound(point.y())).alpha() > 0, qPrintable(QString("Missing ellipse arc at %1,%2").arg(point.x()).arg(point.y())));
+        }
+        QCOMPARE(frame.pixelColor(320, 240).alpha(), 0); QCOMPARE(canvas.document()->history()->count(), before + 1);
+        canvas.document()->history()->undo(); QVERIFY(canvas.shot().layers.first().tiles.isEmpty());
+    }
+    void fixedEllipseCaptureRadiusAndCenterFallbackAreStable() {
+        Canvas canvas; setup(canvas); canvas.addDefaultGuide(GuideType::Ellipse);
+        auto guide = canvas.drawingGuides().first(); guide.points = {{100, 240}, {540, 240}, {320, 170}}; canvas.updateGuide(guide);
+        auto settings = canvas.guideSettings(); settings.snapping = true; canvas.setGuideSettings(settings); GuideTool tool(&canvas);
+        const auto ellipse = guideSnapConstraints(guide, {540, 240}).first();
+        const auto first = tool.beginSnap({546, 240}); QVERIFY(QLineF(first, QPointF(540, 240)).length() < .01);
+        auto point = tool.snap({320, 170}); QVERIFY(point.has_value()); auto samples = tool.strokePoints(*point); QVERIFY(!samples.isEmpty());
+        const auto last = samples.last(); point = tool.snap({320, 240}); QVERIFY(point.has_value());
+        QVERIFY(QLineF(*point, last).length() < .01); samples = tool.strokePoints(*point);
+        for (const auto sample : samples) QVERIFY(guideConstraintDistance(sample, ellipse) < 1e-6);
+        tool.endSnap(); QCOMPARE(tool.beginSnap({320, 240}), QPointF(320, 240));
+        point = tool.snap({330, 240}); QVERIFY(point.has_value()); QCOMPARE(*point, QPointF(330, 240));
     }
     void threePointSnapsTowardThirdVanishingPoint() {
         Canvas canvas; setup(canvas); canvas.addDefaultGuide(GuideType::ThreePoint);

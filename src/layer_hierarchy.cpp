@@ -22,7 +22,7 @@ bool layerIsDescendant(const QVector<RasterLayer> &layers, int index, const QStr
     return false;
 }
 bool layerCanPaint(const QVector<RasterLayer> &layers, int index) {
-    return index >= 0 && index < layers.size() && layers[index].kind == LayerKind::Raster && !layers[index].adjustment && layerCanEdit(layers, index);
+    return index >= 0 && index < layers.size() && layers[index].kind == LayerKind::Raster && !layers[index].adjustment && !layers[index].puppetWarp && layerCanEdit(layers, index);
 }
 bool layerCanEdit(const QVector<RasterLayer> &layers, int index) {
     if (index < 0 || index >= layers.size() || layers[index].group) return false;

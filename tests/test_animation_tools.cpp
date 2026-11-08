@@ -150,8 +150,9 @@ private slots:
         canvas.setTool(Canvas::Tool::Eyedropper);canvas.drawingTools()->fillSettings.source=RasterSampleSource::AllLayers;
         const auto point=canvas.viewTransform().map(sheetGeometry(project,project.shots[0]).output.topLeft()+QPointF(10,10));
         QVERIFY(canvas.drawingTools()->press(point,Qt::NoModifier,1));QCOMPARE(canvas.brush.color,QColor(Qt::blue));
-        QVERIFY(canvas.document()->setCurrentFrame(2));QCOMPARE(reference->count(),1);
-        QCOMPARE(reference->currentData().toString(),layers[0].id);
+        QVERIFY(canvas.document()->setCurrentFrame(2));QVERIFY(reference->findData(layers[0].id)>0);
+        QCOMPARE(reference->itemText(0),QString("Marked reference layers"));
+        QCOMPARE(reference->currentIndex(),-1);QVERIFY(canvas.drawingTools()->fillSettings.referenceLayerId.isEmpty());
     }
     void clipboardCopiesTheRemappedCurrentDrawingOnly() {
         Document doc;const auto project=animatedProject();doc.load(project);doc.selectLayer(1);QString error;

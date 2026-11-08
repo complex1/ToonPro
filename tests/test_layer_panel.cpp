@@ -17,6 +17,7 @@
 #include <QFileInfo>
 #include <QSlider>
 #include <QLineEdit>
+#include <QLabel>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QScrollBar>
@@ -280,7 +281,8 @@ private slots:
     QFile file(directory.filePath("Broken.png"));QVERIFY(file.open(QIODevice::WriteOnly));file.write("This is not an image");file.close();
     const auto invalid=chooseArtwork(window,button,file.fileName());QVERIFY(invalid.opened);QVERIFY(invalid.accepted);
     QCOMPARE(doc->project().toJson(),before);QCOMPARE(doc->history()->count(),0);QCOMPARE(window.canvas()->tool(),tool);
-    QVERIFY(!doc->transformActive());QVERIFY(!window.statusBar()->currentMessage().isEmpty());doc->history()->setClean();
+    QVERIFY(!doc->transformActive());auto *feedback=window.findChild<QLabel*>("canvasStatusMessage");QVERIFY(feedback);QVERIFY(feedback->isVisible());
+    QCOMPARE(feedback->text(),QString("Choose an image of up to 64 million pixels."));doc->history()->setClean();
  }
  void imageImportStopsPlaybackBeforeOpeningChooser(){
     QTemporaryDir directory;QVERIFY(directory.isValid());MainWindow window(directory.filePath("workspace.ini"));

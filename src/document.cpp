@@ -9,6 +9,7 @@
 #include <QUuid>
 #include <QSet>
 #include <QScopedValueRollback>
+#include <algorithm>
 #include <new>
 #include <cmath>
 
@@ -71,13 +72,17 @@ private:
     QString m_beforeSelection, m_afterSelection, m_beforeShot, m_afterShot;
     std::optional<RasterSelection> m_beforeRaster, m_afterRaster;
 };
-Document::Document(QObject *parent) : QObject(parent) { m_history.setUndoLimit(50); }
+Document::Document(QObject *parent) : QObject(parent) {
+    m_history.setUndoLimit(50);
+    connect(this,&Document::changed,this,[this]{++m_contentRevision;});
+}
 void Document::load(const Project &project) {
     QScopedValueRollback loading(m_loading, true);
     m_beforeEffectsEdit.reset(); m_effectsLayerId.clear(); m_effectsLabel.clear(); m_effectsShotId.clear(); m_effectsFrame=-1; m_effectsKeyframeProperties=false;
     m_beforeCameraEdit.reset(); m_cameraEditLayerId.clear(); m_cameraEditLabel.clear();
     m_keyframeSourceEditing=false;
     m_externalEditActive = false;
+    m_beforeReference3DEdit.reset(); m_reference3DEditLayerId.clear(); m_reference3DEditShotId.clear(); m_reference3DEditFrame=-1;
     m_beforeKeyframeEdit.reset(); m_keyframeEditLayerId.clear(); m_keyframeEditLabel.clear();
     m_beforeLayerPropertyEdit.reset(); m_layerPropertyLabel.clear();
     m_beforeStroke.reset(); m_strokeShapeOriginal.reset(); m_strokePaint.tiles.clear(); m_vectorStroke.reset(); m_history.clear(); m_historyBytes = 0;
@@ -127,6 +132,7 @@ void Document::apply(const Project &project, const QString &selectedId, const QS
     m_beforeEffectsEdit.reset(); m_effectsLayerId.clear(); m_effectsLabel.clear(); m_effectsShotId.clear(); m_effectsFrame=-1; m_effectsKeyframeProperties=false;
     m_beforeCameraEdit.reset(); m_cameraEditLayerId.clear(); m_cameraEditLabel.clear();
     m_externalEditActive = false;
+    m_beforeReference3DEdit.reset(); m_reference3DEditLayerId.clear(); m_reference3DEditShotId.clear(); m_reference3DEditFrame=-1;
     m_beforeKeyframeEdit.reset(); m_keyframeEditLayerId.clear(); m_keyframeEditLabel.clear();
     const bool hadTransform = transformActive();
     m_stampPlacement.reset(); m_transformPreview.reset(); m_transformRasterized.reset(); m_transformRows.clear();
@@ -180,10 +186,26 @@ void Document::apply(const Project &project, const QString &selectedId, const QS
     emit rasterSelectionChanged();
     if (hadTransform) emit transformChanged();
 }
+bool Document::bakePuppetWarp(){
+    if(!m_open||editingGestureActive()||layerPropertyEditActive())return false;
+    const auto &layers=activeShot().layers;if(!layers[m_active].puppetWarp||!layerCanEdit(layers,m_active)||layerPositionLocked(layers,m_active))return false;
+    auto after=m_project;after.shots[activeShotIndex()].layers[m_active].puppetWarp.reset();return commit(m_project,after,"Bake Puppet Warp");
+}
 bool Document::commit(const Project &before, const Project &afterInput, const QString &label, const QString &selectedId,
                       std::optional<RasterSelection> beforeRaster, std::optional<RasterSelection> afterRaster,
                       const QString &requestedBeforeShot, const QString &requestedAfterShot, const QJsonObject &action) {
     auto after = afterInput;
+    QMap<QString,const RasterLayer*> retainedBefore;
+    for(const auto *shot:projectArtworkShots(before))for(const auto &layer:shot->layers)if(layer.puppetWarp)retainedBefore.insert(layer.id,&layer);
+    for(const auto *shot:projectArtworkShots(after))for(const auto &layer:shot->layers){
+        const auto *old=retainedBefore.value(layer.id,nullptr);
+        if(layer.puppetWarp){
+            QString error;if(layer.kind!=LayerKind::Raster||layer.group||layer.adjustment)error="Editable Puppet Warp requires a raster artwork layer.";
+            else if(!old||layer.puppetWarp!=old->puppetWarp)error=validatePuppetWarpState(*layer.puppetWarp);
+            if(!error.isEmpty()){apply(before);emit warning(error);return false;}
+        }
+        if(old&&layer.puppetWarp==old->puppetWarp&&layer.tiles!=old->tiles){apply(before);emit warning("Edit the Puppet Warp or Bake warp before changing its raster pixels.");return false;}
+    }
     const auto audioError = validateProjectAudio(after);
     if (!audioError.isEmpty()) { emit warning(audioError); return false; }
     const auto poseError = validateProjectSymbolPoses(after);
@@ -194,10 +216,10 @@ bool Document::commit(const Project &before, const Project &afterInput, const QS
         QString error=validateLayerEffects(layer.effects);
         if(error.isEmpty()&&layer.mask)error=validateLayerMask(*layer.mask);
         if(layer.mask)maskTileCount+=layer.mask->tiles.size();
-        if(error.isEmpty()&&(layer.scene3d||layerIsAnnotation(shot->layers,i))
+        if(error.isEmpty()&&(layer.scene3d||layer.reference3d||layerIsAnnotation(shot->layers,i))
             &&(layer.mask||layer.adjustment||layer.effects!=LayerEffects{}))error="Remove masks and effects before moving this layer into production notes or a 3D reference.";
         if(error.isEmpty()&&layer.adjustment&&(layer.group||layer.kind!=LayerKind::Raster||!layer.tiles.isEmpty()||!layer.objects.isEmpty()
-            ||layer.alphaLocked||layer.clipped||layer.effects.blurEnabled||layer.effects.shadowEnabled||layer.effects.glowEnabled))
+            ||layer.alphaLocked||layer.clipped||layer.effects.blurEnabled||layer.effects.shadowEnabled||layer.effects.glowEnabled||layer.effects.outlineEnabled))
             error="Adjustment layers support color correction and masks; keep artwork on a drawing layer.";
         if(!error.isEmpty()){apply(before);emit warning(error);return false;}
     }
@@ -259,6 +281,14 @@ bool Document::commit(const Project &before, const Project &afterInput, const QS
         for (const auto &image : old) cost += image.sizeInBytes();
     }
     for (const auto &tiles : previous) for (const auto &image : tiles) cost += image.sizeInBytes();
+    QMap<qint64,qint64> oldWarpImages,newWarpImages;
+    QSet<qint64> artworkImages;
+    for(const auto *shot:projectArtworkShots(before))for(const auto &layer:shot->layers)for(const auto &image:layer.tiles)artworkImages.insert(image.cacheKey());
+    for(const auto *shot:projectArtworkShots(after))for(const auto &layer:shot->layers)for(const auto &image:layer.tiles)artworkImages.insert(image.cacheKey());
+    for(const auto *shot:projectArtworkShots(before))for(const auto &layer:shot->layers)if(layer.puppetWarp)for(const auto &image:layer.puppetWarp->sourceTiles)oldWarpImages.insert(image.cacheKey(),image.sizeInBytes());
+    for(const auto *shot:projectArtworkShots(after))for(const auto &layer:shot->layers)if(layer.puppetWarp)for(const auto &image:layer.puppetWarp->sourceTiles)newWarpImages.insert(image.cacheKey(),image.sizeInBytes());
+    for(auto image=oldWarpImages.cbegin();image!=oldWarpImages.cend();++image)if(!newWarpImages.contains(image.key())&&!artworkImages.contains(image.key()))cost+=image.value();
+    for(auto image=newWarpImages.cbegin();image!=newWarpImages.cend();++image)if(!oldWarpImages.contains(image.key())&&!artworkImages.contains(image.key()))cost+=image.value();
     QMap<QString,QMap<TileKey,QImage>> oldMasks;
     for(const auto *shot:projectArtworkShots(before))for(const auto &layer:shot->layers)if(layer.mask)oldMasks[layer.id]=layer.mask->tiles;
     for(const auto *shot:projectArtworkShots(after))for(const auto &layer:shot->layers)if(layer.mask) {
@@ -491,13 +521,13 @@ void Document::setLayerClipped(bool clipped) {
     if (!m_open || editingGestureActive() || layerPropertyEditActive()) return;
     auto p = m_project; auto &layers = p.shots[activeShotIndex()].layers; auto &layer = layers[m_active];
     if (layer.group || layer.clipped == clipped || fullLocked(layers, m_active)) return;
-    if (layer.kind == LayerKind::Scene3D || layer.adjustment) {
+    if (layer.kind == LayerKind::Scene3D || layer.kind == LayerKind::Reference3D || layer.adjustment) {
         emit warning("3D references and adjustment layers cannot use clipping masks."); return;
     }
     if (clipped) {
         auto candidate = layers; candidate[m_active].clipped = true;
         const auto baseId = clippingBases(candidate).value(layer.id);
-        for (const auto &base : layers) if (base.id == baseId && (base.kind == LayerKind::Scene3D || base.adjustment)) {
+        for (const auto &base : layers) if (base.id == baseId && (base.kind == LayerKind::Scene3D || base.kind == LayerKind::Reference3D || base.adjustment)) {
             emit warning("Choose a drawing layer as the clipping base. 3D references and adjustment layers cannot be clipping bases."); return;
         }
     }
@@ -727,7 +757,7 @@ bool Document::mergeDown() {
     if (layerAnimation(p.shots[activeShotIndex()],upper.id) || layerAnimation(p.shots[activeShotIndex()],lower.id)) {
         emit warning("Disable layer keyframes before merging animated artwork."); return false;
     }
-    if (upper.kind == LayerKind::Scene3D || lower.kind == LayerKind::Scene3D) {
+    if (upper.kind == LayerKind::Scene3D || lower.kind == LayerKind::Scene3D || upper.kind == LayerKind::Reference3D || lower.kind == LayerKind::Reference3D) {
         emit warning("3D reference layers cannot be merged into drawing layers."); return false;
     }
     if (upper.group || lower.group || !layerCanPaint(layers, m_active) || !layerCanPaint(layers, lowerIndex)
@@ -738,6 +768,7 @@ bool Document::mergeDown() {
     }
     try {
         auto merged = lower; merged.tiles.clear(); merged.opacity = 1; merged.alphaLocked = false;
+        merged.fillReference = lower.fillReference || upper.fillReference;
         merged.kind = LayerKind::Raster; merged.objects.clear(); merged.effects={}; merged.mask.reset(); merged.adjustment=false;
         QVector<RasterLayer> pair{lower, upper}; for (auto &layer : pair) layer.parentId.clear();
         QString error; if (!compositeLayer(pair, &merged, &error)) { emit warning(error); return false; }
@@ -754,7 +785,7 @@ bool Document::flattenImage() {
     for (const auto &layer : layers) if (layer.kind == LayerKind::Symbol) {
         emit warning("Break apart symbol instances before flattening the image."); return false;
     }
-    for (const auto &layer : layers) if (layer.kind == LayerKind::Scene3D) {
+    for (const auto &layer : layers) if (layer.kind == LayerKind::Scene3D || layer.kind == LayerKind::Reference3D) {
         emit warning("Remove the 3D reference layer before flattening. Flattening cannot preserve its editable scene."); return false;
     }
     for (int i = 0; i < layers.size(); ++i) if (fullLocked(layers, i)) {
@@ -796,11 +827,13 @@ bool Document::flattenImage() {
         QVector<RasterLayer> flattened; QString error;
         if (!artwork.isEmpty()) {
             auto merged = RasterLayer::create("Flattened artwork");
+            merged.fillReference = std::any_of(artwork.cbegin(), artwork.cend(), [](const RasterLayer &layer) { return layer.fillReference; });
             if (!compositeLayer(artwork, &merged, &error)) { emit warning(error); return false; }
             flattened.append(merged);
         }
         if (!notes.isEmpty()) {
             auto merged = RasterLayer::create("Flattened notes"); merged.annotation = true;
+            merged.fillReference = std::any_of(notes.cbegin(), notes.cend(), [](const RasterLayer &layer) { return layer.fillReference; });
             if (!compositeLayer(notes, &merged, &error)) { emit warning(error); return false; }
             flattened.append(merged);
         }

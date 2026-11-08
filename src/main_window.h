@@ -33,6 +33,7 @@ class QuickAccessToolbar;
 class TimelineController;
 class ProjectHome;
 class ProductionPanel;
+class Reference3DLayerPanel;
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
@@ -41,6 +42,7 @@ public:
     bool openProject(const QString &path);
     void setManagedDocument(const Project &, const std::function<bool()> &save, const std::function<void()> &recovery);
     bool prepareManagedLeave();
+    bool closeReferenceWorkspace();
     bool managedDirty() const { return m_dirty; }
     bool saveManaged() { return save(); }
     void markManagedSaved();
@@ -67,6 +69,10 @@ protected:
     bool event(QEvent *) override;
     bool eventFilter(QObject *, QEvent *) override;
 private:
+    void showReference3DLayerPanel();
+    void finishReference3DEdits();
+    Reference3DLayerPanel *m_referenceLayerPanel = nullptr;
+    QDockWidget *m_referenceLayerDock = nullptr;
     bool m_managed = false;
     std::function<bool()> m_managedSave;
     std::function<void()> m_managedRecovery;
@@ -84,6 +90,8 @@ private:
     bool saveStudioCopy();
     bool createStudioFolder(const Project &, const QString &root, const QString &sourceRoot, QString *error);
     void importArtworkFile(const QString &path);
+    void convertToLineArt();
+    void detectPerspective();
     void updateTitle();
     void exportImage(bool sheet);
     void exportAnimation();

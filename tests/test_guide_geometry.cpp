@@ -269,6 +269,70 @@ private slots:
         QVERIFY(std::isinf(guideConstraintDistance(start, invalid)));
     }
 
+    void fixedEllipseIsOneRotatedCurveIndependentOfStrokeStart() {
+        const qreal rotation = .71; const QPointF axis(std::cos(rotation) * 210, std::sin(rotation) * 210);
+        const QPointF normal(-std::sin(rotation) * 23, std::cos(rotation) * 23), center(330, 240);
+        auto guide = makeGuide(GuideType::Ellipse, {center - axis, center + axis, center + normal + axis * .2});
+        QVERIFY(validGuideGeometry(guide));
+        const auto first = guideSnapConstraints(guide, center + axis), second = guideSnapConstraints(guide, center + normal);
+        QCOMPARE(first.size(), 1); QCOMPARE(second.size(), 1); QCOMPARE(first[0].kind, GuideConstraint::Kind::Ellipse);
+        QCOMPARE(first[0].center, center); QVERIFY(near(first[0].axisX, axis)); QVERIFY(near(first[0].axisY, normal));
+        QCOMPARE(first[0].axisX, second[0].axisX); QCOMPARE(first[0].axisY, second[0].axisY);
+        const auto path = guidePath(guide, {0, 0, 700, 500}, .1); QVERIFY(!path.isEmpty());
+        for (int i = 0; i < path.elementCount(); ++i) {
+            const auto point = path.elementAt(i); QVERIFY(guideConstraintDistance({point.x, point.y}, first[0]) < 1e-6);
+        }
+        guide.visible = false; QVERIFY(guidePath(guide, {0, 0, 700, 500}).isEmpty());
+        QCOMPARE(guideSnapConstraints(guide, center + axis).size(), 1);
+        guide.snapping = false; QVERIFY(guideSnapConstraints(guide, center + axis).isEmpty());
+        guide.snapping = true; guide.limited = true; guide.area = {0, 0, 10, 10};
+        QVERIFY(guideSnapConstraints(guide, center).isEmpty()); guide.limited = false;
+        guide.points[2] = center + axis; QVERIFY(!validGuideGeometry(guide));
+        guide.points[2] = center + normal; guide.points[1] = guide.points[0]; QVERIFY(!validGuideGeometry(guide));
+    }
+
+    void unwrappedEllipseArcsRetainDirectionAcrossTwoRevolutions() {
+        GuideConstraint ellipse; ellipse.kind = GuideConstraint::Kind::Ellipse;
+        ellipse.center = {300, 240}; ellipse.axisX = {180, 90}; ellipse.axisY = {-18, 36};
+        const qreal pi = std::acos(-1.0), step = pi / 18;
+        for (const int direction : {-1, 1}) {
+            qreal previous = 170 * pi / 180;
+            for (int i = 1; i <= 72; ++i) {
+                const auto next = guideEllipseParameter(ellipse, guideEllipsePoint(ellipse, previous + direction * step));
+                QVERIFY(next.has_value()); const auto unwrapped = unwrapGuideEllipseAngle(*next, previous);
+                QVERIFY(std::abs(unwrapped - previous - direction * step) < 1e-8);
+                const auto samples = guideEllipseArcSamples(ellipse, previous, unwrapped, .05);
+                QVERIFY(!samples.isEmpty()); QVERIFY(samples.size() <= 512);
+                auto from = guideEllipsePoint(ellipse, previous);
+                for (const auto point : samples) {
+                    QVERIFY(guideConstraintDistance(point, ellipse) < 1e-6);
+                    QVERIFY(guideConstraintDistance((from + point) / 2, ellipse) <= .050001); from = point;
+                }
+                previous = unwrapped;
+            }
+            QVERIFY(std::abs(previous - 170 * pi / 180 - direction * 4 * pi) < 1e-7);
+        }
+        QVERIFY(!guideEllipseParameter(ellipse, ellipse.center));
+        const auto fullLoop = guideEllipseArcSamples(ellipse, 0, 2 * pi, .1);
+        QVERIFY(fullLoop.size() > 20); QVERIFY(near(fullLoop.last(), guideEllipsePoint(ellipse, 0)));
+        ellipse.axisX *= 10000; ellipse.axisY *= 10000;
+        QVERIFY(guideEllipseArcSamples(ellipse, 0, 2 * pi, 1e-8).size() <= 512);
+    }
+
+    void ellipseProjectionCommutesWithRotatedMirroredUniformView() {
+        GuideConstraint ellipse; ellipse.kind = GuideConstraint::Kind::Ellipse;
+        ellipse.center = {210, 180}; ellipse.axisX = {220, 110}; ellipse.axisY = {-9, 18};
+        QTransform view; view.translate(870, 320); view.rotate(37); view.scale(-2.5, 2.5);
+        auto displayed = ellipse; displayed.center = view.map(ellipse.center);
+        displayed.axisX = view.map(ellipse.center + ellipse.axisX) - displayed.center;
+        displayed.axisY = view.map(ellipse.center + ellipse.axisY) - displayed.center;
+        for (const auto point : {QPointF(320, 260), QPointF(120, 90), ellipse.center + ellipse.axisY * .3})
+            QVERIFY(near(view.map(projectOntoGuideConstraint(point, ellipse)), projectOntoGuideConstraint(view.map(point), displayed), 1e-5));
+        const auto centerProjection = projectOntoGuideConstraint(ellipse.center, ellipse);
+        QVERIFY(std::isfinite(centerProjection.x())); QVERIFY(std::isfinite(centerProjection.y()));
+        QVERIFY(std::abs(QLineF(centerProjection, ellipse.center).length() - QLineF({}, ellipse.axisY).length()) < 1e-6);
+    }
+
     void ellipseSamplesFollowShortestCurveInsteadOfCuttingAcrossIt() {
         GuideConstraint constraint; constraint.kind = GuideConstraint::Kind::Ellipse;
         constraint.center = {300, 300}; constraint.axisX = {200, 0}; constraint.axisY = {0, 100};

@@ -4,6 +4,7 @@
 #include "effect_render.h"
 #include "keyframe_render.h"
 #include "scene3d_cache.h"
+#include "reference3d_render.h"
 #include "sheet.h"
 #include "brush_engine.h"
 #include "symbols.h"
@@ -75,7 +76,7 @@ bool makeDraft(Shot &shot,int divisor,const EffectsPreviewCancellation &cancel) 
             layer.mask->tiles=std::move(mask);
             layer.mask->position*=scale;layer.mask->pivot*=scale;layer.mask->feather*=scale;
         }
-        auto &fx=layer.effects;fx.blurRadius*=scale;fx.shadowRadius*=scale;fx.glowRadius*=scale;fx.shadowOffset*=scale;
+        auto &fx=layer.effects;fx.blurRadius*=scale;fx.shadowRadius*=scale;fx.glowRadius*=scale;fx.shadowOffset*=scale;fx.outlineWidth*=scale;
         const auto t=layer.renderTransform;
         // q = scale*p. Children operate in scaled parent coordinates (S*T*S^-1).
         // Root layers map directly back into the original sheet (T*S^-1),
@@ -118,7 +119,7 @@ bool reduceArtwork(Shot &shot,int divisor,const EffectsPreviewCancellation &canc
             layer.mask->tiles=std::move(mask);
             layer.mask->position*=scale;layer.mask->pivot*=scale;layer.mask->feather*=scale;
         }
-        auto &fx=layer.effects;fx.blurRadius*=scale;fx.shadowRadius*=scale;fx.glowRadius*=scale;fx.shadowOffset*=scale;
+        auto &fx=layer.effects;fx.blurRadius*=scale;fx.shadowRadius*=scale;fx.glowRadius*=scale;fx.shadowOffset*=scale;fx.outlineWidth*=scale;
         layer.renderTransform=scaledCoordinates(layer.renderTransform,scale);
         for(auto &object:layer.objects)object.transform*=objectScale;
     }
@@ -308,6 +309,8 @@ EffectsPreviewResult renderEffectsPreview(const EffectsPreviewSnapshot &s,const 
     }
     EffectRenderCancellationScope cancellation(cancel.get());
     Scene3DLayerPreviewScope scenes(s.scenePreviews);
+    std::optional<ReferenceLayerPreviewScope> referenceScenes;
+    if(!s.referencePreviews.isEmpty())referenceScenes.emplace(s.referencePreviews);
     try {
         Shot shot=s.shot;Project reducedProject;auto reduction=s;
         QSet<QString> reachable;int reducedDivisor=1;

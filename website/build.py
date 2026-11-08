@@ -1,153 +1,201 @@
 #!/usr/bin/env python3
-"""Build the public Toon Pro site. No remote content, account or backend needed."""
+"""Build the Toon Pro website from verified, structured documentation. Stdlib only."""
 from __future__ import annotations
 import argparse
-import html
 import hashlib
+import html
 import json
-import math
 import re
 import shutil
 from pathlib import Path
-from urllib.parse import quote
-import markdown
-import yaml
+from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parent
-SLUGS = {'workspaces':'drawing-workspace','brushes':'brushes-and-dynamics',
-         'character-models':'references-and-characters','cel-paint':'cel-paint-and-light-table',
-         'light-table':'cel-paint-and-light-table','3d-reference':'3d-reference-and-rigging',
-         'frame-animation':'frame-by-frame-animation','keyframes':'keyframes-cameras-and-effects',
-         'symbols':'symbols-and-lip-sync','audio-export':'audio-movie-and-export',
-         'shortcuts':'shortcuts-and-troubleshooting'}
+REPO = 'https://github.com/complex1/ToonPro'
 
-def esc(value): return html.escape(str(value), quote=True)
+def esc(value):
+    return html.escape(str(value), quote=True)
 
-def read_guides():
-    guides=[]
-    for path in sorted((ROOT/'content').glob('*.md')):
-        text=path.read_text()
-        if not text.startswith('---\n'): continue
-        _, header, body=text.split('---',2)
-        data=yaml.safe_load(header)
-        if not all(k in data for k in ('title','description','category','order')):
-            raise ValueError(f'Missing guide metadata: {path}')
-        data.update(slug=path.stem, body=body.strip(), minutes=max(2,math.ceil(len(body.split())/210)))
-        guides.append(data)
-    return sorted(guides,key=lambda g:g['order'])
+def slug(value):
+    return re.sub(r'[^a-z0-9]+', '-', value.lower()).strip('-')
 
-def build(out, base, origin):
-    if not base.startswith('/') or not base.endswith('/') or '..' in base: raise ValueError('Base must be an absolute directory URL')
-    guides=read_guides()
-    if not guides: raise ValueError('No guides to publish')
-    out.mkdir(parents=True,exist_ok=True)
-    # PNG artwork master is preserved locally; only the optimized WebP ships.
-    shutil.copytree(ROOT/'assets',out/'assets',dirs_exist_ok=True,ignore=shutil.ignore_patterns('*.png'))
-    shots=json.loads((ROOT/'assets/screenshots/index.json').read_text())
-    screenshots={s['slug']:s for s in shots['screenshots']}
-    release=json.loads((ROOT/'releases.json').read_text())
-    categories=list(dict.fromkeys(g['category'] for g in guides))
+def build(out: Path, base: str, origin: str):
+    if not re.fullmatch(r'/(?:[A-Za-z0-9_-]+/)*', base):
+        raise ValueError('Base must be a directory URL such as / or /ToonPro/')
+    parsed = urlsplit(origin)
+    if parsed.scheme not in ('http', 'https') or not parsed.netloc or parsed.path not in ('', '/'):
+        raise ValueError('Origin must be an HTTP(S) origin')
+    if out.resolve() == ROOT or ROOT.is_relative_to(out.resolve()):
+        raise ValueError('Output must not replace the website source')
+    data = json.loads((ROOT/'data/manual.json').read_text())
+    chapters, features = data['chapters'], data['features']
+    feature_media = json.loads((ROOT/'data/feature-media.json').read_text())
+    for entries in (chapters, features):
+        ids = [x['id'] for x in entries]
+        if len(ids) != len(set(ids)) or any(not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*', x) for x in ids):
+            raise ValueError('Content IDs must be unique URL slugs')
+    chapter_map = {x['id']: x for x in chapters}
+    for feature in features:
+        if feature['chapter'] not in chapter_map:
+            raise ValueError('Feature has unknown chapter: '+feature['id'])
+    out.mkdir(parents=True, exist_ok=True)
+    # Clear only builder-owned outputs, so rebuilding never leaves retired pages.
+    for name in ('docs','features','setup','compare','credits','assets'):
+        if (out/name).exists(): shutil.rmtree(out/name)
+    shutil.copytree(ROOT/'assets', out/'assets')
+    manifest_path = ROOT/'assets/screenshots/current/index.json'
+    shots_data = json.loads(manifest_path.read_text()) if manifest_path.exists() else {'screenshots':[]}
+    shots = shots_data.get('screenshots', []) if isinstance(shots_data,dict) else shots_data
+    shots_map = {s.get('slug', s.get('id','')): s for s in shots}
+    for chapter in chapters:
+        media = feature_media['chapters'].get(chapter['id'])
+        if not media or media['slug'] not in shots_map:
+            raise ValueError('Missing feature screenshot mapping: '+chapter['id'])
     def url(path=''): return base+path.lstrip('/')
-    def asset_url(path):
-        digest=hashlib.sha256((ROOT/path).read_bytes()).hexdigest()[:12]
-        return url(path)+'?v='+digest
-    def icon(name): return f'<img src="{url("assets/icons/"+name+".svg")}" alt="" width="20" height="20">'
-    def header(active=''):
-        nav=[('Explore',url('#workflow'),'workflow'),('Vision',url('vision/'),'vision'),('Compare',url('compare/'),'compare'),('Field guide',url('docs/'),'docs')]
-        links=''.join(f'<a href="{href}"'+(' aria-current="page"' if active==key else '')+f'>{name}</a>' for name,href,key in nav)
-        return f'''<a class="skip-link" href="#main">Skip to content</a><header class="site-header"><div class="wrap header-inner"><a class="brand" href="{base}" aria-label="Toon Pro home"><img src="{url('assets/mark.svg')}" alt="" width="32" height="32"><span class="brand-name">TOON<span>PRO</span></span></a><span class="preview-badge">0.75 / PUBLIC PREVIEW</span><nav class="primary-nav" id="primary-nav" aria-label="Main navigation">{links}</nav><div class="header-actions"><button class="icon-button" data-search aria-label="Search the field guide" data-tooltip="Search guides (Ctrl / ⌘ K)">{icon('search')}</button><a class="header-download" href="{url('download/')}">Get Toon Pro ↗</a><button class="icon-button menu-toggle" aria-label="Open navigation" aria-expanded="false" aria-controls="primary-nav">☰</button></div></div></header>'''
-    footer=f'''<footer class="site-footer"><div class="wrap"><div class="footer-top"><a class="brand" href="{base}"><img src="{url('assets/mark.svg')}" alt="" width="28" height="28"><span class="brand-name">TOON<span>PRO</span></span></a><nav class="footer-links" aria-label="Footer"><a href="{url('vision/')}">Vision</a><a href="{url('compare/')}">Compare</a><a href="{url('docs/')}">Field guide</a><a href="{url('download/')}">Downloads</a><a href="https://github.com/complex1/ToonPro">GitHub ↗</a><a href="{url('credits/')}">Credits</a></nav></div><div class="footer-bottom"><span>© 2026 Toon Pro. Independent tools for hand-drawn stories.</span><span>DESKTOP TARGETS · WINDOWS + macOS · NO TRACKING COOKIES</span></div></div></footer>'''
-    dialogs='''<dialog id="search-dialog" class="search-dialog" aria-label="Search the field guide"><div class="search-head"><label for="doc-search" class="sr-only">Search guides</label><input id="doc-search" type="search" placeholder="Try “brush pressure”, “lip sync” or “export”…" autocomplete="off" aria-controls="search-results"><button data-close-search aria-label="Close search">Esc</button></div><div id="search-results" class="search-results"></div><p class="sr-only" id="search-announcement" aria-live="polite"></p><div class="search-help">↑ ↓ to explore · Enter to open · Esc to close</div></dialog><dialog id="image-dialog" class="image-dialog" aria-label="Enlarged screenshot"><div class="image-toolbar"><figcaption id="image-caption"></figcaption><button data-close-image aria-label="Close enlarged screenshot">×</button></div><img id="enlarged-image" alt=""></dialog>'''
+    def asset(path):
+        file = ROOT/'assets'/path
+        return url('assets/'+path)+'?v='+hashlib.sha256(file.read_bytes()).hexdigest()[:10]
+    def arrow(): return '<span aria-hidden="true">↗</span>'
+    def link(path, label, style='button'): return f'<a class="{style}" href="{url(path)}">{label} {arrow()}</a>'
+    def shot(key, caption='', eager=False):
+        item = shots_map.get(key)
+        if not item:
+            raise ValueError('Missing required real application capture: '+str(key))
+        file = item.get('file', item.get('path',''))
+        if file.startswith('assets/'): src=url(file)
+        elif file.startswith('current/'): src=url('assets/screenshots/'+file)
+        else: src=url('assets/screenshots/current/'+file)
+        alt = item.get('alt', item.get('caption', key.replace('-',' ')))
+        visible_caption = caption or item.get('caption', 'Actual Toon Pro capture · local 0.76 sample document')
+        provenance = item.get('provenance','')
+        if provenance: visible_caption += ' ' + provenance
+        dimensions=f' width="{item["width"]}" height="{item["height"]}"' if item.get('width') and item.get('height') else ''
+        return f'<figure class="app-capture"><button class="zoom-shot" data-zoom="{esc(src)}" data-caption="{esc(visible_caption)}" aria-label="Enlarge {esc(alt)}"><img src="{esc(src)}" alt="{esc(alt)}"{dimensions} loading="{"eager" if eager else "lazy"}"></button><figcaption><span class="live-dot"></span>{esc(visible_caption)}</figcaption></figure>'
+    def best(*keys):
+        return next((key for key in keys if key in shots_map),next(iter(shots_map),''))
+    def sources(paths):
+        return '<div class="source-links"><span>Implementation references</span>'+''.join(f'<a href="{REPO}/blob/main/{esc(p)}">{esc(p.split("/")[-1])} ↗</a>' for p in paths)+'</div>' if paths else ''
+    header = '''<a href="#main" class="skip">Skip to content</a><header class="site-header"><a class="brand" href="BASE"><img src="BASEassets/mark.svg" width="32" height="32" alt=""><span>toon<span class="brand-pro">pro</span><span class="brand-dot">✳</span></span></a><nav id="navigation" aria-label="Main navigation"><a href="BASE" NAVhome>Overview</a><a href="BASEfeatures/" NAVfeatures>Features</a><a href="BASEdocs/" NAVdocs>Documentation</a><a href="BASEcompare/" NAVcompare>Compare</a></nav><div class="header-actions"><button class="search-open icon-button" data-search aria-label="Search documentation" data-tooltip="Search documentation (⌘ / Ctrl K)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><kbd>⌘ K</kbd></button><a class="small-button" href="BASEsetup/">Build locally ↗</a><button class="menu-toggle icon-button" aria-label="Open navigation" aria-expanded="false" aria-controls="navigation"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button></div></header>'''.replace('BASE',base)
+    footer=f'''<footer class="site-footer"><div class="footer-statement">GOOD STORIES<br>START WITH <em>A LINE.</em></div><div class="footer-links"><a href="{url('docs/')}">Read the manual ↗</a><a href="{url('features/')}">Every little feature ↗</a><a href="{REPO}">Source on GitHub ↗</a><a href="{url('credits/')}">Credits & capture provenance ↗</a></div><div class="footer-bottom"><span>TOON PRO / INDEPENDENT DRAWING TOOLS</span><span>LOCAL SOURCE 0.76.0 · PUBLIC PREVIEW 0.75.0</span><span>MADE FOR MAKING.</span></div></footer>'''
+    dialogs=f'''<dialog id="search-dialog" aria-label="Search documentation"><div class="dialog-head"><label for="global-search">Find your next move.</label><button class="icon-button" data-close-search aria-label="Close search">✕</button></div><input id="global-search" type="search" placeholder="Brushes, puppet warp, local setup…" autocomplete="off" aria-controls="search-results"><p id="search-count" role="status"></p><div id="search-results"></div><div class="dialog-foot">↑ ↓ Navigate <span>↵ Open</span><span>esc Close</span></div></dialog><dialog id="image-dialog" aria-label="Application screenshot"><div class="dialog-head"><p id="image-caption"></p><a class="text-link original-image-link" id="open-original" href="{url('assets/screenshots/current/drawing-workspace.webp')}" target="_blank" rel="noopener">Open original ↗</a><button class="icon-button" data-close-image aria-label="Close screenshot">✕</button></div><img id="full-image" alt=""></dialog><div id="tooltip" role="tooltip" hidden></div><div id="toast" role="status"></div>'''
+    pages=[]
     def page(path,title,description,body,active='',kind=''):
-        target=out/path if path.endswith('.html') else out/path/'index.html'
-        target.parent.mkdir(parents=True,exist_ok=True)
-        canonical=origin.rstrip('/')+url('' if path=='index.html' else path)
-        text=f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{esc(title)} · Toon Pro</title><meta name="description" content="{esc(description)}"><meta name="theme-color" content="#0c1011"><meta name="color-scheme" content="dark"><link rel="canonical" href="{canonical}"><meta property="og:title" content="{esc(title)} · Toon Pro"><meta property="og:description" content="{esc(description)}"><meta property="og:type" content="website"><meta property="og:url" content="{canonical}"><meta property="og:image" content="{origin.rstrip('/')+url('assets/art/blue-hour.webp')}"><meta name="twitter:card" content="summary_large_image"><link rel="icon" href="{url('assets/mark.svg')}" type="image/svg+xml"><link rel="preload" href="{url('assets/fonts/display.ttf')}" as="font" type="font/ttf" crossorigin><link rel="stylesheet" href="{asset_url('assets/site.css')}"><link rel="stylesheet" href="{asset_url('assets/product.css')}"><script defer src="{asset_url('assets/site.js')}"></script><script defer src="{asset_url('assets/product.js')}"></script></head><body data-base="{base}" data-page="{kind}">{header(active)}{body}{footer}{dialogs}</body></html>'''
-        target.write_text(text)
-    home=(ROOT/'templates/home.html').read_text().replace('{{BASE}}',base)
-    home=home.replace('{{FRAME_BUTTONS}}',''.join(f'<button type="button" data-demo-frame="{frame}" aria-label="Frame {frame}, drawing {(frame-1)//2+1}" aria-pressed="{str(frame==1).lower()}" tabindex="{0 if frame==1 else -1}">{frame:02}</button>' for frame in range(1,13)))
-    for old,new in SLUGS.items(): home=home.replace('/docs/'+old+'/', '/docs/'+new+'/')
-    for old,new in {'workspace':'drawing-workspace','brushes':'brushes-and-dynamics','character-models':'references-and-characters','timeline':'frame-by-frame-animation'}.items():
-        home=home.replace('/screenshots/'+old+'.webp','/screenshots/'+new+'.webp')
-    home=home.replace('ACTUAL APPLICATION CAPTURE · SAMPLE DOCUMENT','ACTUAL APP · ORIGINAL ILLUSTRATION IMPORTED INTO TOON PRO')
-    page('index.html','Your first line. Your next world.','A drawing-first desktop workspace for independent hand-drawn stories. Explore the tools, the new project flow, clear guides and honest workflow comparisons.',home,kind='home')
-    for slug,title,description in [('vision','Vision & purpose','Why Toon Pro exists, who it is for, and the path from a first drawing toward independent hand-drawn anime production.'),('compare','Compare creative workflows','A source-linked comparison with Clip Studio Paint, Krita, OpenToonz, Harmony and Blender: strengths, fit and Toon Pro’s current limits.')]:
-        content=(ROOT/'templates'/f'{slug}.html').read_text().replace('{{BASE}}',base)
-        page(slug+'/',title,description,content,slug,slug)
-    cards=''
-    for category in categories:
-        group=''
-        for g in guides:
-            if g['category']!=category: continue
-            group+=f'<a class="guide-card" href="{url("docs/"+g["slug"]+"/")}"><span>{g["minutes"]} MIN READ · {"LOCAL DEVELOPMENT" if g.get("status")=="development" else "PUBLIC PREVIEW · 0.75"}</span><h3>{esc(g["title"])}</h3><p>{esc(g["description"])}</p><strong>Open guide ↗</strong></a>'
-        cards+=f'<section class="guide-group"><h2>{esc(category.upper())}</h2><div class="guide-grid">{group}</div></section>'
-    docs=f'''<main id="main"><section class="docs-banner"><div class="wrap"><p class="eyebrow">THE TOON PRO FIELD GUIDE</p><h1>MAKE YOURSELF<br><em>AT HOME.</em></h1><p>Practical steps, real panels, and the details that matter. Choose the guide for your build, then follow a drawing or one animated shot step by step.</p><p class="guide-build-links"><a class="text-link" href="{url('docs/getting-started/')}">Start with the 0.75 public preview ↗</a> · <a class="text-link" href="{url('docs/projects-and-assets/')}">Explore the new development project flow ↗</a></p><button class="search-trigger-wide" data-search>Search tools, techniques and workflows <kbd>⌘ / Ctrl K</kbd></button></div></section><div class="wrap docs-index">{cards}</div></main>'''
-    page('docs/','The field guide','Detailed, illustrated Toon Pro documentation for drawing, brushes, character workflows, animation, 3D references and export.',docs,'docs','docs-index')
-    search=[]
-    for i,g in enumerate(guides):
-        md=markdown.Markdown(extensions=['extra','toc','sane_lists'],extension_configs={'toc':{'permalink':'#','permalink_title':'Link to this section','toc_depth':'2-3'}})
-        prose=md.convert(g['body'])
-        prose=re.sub(r'href="([^":/#]+)\.md(#[^"]*)?"',lambda m:f'href="{url("docs/"+m[1]+"/")}{m[2] or ""}"',prose)
-        prose=re.sub(r'href="/(?!/)([^"]*)"',lambda m:'href="'+(m[0][6:-1] if m[0][6:-1].startswith(base) else url(m[1]))+'"',prose)
-        prose=prose.replace('src="/assets/','src="'+url('assets/'))
-        prose=prose.replace('<img ','<img loading="lazy" data-zoom ')
-        shot=screenshots.get(g['slug'])
-        hero=''
-        if shot:
-            hero=f'<figure class="doc-hero"><img src="{url("assets/screenshots/"+shot["file"])}" width="{shot["width"]}" height="{shot["height"]}" alt="{esc(shot["alt"])}" data-zoom><figcaption>{esc(shot["caption"])} <span>Actual application capture; sample document.</span></figcaption></figure>'
-        nav=f'<a class="sidebar-home" href="{url("docs/")}">← All guides</a>'
-        for category in categories:
-            nav+=f'<p class="sidebar-group">{esc(category)}</p>'
-            for other in guides:
-                if other['category']==category:
-                    current=' aria-current="page"' if other['slug']==g['slug'] else ''
-                    nav+=f'<a href="{url("docs/"+other["slug"]+"/")}"{current}>{esc(other["title"])}</a>'
-        previous=guides[i-1] if i else None; following=guides[i+1] if i+1<len(guides) else None
-        neighbors=''
-        for item,label in [(previous,'PREVIOUS GUIDE'),(following,'NEXT GUIDE')]:
-            neighbors+=(f'<a href="{url("docs/"+item["slug"]+"/")}"><small>{label}</small>{esc(item["title"])} ↗</a>' if item else '<span></span>')
-        development=g.get('status')=='development'
-        version=g.get('version','Public preview · 0.75')
-        notice=(f'<aside class="version-notice development"><p><strong>Local-development workflow.</strong> This guide describes the new managed project flow, which is not included in published 0.75 packages. <a href="{url("docs/getting-started/")}">Using the public preview? Start here.</a></p></aside>' if development else f'<aside class="version-notice"><p><strong>Public-preview tool guide · 0.75.</strong> The newer Projects/dashboard workflow is documented separately. <a href="{url("docs/projects-and-assets/")}">Read the development-project guide.</a></p></aside>')
-        source_label='Based on the implemented local-development workflow.' if development else 'Based on the implemented public-preview workflow.'
-        article=f'''<button class="docs-mobile-toggle" aria-expanded="false" aria-controls="docs-sidebar"><span>Browse the field guide</span><span aria-hidden="true">＋</span></button><div class="docs-shell"><aside id="docs-sidebar" class="docs-sidebar"><nav aria-label="Guide navigation">{nav}</nav></aside><main id="main" class="doc-article"><div class="breadcrumbs"><a href="{url('docs/')}">Field guide</a><span>/</span>{esc(g['category'])}</div><h1>{esc(g['title'])}</h1><p class="doc-description">{esc(g['description'])}</p><div class="doc-meta"><span>{g['minutes']} MIN READ</span><span>{esc(version)}</span><button class="print-button" data-print>Print / save PDF</button></div>{notice}{hero}<div class="doc-prose">{prose}</div><nav class="doc-next" aria-label="Adjacent guides">{neighbors}</nav><p class="doc-source">{source_label} <a href="https://github.com/complex1/ToonPro/blob/main/website/content/{g['slug']}.md">View this guide's source ↗</a></p></main><aside class="doc-toc" aria-label="On this page"><p>ON THIS PAGE</p>{md.toc}</aside></div>'''
-        page('docs/'+g['slug']+'/',g['title'],g['description'],article,'docs','guide')
-        plain=html.unescape(re.sub('<[^>]+>',' ',prose)); plain=re.sub(r'\s+',' ',plain)
-        search.append({'title':g['title'],'description':g['description'],'category':g['category'],'url':url('docs/'+g['slug']+'/'),'text':plain})
-        for heading in re.findall(r'<h[23] id="([^"]+)">(.*?)</h[23]>',prose):
-            label=html.unescape(re.sub('<[^>]+>','',heading[1])).rstrip('#').strip()
-            search.append({'title':label,'description':g['title'],'category':g['category'],'url':url('docs/'+g['slug']+'/')+'#'+heading[0],'text':g['description']})
-    for slug,title in [('vision','Vision & purpose'),('compare','Compare creative workflows')]:
-        body=(ROOT/'templates'/f'{slug}.html').read_text()
-        search.append({'title':title,'description':'Toon Pro’s purpose, workflow and current direction.' if slug=='vision' else 'Official-source comparison, fit and trade-offs with other creative tools.','category':'About Toon Pro','url':url(slug+'/'),'text':html.unescape(re.sub('<[^>]+>',' ',body))})
-    (out/'search-index.json').write_text(json.dumps(search,ensure_ascii=False))
-    download_cards=''
-    for key,symbol in [('mac','⌘'),('windows','⊞'),('intel','⌘')]:
-        r=release[key]
-        available=bool(r.get('url')) and r.get('status')=='available'
-        if r.get('url') and not available:
-            raise ValueError(f'Download URL requires verified available status: {key}')
-        action=(f'<a class="button primary" href="{esc(r["url"])}">{esc(r["button"])} <span aria-hidden="true">↓</span></a>'
-                if available else '<span class="status-label">VALIDATION IN PROGRESS</span>')
-        size=f' · {r["bytes"]/1024/1024:.1f} MB' if available and r.get('bytes') else ''
-        file_info=f'<p class="download-file">{esc(r.get("format", ""))}{size}</p>' if available else ''
-        extra=''.join(f'<a href="{esc(link["url"])}">{esc(link["label"])}</a>' for link in r.get('links',[]) if available)
-        extra=f'<nav class="download-support" aria-label="{esc(r["label"])} package information">{extra}</nav>' if extra else ''
-        download_cards+=f'<article class="download-card"><span class="os-icon" aria-hidden="true">{symbol}</span><h2>{esc(r["label"])}</h2><p class="minimum">{esc(r["minimum"])}</p><p>{esc(r["note"])}</p>{action}{file_info}{extra}</article>'
-    release_link=(f'<a class="text-link" href="{esc(release["releaseUrl"])}">Release notes & all packages ↗</a>'
-                  if release.get('releaseUrl') else '<a class="text-link" href="https://github.com/complex1/ToonPro/actions">Follow build progress ↗</a>')
-    download=f'''<main id="main" class="simple-page wrap"><p class="eyebrow">TOON PRO 0.75 / PUBLIC PREVIEW</p><h1>YOUR WORKSPACE.<br><em>YOUR NEXT STORY.</em></h1><p class="simple-intro">Get the desktop app for Windows or macOS. Preview builds are for trying the workflow and sharing feedback; they are not signed production releases.</p><aside class="version-notice development"><p><strong>Looking for the new Projects dashboard?</strong> Drawing / Animation / Movie projects and the new Assets flow are in local development, separate from these 0.75 downloads. <a href="{url('docs/projects-and-assets/')}">Explore that workflow.</a></p></aside><div class="download-grid">{download_cards}</div><p class="download-note">On a Mac, choose Apple Silicon for M1 and later chips, or Intel for an Intel processor. Find your chip in Apple menu → About This Mac. 3D rendering is available on Apple Silicon Mac. Linux distribution is deferred.</p><div class="download-links">{release_link}<a class="text-link" href="{url('docs/getting-started/')}">Read the first-project guide ↗</a><a class="text-link" href="https://github.com/complex1/ToonPro/issues">Report an issue ↗</a></div><section class="faq"><h2>BEFORE YOUR FIRST FRAME.</h2><details><summary>What should I know about the preview?</summary><p>Save a copy of an important project before testing a new build. Mac candidates are ad-hoc signed and not notarized; Windows candidates are unsigned. Package checks cover saved projects, resources, drawing, review playback and media export. Physical tablet feel and real production projects still need artist testing.</p></details><details><summary>Can I use a pen display or drawing tablet?</summary><p>Toon Pro supports tablet input and pressure-aware brush controls. Start with a small ink brush, then test pressure, fast curves, slow strokes and the move from panels to the canvas. Hardware and driver behavior varies; the troubleshooting guide explains how to isolate an issue.</p></details><details><summary>Where are the source and release notes?</summary><p>The source and current verification notes are available in the public <a href="https://github.com/complex1/ToonPro">GitHub repository</a>. Public source availability does not set a license or a future pricing policy. Refer to repository terms and the actual package notices.</p></details><details><summary>Do I need an account to read the guides?</summary><p>No. This site has no sign-in, analytics or tracking cookies. Search runs locally in your browser. Published app downloads are hosted on public GitHub Releases and do not require a GitHub account.</p></details></section></main>'''
-    page('download/','Get Toon Pro','Windows and Mac preview availability, requirements and honest build status for Toon Pro.',download,kind='download')
-    credits=f'''<main id="main" class="simple-page wrap"><p class="eyebrow">THE DETAILS BEHIND THE DETAILS</p><h1>MADE WITH<br><em>CARE & CREDIT.</em></h1><div class="credit-list"><h2>Original illustrative artwork</h2><p>“Blue Hour”, the city illustration on this website, was created for Toon Pro using the Image Generation tool. It is illustrative concept art, not a claim that the app generated or painted the image. The drawing-workspace capture shows that image imported as an artwork layer in the real application. The matching character turnaround was also created with Image Generation and imported into the actual Model Sheets panel.</p><a href="{url('assets/ARTWORK.txt')}">Artwork brief and provenance ↗</a><h2>Real application screenshots</h2><p>The field guide uses real Toon Pro application and widget captures with sample documents. Some panels are captured in focused fixtures to keep their controls legible. Capture versions and source fixtures are recorded in the screenshot index; these are not fabricated interfaces.</p><a href="{url('assets/screenshots/index.json')}">Screenshot provenance index ↗</a><h2>Type & icons</h2><p>Barlow Condensed and Manrope are locally hosted under the SIL Open Font License. Lucide icons retain the repository's existing attribution.</p><p><a href="{url('assets/fonts/barlowcondensed-OFL.txt')}">Barlow Condensed license</a> · <a href="{url('assets/fonts/manrope-OFL.txt')}">Manrope license</a> · <a href="{url('assets/icons/NOTICE.md')}">Icon attribution</a></p><h2>Privacy</h2><p>This static website has no accounts, forms, tracking cookies or analytics. Guide search runs in the browser. External GitHub links follow GitHub's own terms and privacy practices.</p></div></main>'''
-    page('credits/','Credits and provenance','Original illustration, real application captures, fonts, icons and privacy information.',credits,kind='credits')
-    page('404.html','This frame is missing','Return to Toon Pro or find the guide you need.',f'<main id="main" class="simple-page wrap"><p class="eyebrow">404 / MISSING FRAME</p><h1>BACK TO<br><em>THE DRAWING BOARD.</em></h1><p class="simple-intro">That page may have moved. The field guide can help you find the next step.</p><p style="margin-top:30px"><a class="button primary" href="{url("docs/")}">Open the field guide ↗</a></p></main>')
-    urls=[base,url('docs/'),url('download/'),url('credits/'),url('vision/'),url('compare/')]+[url('docs/'+g['slug']+'/') for g in guides]
-    (out/'sitemap.xml').write_text('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+''.join(f'<url><loc>{esc(origin.rstrip("/")+u)}</loc></url>' for u in urls)+'</urlset>')
-    (out/'robots.txt').write_text(f'User-agent: *\nAllow: /\nSitemap: {origin.rstrip("/")+url("sitemap.xml")}\n')
+        h=header
+        for section in ('home','features','docs','compare'):
+            h=h.replace('NAV'+section, 'aria-current="page"' if section==active else '')
+        dest=out/path/'index.html' if path else out/'index.html'
+        dest.parent.mkdir(parents=True,exist_ok=True)
+        canonical=origin.rstrip('/')+url(path+('/' if path else ''))
+        output=f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{esc(title)} · Toon Pro</title><meta name="description" content="{esc(description)}"><meta name="theme-color" content="#18191b"><meta name="color-scheme" content="dark"><link rel="canonical" href="{esc(canonical)}"><meta property="og:title" content="{esc(title)} · Toon Pro"><meta property="og:description" content="{esc(description)}"><meta property="og:type" content="website"><link rel="icon" href="{url('assets/mark.svg')}" type="image/svg+xml"><link rel="preload" href="{url('assets/fonts/body-readable.ttf')}" as="font" type="font/ttf" crossorigin><link rel="stylesheet" href="{asset('site.css')}"><link rel="stylesheet" href="{asset('feature-media.css')}"><script defer src="{asset('site.js')}"></script></head><body data-base="{base}" data-page="{kind}">{h}{body}{footer}{dialogs}</body></html>'''
+        dest.write_text(output)
+        pages.append({'url':url(path+('/' if path else '')),'title':title,'text':description,'category':'Website'})
+    feature_count=len(features)
+    chapter_count=len(chapters)
+    hero_shot=best('drawing-workspace','workspace','drawing')
+    tours=[('draw','01','The drawing room.','A canvas, your tools, and room to think. Raster and vector artwork share a focused native workspace.',best('drawing-workspace','workspace'),'workspace-and-navigation'),('brush','02','Find your signature.','Explore brush dynamics, editable response curves, spacing, scatter and quick properties.',best('brush-dynamics','brushes-and-dynamics','brush-settings','brushes'),'brush-dynamics'),('layers','03','Beautifully layered.','Build artwork with folders, masks, clipping, blend modes and live effects.',best('layers','layers-and-compositing'),'layers-and-compositing'),('guides','04','A little perspective.','Use editable assistants and snapping. Review detected perspective before adding it to your drawing.',best('perspective-guides','guides'),'perspective-guides'),('reference','05','A different angle.','Place, pose and revisit editable 3D references directly on the drawing canvas.',best('reference-3d','3d-reference','3d-reference-workspace','3d-reference-and-rigging'),'reference-3d')]
+    tour_tabs=''.join(f'<button id="tab-{key}" role="tab" aria-controls="panel-{key}" aria-selected="{str(i==0).lower()}" tabindex="{0 if i==0 else -1}"><small>{num}</small>{label}</button>' for i,(key,num,label,*_) in enumerate(tours))
+    tour_panels=''
+    for i,(key,num,title,description,screen,chapter) in enumerate(tours):
+        target=chapter if chapter in chapter_map else next((c['id'] for c in chapters if key in c['id']),chapters[0]['id'])
+        tour_panels+=f'<div id="panel-{key}" class="tour-panel" role="tabpanel" aria-labelledby="tab-{key}" {"hidden" if i else ""}><div class="tour-copy"><span class="eyebrow">WORKSPACE / {num}</span><h3>{title}</h3><p>{description}</p>{link("docs/"+target+"/","Get into the details","text-link")}</div>{shot(screen)}</div>'
+    home=f'''<main id="main"><section class="hero"><div class="hero-copy"><div class="eyebrow"><span class="live-dot"></span> A NATIVE WORKSPACE FOR HAND-DRAWN IDEAS</div><h1>MAKE A<br>LITTLE<br><span class="chaos">CHAOS.<svg viewBox="0 0 540 25" aria-hidden="true"><path d="M5 15C130-5 380 30 530 8M24 23C150 5 340 13 500 16"/></svg></span></h1><p>Messy sketches. Confident lines. Worlds of your own.<br>Meet Toon Pro, a drawing-first desktop app<br class="desktop-break"> for artists with stories to tell.</p><div class="hero-actions">{link('setup/','Make your first mark','button primary')}{link('docs/','Take a look around','text-link')}</div><p class="build-note">C++20 + Qt 6 · macOS / Windows source builds<br>0.76 local development · <a href="{REPO}/releases">0.75 public preview ↗</a></p></div><div class="hero-visual"><div class="stamp">LESS FRICTION.<br>MORE DRAWING.<svg viewBox="0 0 50 50" aria-hidden="true"><path d="m25 3 3 14 11-9-6 14 14 3-14 4 7 12-13-7-3 13-4-14-13 7 8-13-13-3 14-3L11 8l12 10Z"/></svg></div><div class="window-label"><span>● ● ●</span> THE ACTUAL APP / LOCAL 0.76 <span>↗</span></div>{shot(hero_shot,eager=True)}<div class="visual-caption"><span>YOUR IDEAS. YOUR FILES. YOUR PACE.</span><span class="hand-note">go on, make a mark ↙</span></div></div><div class="hero-index">01 / MADE FOR MAKING</div></section><div class="ticker" aria-label="Drawing tools"><div>RASTER + VECTOR <span>✳</span> BRUSHES WITH CHARACTER <span>✳</span> EDITABLE REFERENCES <span>✳</span> LOCALLY YOURS <span>✳</span> RASTER + VECTOR <span>✳</span></div></div><section class="intro-section section"><div class="section-label">A LITTLE LESS SETUP.<br>A LOT MORE FLOW.</div><div><h2>From “what if”<br>to <em>right there.</em></h2><p class="large-copy">Start with a drawing. Keep the tools close. Bring in a reference, find the right brush, and follow your line. When a story needs a little movement, the shot tools are there too.</p><div class="principles"><div><span>01 / DIRECT</span><h3>Tools, within reach.</h3><p>Fast tool switching, visual controls and precision when you need it.</p></div><div><span>02 / FOCUSED</span><h3>A drawing of its own.</h3><p>Independent document tabs inside a separate project and asset organizer.</p></div><div><span>03 / LOCAL</span><h3>Your project, on disk.</h3><p>Ordinary project folders and saved native artwork. Your work stays close.</p></div></div></div></section><section class="workspace-section section" id="workspace"><div class="section-heading"><div><span class="eyebrow">MEET YOUR NEW CREATIVE CORNER</span><h2>Serious tools.<br><em>Playful instincts.</em></h2></div><span class="outline-sticker">ACTUAL APP<br>REAL CONTROLS ↙</span></div><div class="tour-tabs" role="tablist" aria-label="Explore the workspace">{tour_tabs}</div>{tour_panels}</section><section class="ink-section section" id="playground"><div><span class="eyebrow">A TINY DETOUR / TRY IT HERE</span><h2>Leave your<br><em>mark.</em></h2><p>Drag across the paper. Switch the ink. Make a mess.</p><p class="demo-note">This is a small browser playground, an illustrative website demo. The desktop brush engine has its own dynamics and controls.</p>{link('features/','Explore the real brush tools','text-link')}</div><div class="ink-lab"><div class="ink-toolbar"><div class="ink-colors" aria-label="Ink color"><button style="--ink:#292735" data-ink="#292735" aria-label="Charcoal ink" aria-pressed="true"></button><button style="--ink:#9d7bd8" data-ink="#9d7bd8" aria-label="Lilac ink" aria-pressed="false"></button><button style="--ink:#dc603e" data-ink="#dc603e" aria-label="Orange ink" aria-pressed="false"></button><button style="--ink:#507944" data-ink="#507944" aria-label="Green ink" aria-pressed="false"></button></div><label class="ink-size">Size<input id="ink-size" type="range" min="1" max="28" value="8" aria-label="Playground brush size"><input id="ink-number" type="number" min="1" max="28" value="8" aria-label="Exact playground brush size"></label><button class="icon-button" id="clear-ink" aria-label="Clear playground" data-tooltip="Clear playground">↺</button></div><canvas id="ink-canvas" aria-label="Drawing playground. Use a pointer or pen to draw." role="img"></canvas><div class="ink-bottom"><span>AN IDEA CAN START ANYWHERE.</span><button id="save-ink" class="text-link">Save your doodle ↓</button></div></div></section><section class="everything-section section"><div><span class="eyebrow">NO MYSTERY BUTTONS</span><h2>Every bit.<br>Every <em>little byte.</em></h2><p>From the first project to the fine print.<br>The tools, the steps, and the boundaries, all in one place.</p></div><a class="big-nav lilac" href="{url('features/')}"><span>01 / THE TOOLBOX</span><strong>{feature_count}<small>documented capabilities</small></strong><span>Explore every feature <b>↗</b></span></a><a class="big-nav lime" href="{url('docs/')}"><span>02 / THE MANUAL</span><strong>{chapter_count}<small>practical, detailed chapters</small></strong><span>Learn your way around <b>↗</b></span></a></section><section class="closing-section section"><span class="eyebrow">YOUR NEXT WORLD IS WAITING.</span><h2>Open canvas.<br><em>Open possibilities.</em></h2>{link('setup/','Let’s make something','button primary')}<p>Start with the current source build. Read the requirements first.</p></section></main>'''
+    page('', 'Make a little chaos', 'A native drawing-first workspace for hand-drawn stories. Discover Toon Pro through real screenshots, detailed guides and every implemented feature.', home,'home','home')
+    categories=list(dict.fromkeys(c['category'] for c in chapters))
+    def chapter_card(c):
+        return f'<a class="chapter-card" href="{url("docs/"+c["id"]+"/")}" data-filter-item data-category="{esc(c["category"])}" data-text="{esc(c["title"]+" "+c["summary"])}"><span class="eyebrow">{esc(c["category"])}</span><h3>{esc(c["title"])}</h3><p>{esc(c["summary"])}</p><span class="card-arrow" aria-hidden="true">↗</span></a>'
+    filters='<button class="filter-chip active" data-category-filter="all" aria-pressed="true">Everything</button>'+''.join(f'<button class="filter-chip" data-category-filter="{esc(c)}" aria-pressed="false">{esc(c)}</button>' for c in categories)
+    docs=f'''<main id="main"><section class="page-intro section"><span class="eyebrow">THE MANUAL / CURRENT LOCAL 0.76</span><h1>GET INTO<br>THE <em>DETAILS.</em></h1><div class="intro-row"><p>Clear steps. Real controls. Honest boundaries.<br>Find your starting point, then go as deep as you like.</p><button class="button" data-search>Search the whole manual <kbd>⌘ K</kbd></button></div></section><section class="section library" data-filter-root><div class="library-toolbar"><label class="filter-search"><span>Find a chapter</span><input type="search" data-filter-search placeholder="Try layers, fill, or setup…"></label><p data-filter-count role="status">{chapter_count} chapters</p></div><div class="filter-chips" aria-label="Filter manual categories">{filters}</div><div class="chapter-grid">{''.join(chapter_card(c) for c in chapters)}</div><p class="empty-state" data-empty hidden>No chapters match. Try another word or choose Everything.</p></section></main>'''
+    page('docs','The manual','Step-by-step Toon Pro documentation, from local setup and drawing to references, animation and export.',docs,'docs','docs')
+    for i,c in enumerate(chapters):
+        section_ids=[]
+        for n,section in enumerate(c['sections']): section_ids.append(f'{slug(section["title"])}-{n+1}')
+        toc=''.join(f'<a href="#{sid}">{esc(s["title"])}</a>' for s,sid in zip(c['sections'],section_ids))
+        prose=''
+        for s,sid in zip(c['sections'],section_ids):
+            prose+=f'<section id="{sid}" class="article-section"><h2>{esc(s["title"])}</h2>'
+            prose+=''.join(f'<p>{esc(p)}</p>' for p in s.get('body',[]))
+            if s.get('steps'): prose+='<ol class="steps">'+''.join(f'<li>{esc(p)}</li>' for p in s['steps'])+'</ol>'
+            if s.get('code'): prose+=f'<div class="code-block"><button data-copy aria-label="Copy code">Copy</button><pre><code>{esc(s["code"])}</code></pre></div>'
+            if s.get('tips'): prose+='<aside class="note"><strong>Keep in mind</strong>'+''.join(f'<p>{esc(p)}</p>' for p in s['tips'])+'</aside>'
+            prose+='</section>'
+            extras = {('first-drawing', 1): 'new-project', ('projects-and-assets', 2): 'drawing-gallery', ('projects-and-assets', 4): 'assets-gallery', ('workspace-and-navigation', 2): 'editor-tabs', ('brush-basics', 1): 'brush-settings'}
+            extra = extras.get((c['id'], len(prose.split('class=\"article-section\"')) - 1))
+            if extra in shots_map: prose += shot(extra)
+        chapter_media = feature_media['chapters'][c['id']]
+        figure = shot(chapter_media['slug'], chapter_media['label'])
+        sidebar=''.join(f'<div class="sidebar-group"><span>{esc(cat)}</span>'+''.join(f'<a href="{url("docs/"+other["id"]+"/")}"'+(' aria-current="page"' if other['id']==c['id'] else '')+f'>{esc(other["title"])}</a>' for other in chapters if other['category']==cat)+'</div>' for cat in categories)
+        related=[chapter_map[x] for x in c.get('related',[]) if x in chapter_map]
+        neighbors=''.join(f'<a href="{url("docs/"+other["id"]+"/")}"><small>{label}</small>{esc(other["title"])} ↗</a>' for other,label in [(chapters[i-1] if i else None,'PREVIOUS'),(chapters[i+1] if i+1<len(chapters) else None,'NEXT')] if other)
+        body=f'''<div class="reading-progress" aria-hidden="true"></div><main id="main" class="docs-layout"><aside class="docs-sidebar"><a href="{url('docs/')}" class="text-link">← All documentation</a><button class="sidebar-search" data-search>Find a tool or workflow <kbd>⌘ K</kbd></button><nav aria-label="Manual chapters">{sidebar}</nav></aside><article class="doc-article"><div class="eyebrow">{esc(c['category'])} / LOCAL 0.76 SOURCE</div><h1>{esc(c['title'])}</h1><p class="article-lead">{esc(c['summary'])}</p><div class="version-note"><span class="live-dot"></span>These instructions follow the current source build. Public 0.75 packages can differ.</div>{figure}<details class="mobile-toc"><summary>In this chapter</summary>{toc}</details>{prose}{sources(c.get('sources',[]))}<nav class="chapter-neighbors" aria-label="Adjacent chapters">{neighbors}</nav>{('<div class="related"><h2>Keep exploring</h2>'+''.join(chapter_card(x) for x in related)+'</div>') if related else ''}</article><aside class="toc"><span class="eyebrow">IN THIS CHAPTER</span><nav aria-label="On this page">{toc}</nav><a class="text-link" href="#main">Back to top ↑</a></aside></main>'''
+        page('docs/'+c['id'],c['title'],c['summary'],body,'docs','article')
+    feature_categories=list(dict.fromkeys(f['category'] for f in features))
+    feature_filters='<button class="filter-chip active" data-category-filter="all" aria-pressed="true">Everything</button>'+''.join(f'<button class="filter-chip" data-category-filter="{esc(cat)}" aria-pressed="false">{esc(cat)}</button>' for cat in feature_categories)
+    feature_rows=''
+    for i,f in enumerate(features):
+        details=''.join(f'<p>{esc(p)}</p>' for p in f.get('details',[]))
+        workflow='<h3>Try it</h3><ol>'+''.join(f'<li>{esc(p)}</li>' for p in f.get('workflow',[]))+'</ol>' if f.get('workflow') else ''
+        limits='<div class="note"><strong>Scope & boundaries</strong>'+''.join(f'<p>{esc(p)}</p>' for p in f.get('limits',[]))+'</div>' if f.get('limits') else ''
+        text=' '.join([f['title'],f['summary'],*f.get('keywords',[]),*f.get('details',[])])
+        media = feature_media['chapters'][f['chapter']]
+        capture = shots_map[media['slug']]
+        thumbnail = f'<img class="feature-thumb" src="{url("assets/screenshots/current/"+capture["file"])}" alt="{esc(media["label"])}" width="{capture["width"]}" height="{capture["height"]}" loading="lazy">'
+        illustration = shot(media['slug'], media['label'])
+        feature_rows+=f'''<article class="feature-row" id="{f['id']}" data-filter-item data-category="{esc(f['category'])}" data-text="{esc(text)}" data-feature="{f['id']}" data-capture="{media['slug']}"><details><summary><span class="feature-number">{i+1:03}</span>{thumbnail}<span class="feature-main"><span class="feature-category">{esc(f['category'])}</span><strong>{esc(f['title'])}</strong><span>{esc(f['summary'])}</span></span><span class="status-badge">{esc(data.get('statusLabels',{}).get(f['status'],f['status']))}</span><span class="expand-icon" aria-hidden="true">+</span></summary><div class="feature-detail">{illustration}{details}{workflow}{limits}{link('docs/'+f['chapter']+'/','Read the full guide','text-link')}{sources(f.get('sources',[]))}<button class="text-link feature-permalink" data-feature-link="{f['id']}">Copy feature link ↗</button></div></details><button class="save-feature icon-button" data-save="{f['id']}" aria-label="Save {esc(f['title'])}" aria-pressed="false" data-tooltip="Save feature on this browser">☆</button></article>'''
+    # The gallery introduces actual app visuals before the complete catalog.
+    gallery_cards = ''
+    for card in feature_media['gallery']:
+        candidates = [f for f in features if feature_media['chapters'][f['chapter']]['slug'] == card['slug']]
+        destination = '#' + candidates[0]['id'] if candidates else '#feature-catalog'
+        gallery_cards += f'<article class="feature-showcase-card"><div class="showcase-image">{shot(card["slug"])}</div><div class="showcase-copy"><span class="eyebrow">{esc(card["category"])}</span><h3>{esc(card["title"])}</h3><p>{esc(card["description"])}</p><a class="text-link" href="{destination}">Explore the controls ↗</a></div></article>'
+    feature_body=f'''<main id="main"><section class="page-intro section feature-intro"><div class="feature-intro-grid"><div><span class="eyebrow">THE COMPLETE TOOLBOX / LOCAL 0.76</span><h1>Small details.<br><em>Big possibilities.</em></h1><p class="wide-intro">{feature_count} documented capabilities. See the workspace, explore the controls, and discover the little details that make a drawing yours.</p><a class="button primary" href="#feature-catalog">Browse every feature ↓</a></div><div class="feature-intro-image">{shot('reference-3d', 'Editable 3D reference models directly on the drawing canvas.', eager=True)}</div></div><div class="status-key"><span class="live-dot"></span>Current local 0.76 source. Public preview packages can differ. Screenshots show real app widgets with sample documents.</div></section><section class="section feature-showcase" aria-labelledby="feature-showcase-title"><div class="showcase-heading"><div><span class="eyebrow">A CLOSER LOOK AT THE APP</span><h2 id="feature-showcase-title">See the tools.<br><em>Find your rhythm.</em></h2></div><p>Real screens, real controls. Enlarge any image to inspect it, or jump straight to the feature details.</p></div><div class="feature-showcase-grid">{gallery_cards}</div></section><section class="section library" id="feature-catalog" data-filter-root data-feature-library><div class="catalog-heading"><span class="eyebrow">EVERY FEATURE, BIT BY BIT</span><h2>The whole toolbox.</h2><p>Search, filter and expand. Each entry includes a related app image, practical steps and its current boundaries.</p></div><div class="library-toolbar"><label class="filter-search"><span>Find your feature</span><input type="search" data-filter-search placeholder="Try pressure, fill reference, or puppet warp…"></label><button class="filter-chip" data-saved-filter aria-pressed="false">☆ Saved <span data-saved-count>0</span></button><button class="text-link" data-expand-all>Expand results +</button><p data-filter-count role="status">{feature_count} features</p></div><div class="filter-chips" aria-label="Filter feature categories">{feature_filters}</div><div class="feature-list">{feature_rows}</div><p class="empty-state" data-empty hidden>No features match. Try another search, category, or saved filter.</p><p class="local-note">Saved features stay in this browser’s local storage. No account is needed.</p></section></main>'''
+    page('features','Every feature, bit by bit','Search the complete Toon Pro feature catalog. Explore implemented behavior, practical workflows, optional tools and honest limitations.',feature_body,'features','features')
+    setup_commands={
+        'macos':('macOS','Install Xcode Command Line Tools, CMake 3.24+, zlib and Qt 6.10.3 for macOS. Select QtBase, QtSvg and QtMultimedia; Qt Test is needed for tests. Use a C++20 compiler. Set the Qt path below to your installation.', '''git clone https://github.com/complex1/ToonPro.git
+cd ToonPro
+cmake -S . -B build -DCMAKE_PREFIX_PATH="/path/to/Qt/6.10.3/macos" -DTOON_ENABLE_FILAMENT=OFF -DTOON_ENABLE_EXPERIMENTAL_3D=ON -DBUILD_TESTING=ON
+cmake --build build --config Release --parallel 4
+ctest --test-dir build -C Release --output-on-failure --parallel 2
+open build/ToonPro.app'''),
+        'windows':('Windows','Use an x64 Visual Studio 2022 developer shell with C++20 support, CMake 3.24+, Qt 6.10.3 msvc2022_64 and zlib. Set CMAKE_PREFIX_PATH and ZLIB_ROOT to the actual SDK and zlib locations. Qt Multimedia and SVG are required. The commands below use PowerShell.', '''git clone https://github.com/complex1/ToonPro.git
+cd ToonPro
+cmake -S . -B build -DCMAKE_PREFIX_PATH="C:/Qt/6.10.3/msvc2022_64" -DZLIB_ROOT="C:/path/to/zlib" -DTOON_ENABLE_FILAMENT=OFF -DTOON_ENABLE_EXPERIMENTAL_3D=ON -DBUILD_TESTING=ON
+cmake --build build --config Release --parallel 4
+$env:PATH = "C:\\Qt\\6.10.3\\msvc2022_64\\bin;$env:PATH"
+ctest --test-dir build -C Release --output-on-failure --parallel 2
+.\\build\\Release\\ToonPro.exe'''),
+        'linux':('Linux source','Linux is a development target; public distribution is deferred. Use a C++20 compiler, CMake 3.24+, zlib development headers, Qt 6.10.3 gcc_64 and the matching XCB/OpenGL/audio runtime dependencies. GUI tests need a display or Xvfb. Video encoding needs a working codec runtime; see packaging notes.', '''git clone https://github.com/complex1/ToonPro.git
+cd ToonPro
+cmake -S . -B build -DCMAKE_PREFIX_PATH="/path/to/Qt/6.10.3/gcc_64" -DTOON_ENABLE_FILAMENT=OFF -DTOON_ENABLE_EXPERIMENTAL_3D=ON -DBUILD_TESTING=ON
+cmake --build build --config Release --parallel 4
+ctest --test-dir build -C Release --output-on-failure --parallel 2
+./build/ToonPro''')}
+    setup_tabs=''.join(f'<button role="tab" id="setup-tab-{key}" aria-controls="setup-panel-{key}" aria-selected="{str(i==0).lower()}" tabindex="{0 if i==0 else -1}">{name}</button>' for i,(key,(name,*_)) in enumerate(setup_commands.items()))
+    setup_panels=''.join(f'<section id="setup-panel-{key}" role="tabpanel" aria-labelledby="setup-tab-{key}" {"hidden" if i else ""}><h2>{name}</h2><p>{esc(description)}</p><div class="code-block"><button data-copy aria-label="Copy {name} setup commands">Copy</button><pre><code>{esc(code)}</code></pre></div></section>' for i,(key,(name,description,code)) in enumerate(setup_commands.items()))
+    setup=f'''<main id="main"><section class="page-intro section"><span class="eyebrow">FROM SOURCE TO FIRST STROKE</span><h1>LET’S GET<br><em>YOU DRAWING.</em></h1><p class="wide-intro">Build the current local version. Point CMake at your Qt installation, run the checks, then open your first drawing.</p></section><section class="section setup-layout"><aside><span class="eyebrow">BEFORE YOU START</span><h2>A few essentials.</h2><dl class="requirements"><dt>Language</dt><dd>C++20 compiler</dd><dt>Build</dt><dd>CMake 3.24 or newer</dd><dt>Framework</dt><dd>Qt 6.10+ · distribution pin 6.10.3</dd><dt>Qt modules</dt><dd>Core, Gui, Widgets, Svg, Concurrent, Sql, Multimedia, MultimediaWidgets; Test for tests</dd><dt>Dependency</dt><dd>zlib · Git for cloning</dd><dt>Development scripts</dt><dd>Python 3.10+; the editor itself is native C++</dd></dl><a class="text-link" href="{REPO}/blob/main/docs/packaging.md">Platform packaging recipes ↗</a></aside><div class="setup-main"><div role="tablist" class="setup-tabs" aria-label="Build platform">{setup_tabs}</div>{setup_panels}<div class="note"><strong>What is being built?</strong><p>Source version 0.76.0, including current development tools. Published 0.75.0 preview packages have an earlier project flow. These commands are build recipes; platform verification results belong to the corresponding build.</p></div><h2>Then make your first drawing.</h2><ol class="steps"><li>Open the app and choose New project → Drawing.</li><li>Give the project a name and choose its local folder.</li><li>Choose New drawing, set the canvas dimensions and background, then create it.</li><li>Choose a brush in Tools, set a foreground color and draw on the editable layer.</li><li>Save the document with Cmd/Ctrl+S.</li></ol>{link('docs/','Read the full manual','button')}<h2>Check before packaging.</h2><p>CTest covers application behavior; physical tablet feel, platform codecs and clean-machine packages need their own acceptance checks. Run the packaging scripts only after the relevant platform checks pass.</p><p><a class="text-link" href="{REPO}/blob/main/docs/testing-2026-11-08.md">Current test report ↗</a> · <a class="text-link" href="{REPO}/releases">Published previews ↗</a></p><p>Pricing and application licensing are undecided. Source availability does not establish a usage license.</p></div></section></main>'''
+    page('setup','Build locally','Requirements, platform build recipes, tests and the first drawing workflow for the current Toon Pro source.',setup,kind='setup')
+    # The source comparison is also maintained as a readable repository document.
+    products=[('Clip Studio Paint','Illustration, comics and 2D animation','A mature art workflow with customizable brushes, vector layers and 3D drawing references. Animation capacity depends on the edition.','Toon Pro’s direction is a drawing-first native editor with a separate project dashboard and independent document tabs. Full Clip Studio feature parity remains unfinished.','https://www.clipstudio.net/en/animation/'),('Krita','Digital painting and frame-by-frame animation','A mature painting application with a configurable brush engine, animation timeline and audio support.','Toon Pro combines a local project/asset manager, editable vector drawing and shot documents. Krita has a much more established painting ecosystem.','https://docs.krita.org/en/user_manual/animation.html'),('OpenToonz','2D animation production','Raster and vector drawing, Xsheet/timeline exposure workflows and node-based effects for animation production.','Toon Pro starts with an individual drawing and keeps organization outside the canvas. Complete multi-shot assembly and delivery remain open work.','https://opentoonz.readthedocs.io/en/latest/'),('Toon Boom Harmony','Production animation and compositing','A professional animation family with drawing, rigging and compositing tools. Availability depends on the edition; the Node view is a Premium feature.','Toon Pro’s current priority is direct drawing UX for an individual artist. It does not claim Harmony’s rigging, production pipeline or node compositor depth.','https://www.toonboom.com/products/harmony'),('Blender','3D creation and Grease Pencil animation','A broad 3D creation suite; Grease Pencil supports traditional 2D, cut-out animation and storyboarding in a 3D environment.','Toon Pro uses editable 3D primarily as a drawing reference. Full 3D creation, advanced rendering, physics and general scene authoring are outside its current scope.','https://docs.blender.org/manual/en/latest/grease_pencil/introduction.html')]
+    rows=''.join(f'<article class="comparison-row"><div><span class="eyebrow">{esc(focus)}</span><h2>{esc(name)}</h2><a class="text-link" href="{source}">Official product documentation ↗</a></div><div><h3>Where it shines</h3><p>{esc(strength)}</p><h3>Where Toon Pro fits</h3><p>{esc(fit)}</p></div></article>' for name,focus,strength,fit,source in products)
+    compare=f'''<main id="main"><section class="page-intro section"><span class="eyebrow">DIFFERENT TOOLS. DIFFERENT RHYTHMS.</span><h1>FIND YOUR<br><em>KIND OF FLOW.</em></h1><p class="wide-intro">The right workspace depends on what you make. Here is where Toon Pro fits alongside established creative tools.</p></section><section class="section compare-principles"><h2>Why this direction?</h2><div class="principles"><div><span>01</span><h3>Start with one drawing.</h3><p>Create a focused drawing project before thinking about shots or a whole production.</p></div><div><span>02</span><h3>Keep organization separate.</h3><p>Projects and assets live in their own dashboard; independent documents open in tabs.</p></div><div><span>03</span><h3>Keep the work local.</h3><p>Project-owned media, native editable documents and ordinary folders on your selected drive.</p></div></div></section><section class="section comparisons">{rows}<div class="note"><strong>A comparison, with context.</strong><p>These are workflow distinctions, not measured speed or quality rankings. Toon Pro remains in development. Physical pen acceptance, broad platform packaging, large-project behavior, live linked assets and full multi-shot delivery still need work. Other products are mature and have different strengths.</p><p>Official sources reviewed 8 November 2026. Edition details can change. <a href="{REPO}/blob/main/docs/product-comparison.md">Read the complete source-linked comparison ↗</a></p></div>{link('features/','See exactly what is implemented','button')}</section></main>'''
+    page('compare','Find your kind of flow','A fair, official-source comparison of Toon Pro with Clip Studio Paint, Krita, OpenToonz, Harmony and Blender.',compare,'compare','compare')
+    credits=f'''<main id="main" class="credits section"><span class="eyebrow">SMALL PRINT / BIG RESPECT</span><h1>MADE WITH<br><em>REAL DETAILS.</em></h1><h2>Actual app captures</h2><p>Screenshots show the current Toon Pro 0.76 source build. They use sample documents and focused UI test fixtures where appropriate. A fixture capture demonstrates the real widget with sample data; it is not an artist acceptance test or a performance benchmark. The capture manifest records filenames, dimensions and provenance.</p><p><a class="text-link" href="{url('assets/screenshots/current/index.json')}">Read the capture manifest ↗</a></p><h2>Type and visual identity</h2><p>Space Grotesk supplies the reading and interface type; Bricolage Grotesque adds expressive headings. Both are served locally under the SIL Open Font License. The website’s simple vector mark and UI symbols are project artwork.</p><p><a href="{url('assets/fonts/spacegrotesk-OFL.txt')}">Space Grotesk license</a> · <a href="{url('assets/fonts/bricolagegrotesque-OFL.txt')}">Bricolage Grotesque license</a></p><h2>The browser playground</h2><p>The small ink canvas is an illustrative website interaction. It uses browser drawing APIs and does not embed, reproduce or benchmark Toon Pro’s native brush engine. You can download your own doodle locally.</p><h2>Privacy and local preferences</h2><p>This static site has no analytics, account system or tracking cookies. Search runs in your browser. Saved features use local storage on your browser and can be removed by unsaving them or clearing site storage. External links use their destination’s own policies.</p><h2>Build and release boundaries</h2><p>This site documents current source 0.76.0; published preview 0.75.0 packages may differ. Source code availability does not establish pricing or an application license. Dependency notices and platform packaging requirements remain in the repository.</p><p><a class="text-link" href="{REPO}/blob/main/docs/packaging.md">Packaging and third-party requirements ↗</a></p></main>'''
+    page('credits','Credits and provenance','Real application screenshot provenance, local fonts, browser playground and privacy details.',credits,kind='credits')
+    search_entries=[{'title':c['title'],'text':' '.join([c['summary']]+[p for s in c['sections'] for p in s.get('body',[])]),'category':c['category'],'url':url('docs/'+c['id']+'/')} for c in chapters]
+    search_entries += [{'title':f['title'],'text':f['summary']+' '+' '.join(f.get('keywords',[])),'category':'Feature · '+f['category'],'url':url('features/')+'#'+f['id']} for f in features]
+    search_entries+=pages[:1]+[p for p in pages if p['url'] in [url('setup/'),url('compare/')]]
+    (out/'search-index.json').write_text(json.dumps(search_entries,ensure_ascii=False))
+    info={'version':'0.76.0','publicPreview':'0.75.0','chapterCount':chapter_count,'featureCount':feature_count,'screenshotCount':len(shots),'pageCount':len(pages),'basePath':base}
+    (out/'build-info.json').write_text(json.dumps(info,indent=2))
     (out/'.nojekyll').touch()
-    (out/'build-info.json').write_text(json.dumps({'guideCount':len(guides),'guideWords':sum(len(g['body'].split()) for g in guides),'screenshotCount':len(shots['screenshots']),'version':release['version'],'developmentWorkflow':'0.76 local development','sitePageCount':7,'basePath':base},indent=2))
-    print(f'Built {len(guides)} guides and 7 site pages in {out}')
+    (out/'sitemap.xml').write_text('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+''.join('<url><loc>'+esc(origin.rstrip('/')+p['url'])+'</loc></url>' for p in pages)+'</urlset>')
+    (out/'robots.txt').write_text('User-agent: *\nAllow: /\nSitemap: '+origin.rstrip('/')+url('sitemap.xml')+'\n')
+    (out/'404.html').write_text((out/'index.html').read_text().replace('<title>Make a little chaos','<title>Page not found').replace('<main id="main">','<main id="main"><div class="note">This page is missing. Explore the overview below or use documentation search.</div>',1))
+    print(json.dumps(info,indent=2))
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('--output',type=Path,default=ROOT/'dist');parser.add_argument('--base',default='/ToonPro/');parser.add_argument('--origin',default='https://complex1.github.io');args=parser.parse_args()
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--output',type=Path,default=ROOT/'dist')
+    parser.add_argument('--base',default='/ToonPro/')
+    parser.add_argument('--origin',default='https://complex1.github.io')
+    args=parser.parse_args()
     build(args.output.resolve(),args.base,args.origin)

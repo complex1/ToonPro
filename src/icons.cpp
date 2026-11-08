@@ -124,6 +124,8 @@ FeatureSymbol symbol(FeatureIcon feature)
     case FeatureIcon::Blur: return {"toon-blur", "Blur"};
     case FeatureIcon::AlphaLock: return {"toon-alpha-lock", "Lock transparent pixels"};
     case FeatureIcon::Clipping: return {"toon-clipping", "Clip to layer below"};
+    case FeatureIcon::FillReference: return {"toon-fill-reference", "Fill reference"};
+    case FeatureIcon::VectorNudge: return {"toon-vector-nudge", "Nudge vector strokes"};
     }
     return {"", ""};
 }

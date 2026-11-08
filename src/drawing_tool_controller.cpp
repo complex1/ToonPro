@@ -38,7 +38,7 @@ DrawingToolController::DrawingToolController(Canvas *canvas):QObject(canvas),m_c
     textStyle=EditableObject::create(ObjectKind::Text); textStyle.text="Text"; textStyle.fill=Qt::black;
     canvas->installEventFilter(this);
     connect(canvas,&Canvas::viewChanged,this,&DrawingToolController::positionTextEditor);
-    connect(&m_transform,&AdvancedTransform::changed,this,[this]{m_canvas->invalidateArtworkCache();m_canvas->updateSelectionUi();emit changed();});
+    connect(&m_transform,&AdvancedTransform::changed,this,[this]{if(!m_transform.puppet())m_selectedPuppetPins.clear();m_canvas->invalidateArtworkCache();m_canvas->updateSelectionUi();emit changed();});
     connect(this,&DrawingToolController::changed,canvas,[this]{m_canvas->update();m_canvas->updateSelectionUi();});
     connect(doc(),&Document::changed,this,[this] {
         if(m_textEdit&&!doc()->externalEditActive()){finishTextEdit(true);return;}
@@ -59,7 +59,7 @@ DrawingToolController::DrawingToolController(Canvas *canvas):QObject(canvas),m_c
 }
 bool DrawingToolController::handlesTool() const {
     const auto t=m_canvas->pointerTool();
-    return t==Tool::Arc || (t>=Tool::Eyedropper && t<=Tool::VectorWidth) || (t==Tool::Eraser && doc()->isOpen() && doc()->activeShot().layers[doc()->activeLayer()].kind==LayerKind::Vector);
+    return t==Tool::Arc || t==Tool::VectorNudge || (t>=Tool::Eyedropper && t<=Tool::VectorWidth) || (t==Tool::Eraser && doc()->isOpen() && doc()->activeShot().layers[doc()->activeLayer()].kind==LayerKind::Vector);
 }
 bool DrawingToolController::active() const { return m_drag||m_arcPending||!m_points.isEmpty()||!m_nodes.isEmpty()||m_transform.active()||m_objects.editActive()||m_raster.retouchActive(); }
 void DrawingToolController::notifySettings(){ emit changed(); }
@@ -72,6 +72,28 @@ bool DrawingToolController::beginAdvanced(const QStringList &ids,bool boundary) 
     auto selected=ids;
     if(selected.isEmpty()&&!boundary)if(auto *panel=m_canvas->window()->findChild<LayerPanel*>())selected=panel->selectedLayerIds();
     const bool ok=m_canvas->prepareToolTransform(selected); emit changed(); return ok;
+}
+bool DrawingToolController::setPuppetMode(bool enabled){
+    if(enabled==puppetMode&&warpMode){
+        if(!m_transform.active()&&doc()->isOpen()&&m_canvas->tool()==Tool::AdvancedTransform){const bool ready=m_canvas->prepareToolTransform();emit changed();return ready;}
+        return true;
+    }
+    if(!m_canvas->resolvePendingTransform()){emit changed();return false;}
+    m_transform.cancel();m_selectedPuppetPins.clear();puppetMode=enabled;warpMode=true;
+    if(enabled)selectionBoundary=false;
+    m_canvas->refreshLayerSelectionContext();m_canvas->notifyToolSettingsEdited();
+    const bool ok=!doc()->isOpen()||m_canvas->tool()!=Tool::AdvancedTransform||m_canvas->prepareToolTransform();emit changed();return ok;
+}
+bool DrawingToolController::setPuppetDensity(int density){
+    if(density<minPuppetDensity||density>maxPuppetDensity)return false;
+    const int previous=puppetDensity;puppetDensity=density;
+    if(m_transform.puppet()&&!m_transform.setPuppetDensity(density)){puppetDensity=previous;emit changed();return false;}
+    m_canvas->notifyToolSettingsEdited();emit changed();return true;
+}
+bool DrawingToolController::removeSelectedPuppetPins(){
+    if(!m_transform.puppet()||m_selectedPuppetPins.isEmpty())return false;
+    if(!m_transform.removePuppetPins(m_selectedPuppetPins.values()))return false;
+    m_selectedPuppetPins.clear();m_drag=false;emit changed();return true;
 }
 std::optional<EditableObject> DrawingToolController::selectedObject() const {
     if(!doc()->isOpen()) return {};
@@ -243,6 +265,16 @@ void DrawingToolController::applyVectorBrush(QPointF point,qreal pressure) {
     }
     if(any)m_objects.previewObjects(values);m_lastBrushPoint=point;
 }
+void DrawingToolController::applyVectorNudge(QPointF point,qreal pressure){
+    auto values=m_editObjects;QString error;
+    for(auto &object:values){
+        const auto nudged=nudgedVectorPath(object,m_start,point-m_start,nudgeRadius,nudgeStrength*qBound(.05,pressure,1.),m_nudgeLayerTransform,&error);
+        if(!nudged){cancel();emit doc()->warning(error);return;}object=*nudged;
+    }
+    // Always publish from the captured source, including returning to the start.
+    // Neither event count nor previous previews accumulates deformation.
+    if(!m_objects.previewObjects(values))cancel();
+}
 bool DrawingToolController::press(QPointF view,Qt::KeyboardModifiers mods,qreal pressure) {
     if(m_textEdit)finishTextEdit();
     auto t=m_canvas->pointerTool(); auto p=m_canvas->artworkPoint(view);
@@ -262,13 +294,36 @@ bool DrawingToolController::press(QPointF view,Qt::KeyboardModifiers mods,qreal 
         p=inverse.map(p);
     }
     m_start=m_current=p;if(m_points.isEmpty()&&m_nodes.isEmpty())m_combine=combine(mods,m_canvas->selectionCombine());m_handle=-1;
-    if(t==Tool::Bucket){RasterTools::bucket(doc(),p,m_canvas->brush.color,fillSettings);return true;}
+    if(t==Tool::Bucket){
+        if(!encloseFillMode){RasterTools::bucket(doc(),p,m_canvas->brush.color,fillSettings);return true;}
+        m_enclosePath=QPainterPath(p);m_drag=true;emit changed();return true;
+    }
     if(t==Tool::MagicWand||t==Tool::ColorRange){RasterTools::selectColor(doc(),p,fillSettings,t==Tool::MagicWand,m_combine);return true;}
     if(t==Tool::AdvancedTransform){
         if(!m_transform.active()&&!m_canvas->prepareToolTransform())return true;
+        if(warpMode&&puppetMode){
+            if(!m_transform.puppet())return true;
+            const auto &pins=m_transform.pins();int hit=-1;qreal distance=12;
+            for(int i=0;i<pins.size();++i){const auto d=QLineF(view,m_canvas->artworkViewTransform().map(pins[i].target)).length();if(d<distance){distance=d;hit=i;}}
+            if((mods&Qt::AltModifier)&&hit>=0){m_selectedPuppetPins={hit};removeSelectedPuppetPins();return true;}
+            if(hit<0){hit=m_transform.addPuppetPin(p);if(hit<0)return true;m_selectedPuppetPins={hit};}
+            else if(mods&Qt::ShiftModifier){if(m_selectedPuppetPins.contains(hit))m_selectedPuppetPins.remove(hit);else m_selectedPuppetPins.insert(hit);}
+            else if(!m_selectedPuppetPins.contains(hit))m_selectedPuppetPins={hit};
+            m_transformPoints.clear();for(const auto &pin:m_transform.pins())m_transformPoints.append(pin.target);
+            m_drag=m_selectedPuppetPins.contains(hit);emit changed();return true;
+        }
         m_transformPoints=warpMode?m_transform.controlPoints():QVector<QPointF>(m_transform.quad());
         for(int i=0;i<m_transformPoints.size();++i)if(QLineF(view,m_canvas->artworkViewTransform().map(m_transformPoints[i])).length()<12){m_handle=i;break;}
         m_drag=true;emit changed();return true;
+    }
+    if(t==Tool::VectorNudge){
+        const auto &shot=doc()->activeShot();const auto &layer=shot.layers[doc()->activeLayer()];
+        if(layer.kind!=LayerKind::Vector)return true;
+        if(const auto*animation=layerAnimation(shot,layer.id);animation&&!animation->paths.isEmpty()){
+            emit doc()->warning("Disable path animation on this layer before nudging its source geometry.");return true;
+        }
+        m_editObjects=editableObjectsAtFrame();m_nudgeLayerTransform=objectLayerTransform();
+        m_drag=m_objects.beginLayerEdit("Nudge vector strokes");emit changed();return true;
     }
     if(t==Tool::VectorSimplify||t==Tool::VectorWidth){
         const auto &layer=doc()->activeShot().layers[doc()->activeLayer()];
@@ -339,7 +394,16 @@ bool DrawingToolController::move(QPointF view,Qt::KeyboardModifiers mods,qreal p
     if(mods&Qt::ShiftModifier){auto d=m_current-m_start;if(t==Tool::Rectangle||t==Tool::Ellipse||t==Tool::EllipseSelect){const qreal a=qMax(qAbs(d.x()),qAbs(d.y()));m_current=m_start+QPointF(std::copysign(a,d.x()),std::copysign(a,d.y()));}
         if(t==Tool::Line){const qreal length=std::hypot(d.x(),d.y()),a=std::round(std::atan2(d.y(),d.x())/(M_PI/4))*(M_PI/4);m_current=m_start+QPointF(std::cos(a)*length,std::sin(a)*length);}}
     if(m_drag){
-        if(t==Tool::AdvancedTransform){auto points=m_transformPoints;auto delta=m_current-m_start;if(m_handle>=0)points[m_handle]+=delta;else for(auto &point:points)point+=delta;if(warpMode)m_transform.setWarp(points);else m_transform.setQuad(QPolygonF(points));}
+        if(t==Tool::AdvancedTransform){auto points=m_transformPoints;auto delta=m_current-m_start;
+            if(m_transform.puppet()){for(int i:m_selectedPuppetPins)if(i<points.size())points[i]+=delta;m_transform.setPuppetTargets(points);}
+            else{if(m_handle>=0)points[m_handle]+=delta;else for(auto &point:points)point+=delta;if(warpMode)m_transform.setWarp(points);else m_transform.setQuad(QPolygonF(points));}}
+        else if(t==Tool::Bucket&&encloseFillMode){
+            if(QLineF(m_canvas->artworkViewTransform().map(m_enclosePath.currentPosition()),view).length()>=.75){
+                if(m_enclosePath.elementCount()>=8192){cancel();emit doc()->warning("The enclosure is too detailed. Draw a shorter loop around the regions to fill.");return true;}
+                m_enclosePath.lineTo(m_current);
+            }
+        }
+        else if(t==Tool::VectorNudge)applyVectorNudge(m_current,pressure);
         else if(t==Tool::VectorSimplify||t==Tool::VectorWidth)applyVectorBrush(m_current,pressure);
         else if(t==Tool::VectorNode||t==Tool::Text){auto o=m_editObject;const auto delta=m_current-m_start;
             if(m_node>=0&&m_node<o.nodes.size()){auto inv=o.transform.inverted();const auto local=inv.map(m_current);auto &n=o.nodes[m_node];
@@ -374,9 +438,13 @@ bool DrawingToolController::release(QPointF view,Qt::KeyboardModifiers mods,qrea
     }
     if(t==Tool::AdvancedTransform){emit changed();return true;}
     if(t==Tool::VectorPen){emit changed();return true;}
-    if(t==Tool::Text||t==Tool::VectorNode||t==Tool::VectorSimplify||t==Tool::VectorWidth)m_objects.finishEdit();
+    if(t==Tool::Text||t==Tool::VectorNode||t==Tool::VectorSimplify||t==Tool::VectorWidth||t==Tool::VectorNudge)m_objects.finishEdit();
     else if(t==Tool::Retouch)m_raster.endRetouch();
-    else if(t==Tool::VectorEraser||t==Tool::Eraser){ObjectTools::erasePath(doc(),m_eraseSweep,(t==Tool::Eraser?m_canvas->brush.size:retouchSettings.size)/2,eraseSegments);m_eraseSweep={};}
+    else if(t==Tool::VectorEraser||t==Tool::Eraser){ObjectTools::erasePath(doc(),m_eraseSweep,(t==Tool::Eraser?m_canvas->brush.size:retouchSettings.size)/2,vectorEraseMode);m_eraseSweep={};}
+    else if(t==Tool::Bucket&&encloseFillMode){
+        auto enclosure=m_enclosePath;m_enclosePath={};
+        if(enclosure.elementCount()>=3){enclosure.closeSubpath();RasterTools::encloseFill(doc(),enclosure,m_canvas->brush.color,fillSettings);}
+    }
     else if(t==Tool::Gradient)RasterTools::gradient(doc(),m_start,m_current,gradientStops,radialGradient);
     else if(t==Tool::EllipseSelect)doc()->combineRasterSelection(gesturePath(),m_combine);
     else if(t==Tool::Line||t==Tool::Rectangle||t==Tool::Ellipse)commitPath(gesturePath());
@@ -424,8 +492,8 @@ void DrawingToolController::finishGesture(){
     if(m_focusingTextEditor)return;
     finishTextEdit();
     if(m_raster.retouchActive())m_raster.endRetouch();
-    if(m_objects.editActive())m_objects.finishEdit();
-    m_drag=false;m_styleEdit=false;emit changed();
+    if(m_objects.editActive()){if(m_canvas->tool()==Tool::VectorNudge&&m_drag)m_objects.cancelEdit();else m_objects.finishEdit();}
+    m_enclosePath={};m_drag=false;m_styleEdit=false;emit changed();
 }
 void DrawingToolController::interruptGesture(){
     // Retouch changes painted pixels as contact moves. A missing release keeps
@@ -436,7 +504,7 @@ void DrawingToolController::interruptGesture(){
 }
 void DrawingToolController::cancel(){
     finishTextEdit(true);m_openTextOnRelease=false;
-    m_raster.cancelRetouch();m_objects.cancelEdit();m_transform.cancel();m_drag=false;m_arcPending=false;m_styleEdit=false;m_editObjects.clear();m_simplifyRegion={};m_points.clear();m_nodes.clear();m_eraseSweep={};
+    m_raster.cancelRetouch();m_objects.cancelEdit();m_transform.cancel();m_selectedPuppetPins.clear();m_drag=false;m_arcPending=false;m_styleEdit=false;m_editObjects.clear();m_simplifyRegion={};m_points.clear();m_nodes.clear();m_eraseSweep={};m_enclosePath={};
     if(auto o=selectedObject()){strokeWidth=o->strokeWidth;objectOpacity=o->opacity;if(m_node>=o->nodes.size())m_node=-1;}
     emit changed();
 }
@@ -444,6 +512,7 @@ bool DrawingToolController::key(int key,Qt::KeyboardModifiers mods){
     if(key==Qt::Key_Escape&&active()){cancel();return true;}
     if(key==Qt::Key_Return||key==Qt::Key_Enter){if(m_transform.active())m_transform.apply();else if(m_arcPending||!m_points.isEmpty()||!m_nodes.isEmpty())finishPath(mods&Qt::ShiftModifier);else return false;return true;}
     if(key==Qt::Key_Delete||key==Qt::Key_Backspace){
+        if(m_transform.puppet()){removeSelectedPuppetPins();return true;}
         if(m_arcPending){cancel();return true;}
         if(!m_nodes.isEmpty()){m_nodes.removeLast();emit changed();return true;}if(!m_points.isEmpty()){m_points.removeLast();emit changed();return true;}
         if((m_canvas->tool()==Tool::VectorNode||m_canvas->tool()==Tool::Text)&&!m_objectId.isEmpty()){
@@ -470,8 +539,8 @@ std::optional<QPainterPath> DrawingToolController::selectionPreview()const{
 QPainterPath DrawingToolController::cursorPath()const{
     QPainterPath p;if(!m_canvas->m_pointerInside||m_canvas->m_space||m_canvas->m_dragging)return p;
     const auto tool=m_canvas->pointerTool();const bool vectorEraser=doc()->isOpen() && doc()->activeShot().layers[doc()->activeLayer()].kind==LayerKind::Vector && tool==Tool::Eraser;
-    if(vectorEraser||tool==Tool::Retouch||tool==Tool::VectorEraser||tool==Tool::VectorSimplify||tool==Tool::VectorWidth){const auto center=m_canvas->m_pointerPosition;
-        const qreal size=(tool==Tool::VectorSimplify||tool==Tool::VectorWidth)?widthBrushRadius*2:vectorEraser?m_canvas->brush.size:retouchSettings.size;
+    if(vectorEraser||tool==Tool::Retouch||tool==Tool::VectorEraser||tool==Tool::VectorSimplify||tool==Tool::VectorWidth||tool==Tool::VectorNudge){const auto center=m_canvas->m_pointerPosition;
+        const qreal size=tool==Tool::VectorNudge?nudgeRadius*2:(tool==Tool::VectorSimplify||tool==Tool::VectorWidth)?widthBrushRadius*2:vectorEraser?m_canvas->brush.size:retouchSettings.size;
         const qreal radius=qMax(2.,size*m_canvas->artworkZoom()/2);p.addEllipse(center,radius,radius);}return p;
 }
 void DrawingToolController::paint(QPainter &p)const{
@@ -479,12 +548,33 @@ void DrawingToolController::paint(QPainter &p)const{
     QPen pen(QColor(ui::accent),1.5);pen.setCosmetic(true);p.setPen(pen);p.setBrush(Qt::NoBrush);
     const auto handle=[&](QPointF point,bool square=false){auto v=view.map(point);p.setBrush(QColor(ui::panel));if(square)p.drawRect(QRectF(v-QPointF(4,4),QSizeF(8,8)));else p.drawEllipse(v,4,4);p.setBrush(Qt::NoBrush);};
     if(m_transform.active()){
+        if(m_transform.puppet()){
+            const auto &mesh=m_transform.puppetMesh();
+            if(showPuppetMesh){
+                QPen meshPen(QColor(ui::muted),.7);meshPen.setCosmetic(true);p.setPen(meshPen);
+                QSet<QPair<int,int>> edges;
+                for(const auto &triangle:mesh.triangles)for(int i=0;i<3;++i){int a=triangle[i],b=triangle[(i+1)%3];if(a>b)std::swap(a,b);if(edges.contains({a,b}))continue;edges.insert({a,b});p.drawLine(view.map(mesh.target[a]),view.map(mesh.target[b]));}
+            }
+            for(int i=0;i<m_transform.pins().size();++i){
+                const auto point=view.map(m_transform.pins()[i].target);const bool selected=m_selectedPuppetPins.contains(i);
+                QPen pinPen(QColor(ui::text),1.5);pinPen.setCosmetic(true);p.setPen(pinPen);p.setBrush(QColor(selected?ui::accent:ui::panel));p.drawEllipse(point,6,6);
+                p.setBrush(QColor(selected?ui::canvas:ui::text));p.drawEllipse(point,1.5,1.5);
+            }
+            p.setBrush(Qt::NoBrush);p.setPen(pen);
+        }else{
         const auto points=warpMode?m_transform.controlPoints():QVector<QPointF>(m_transform.quad());
         if(warpMode){for(int i=0;i<3;++i){QPolygonF row,col;for(int j=0;j<3;++j){row<<view.map(points[i*3+j]);col<<view.map(points[j*3+i]);}p.drawPolyline(row);p.drawPolyline(col);}}
         else p.drawPolygon(view.map(QPolygonF(points)));for(auto point:points)handle(point,true);
+        }
     }
     if(m_drag||m_arcPending||!m_points.isEmpty()||!m_nodes.isEmpty()){
-        if(m_canvas->tool()==Tool::Gradient){p.drawLine(view.map(m_start),view.map(m_current));handle(m_start);handle(m_current);}
+        if(m_canvas->tool()==Tool::VectorNudge){p.drawEllipse(view.map(m_start),nudgeRadius*m_canvas->artworkZoom(),nudgeRadius*m_canvas->artworkZoom());p.drawLine(view.map(m_start),view.map(m_current));}
+        else if(m_canvas->tool()==Tool::Bucket&&encloseFillMode){
+            auto enclosure=m_enclosePath;enclosure.closeSubpath();
+            auto enclosurePen=pen;enclosurePen.setStyle(Qt::DashLine);p.setPen(enclosurePen);
+            auto tint=QColor(ui::accent);tint.setAlpha(32);p.setBrush(tint);p.drawPath(view.map(enclosure));p.setBrush(Qt::NoBrush);p.setPen(pen);
+        }
+        else if(m_canvas->tool()==Tool::Gradient){p.drawLine(view.map(m_start),view.map(m_current));handle(m_start);handle(m_current);}
         else if(m_canvas->tool()==Tool::VectorEraser||m_canvas->tool()==Tool::Eraser)p.drawPath(view.map(m_eraseSweep));
         else if(m_canvas->tool()!=Tool::EllipseSelect&&m_canvas->tool()!=Tool::PolygonSelect)p.drawPath(view.map(gesturePath()));
         for(auto point:m_points)handle(point);

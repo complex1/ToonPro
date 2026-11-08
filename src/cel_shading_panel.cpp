@@ -135,6 +135,7 @@ void CelShadingPanel::setActive(bool active){
 void CelShadingPanel::setStatus(const QString &message){m_status->setText(message);m_status->setToolTip(message);}
 void CelShadingPanel::notifyState(){
     if(!m_canvas||!m_overlay)return;
+    m_canvas->setExternalViewGestureActive(this,m_dragging);
     {QSignalBlocker blocker(m_enable);m_enable->setChecked(m_active);}chip(m_color,m_kindTabs->currentIndex()==0?m_shadow:m_highlight);chip(m_guideColor,m_kindTabs->currentIndex()==0?m_shadowGuide:m_highlightGuide);
     m_apply->setEnabled(!m_busy&&!m_fills.isEmpty()&&m_preview.rejectedFills.isEmpty()&&unavailableReason().isEmpty());m_cancel->setEnabled(pending()||m_busy);m_undo->setEnabled(!m_operations.isEmpty());
     m_overlay->setVisible(isVisible()&&(m_active||pending())&&!m_canvas->document()->editingGestureActive());if(m_overlay->isVisible())m_overlay->raise();m_overlay->update();
@@ -230,6 +231,7 @@ void CelShadingPanel::contextChanged(){
 void CelShadingPanel::invalidateWorker(){++m_generation;if(m_cancelled)m_cancelled->store(true,std::memory_order_relaxed);m_cancelled.reset();m_busy=false;}
 void CelShadingPanel::clearLocalDraft(){
     invalidateWorker();m_boundaries.clear();m_fills.clear();m_operations.clear();m_livePath={};m_dragging=m_tablet=false;m_preview={};m_previewComposite={};m_previewDirty=false;
+    if(m_canvas)m_canvas->setExternalViewGestureActive(this,false);
 }
 void CelShadingPanel::cancelEditing(){
     clearLocalDraft();persistDraft();setStatus({});notifyState();emit previewChanged();
@@ -329,7 +331,7 @@ void CelShadingPanel::drawStart(QPointF position){if(!unavailableReason().isEmpt
     if(m_modeTabs->currentIndex()==1){addFill(point,m_kindTabs->currentIndex()==0?CelShadeKind::Shadow:CelShadeKind::Highlight,m_kindTabs->currentIndex()==0?m_shadow:m_highlight);return;}
     m_dragging=true;m_livePath=QPainterPath(point);notifyState();}
 void CelShadingPanel::drawMove(QPointF position){if(!m_dragging)return;const auto point=m_canvas->artworkPoint(position);if(QLineF(point,m_livePath.currentPosition()).length()<.25)return;if(m_livePath.elementCount()<32768)m_livePath.lineTo(point);m_overlay->update();}
-void CelShadingPanel::drawFinish(QPointF position){if(!m_dragging)return;drawMove(position);m_dragging=false;const auto path=m_livePath;m_livePath={};addBoundary(path,m_kindTabs->currentIndex()==0?CelShadeKind::Shadow:CelShadeKind::Highlight);notifyState();}
+void CelShadingPanel::drawFinish(QPointF position){if(!m_dragging)return;drawMove(position);m_dragging=false;m_canvas->setExternalViewGestureActive(this,false);const auto path=m_livePath;m_livePath={};addBoundary(path,m_kindTabs->currentIndex()==0?CelShadeKind::Shadow:CelShadeKind::Highlight);notifyState();}
 void CelShadingPanel::showEvent(QShowEvent *event){QWidget::showEvent(event);if(m_previewDirty)renderPreview();notifyState();}
 void CelShadingPanel::hideEvent(QHideEvent *event){setActive(false);if(m_overlay)m_overlay->hide();QWidget::hideEvent(event);}
 bool CelShadingPanel::eventFilter(QObject *watched,QEvent *event){

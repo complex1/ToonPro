@@ -1,4 +1,5 @@
 #include "timeline_controller.h"
+#include "feature_flags.h"
 #include "canvas.h"
 #include "camera_tool.h"
 #include "mask_tool.h"
@@ -7,6 +8,7 @@
 
 namespace toon {
 bool TimelineController::selectCamera(const QString &layerId) {
+    if (!features::legacy3DEditor && !layerId.isEmpty()) return false;
     if(property("symbolEditor").toBool())return false;
     if (!document()->isOpen() || !prepareTransition()) return false;
     if (!layerId.isEmpty()) {
@@ -35,7 +37,7 @@ bool TimelineController::beginCameraEdit() {
     return document()->beginCameraEdit(m_cameraLayerId);
 }
 bool TimelineController::previewShotCamera(const Camera2D &camera) { return document()->previewShotCamera(camera); }
-bool TimelineController::previewSceneCamera(const Camera3D &camera) { return document()->previewSceneCamera(camera); }
+bool TimelineController::previewSceneCamera(const Camera3D &camera) { return features::legacy3DEditor && document()->previewSceneCamera(camera); }
 void TimelineController::finishCameraEdit() { document()->commitCameraEdit(); }
 void TimelineController::cancelCameraEdit() { document()->cancelCameraEdit(); }
 bool TimelineController::setCameraKey() {

@@ -1,8 +1,10 @@
 #include "auto_actions.h"
+#include "raster_tools.h"
 #include <QFile>
 #include <QDir>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QPainter>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QtTest>
@@ -16,6 +18,20 @@ bool write(const QString &path,const QJsonObject &o){QFile f(path);return f.open
 class AutoActionsTests:public QObject {
     Q_OBJECT
 private slots:
+    void expandedBucketReplaysAndEncloseFillStopsRecording(){
+        auto fixture=project();fixture.transparent=true;fixture.shots[0].layers[0].fillReference=true;
+        QImage ink(tileSize,tileSize,QImage::Format_ARGB32_Premultiplied);ink.fill(Qt::transparent);
+        {QPainter painter(&ink);painter.setPen(QPen(Qt::black,3));painter.drawRect(QRectF(30,30,50,50));}
+        fixture.shots[0].layers[0].tiles.insert({0,0},ink);fixture.shots[0].layers.append(RasterLayer::create("Flats"));
+        QTemporaryDir dir;Document d;d.load(fixture);d.selectLayer(1);AutoActions actions(&d,dir.filePath("a.json"));const auto id=actions.create("Expanded flat");
+        RasterFillSettings settings;settings.source=RasterSampleSource::MarkedReferences;settings.expansion=2;
+        QVERIFY(actions.startRecording(id));QVERIFY(RasterTools::bucket(&d,{50,50},Qt::red,settings));actions.stopRecording();
+        QCOMPARE(actions.action(id)->steps.size(),1);QCOMPARE(actions.action(id)->steps[0].parameters["expansion"].toInt(),2);QCOMPARE(read(actions.path())["version"].toInt(),4);
+        const auto expected=layer(d).tiles;d.load(fixture);d.selectLayer(1);QVERIFY(actions.play(id));QCOMPARE(layer(d).tiles,expected);QCOMPARE(d.history()->count(),1);
+        const auto original=read(actions.path());auto downgraded=original;downgraded["version"]=3;QVERIFY(write(actions.path(),downgraded));QVERIFY(!actions.load());QVERIFY(write(actions.path(),original));QVERIFY(actions.load());
+        d.load(fixture);d.selectLayer(1);QSignalSpy status(&actions,&AutoActions::status);QVERIFY(actions.startRecording(id));QPainterPath enclosure;enclosure.addRect(20,20,70,70);
+        settings.expansion=0;QVERIFY(RasterTools::encloseFill(&d,enclosure,Qt::blue,settings));QVERIFY(!actions.recording());QCOMPARE(actions.action(id)->steps.size(),1);QVERIFY(!status.isEmpty());QVERIFY(status.last().first().toString().contains("not supported"));
+    }
     void recordReplayFreshDocumentAndSingleUndo(){
         QTemporaryDir dir;Document d;d.load(project());AutoActions a(&d,dir.filePath("actions.json"));QVERIFY(a.load());
         const auto id=a.create("Ink setup");QVERIFY(a.startRecording(id));d.addLayer();

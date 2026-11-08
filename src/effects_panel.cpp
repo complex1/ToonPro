@@ -51,7 +51,7 @@ protected:
 private:
     void updateHeight(){setFixedHeight(qMax(20,fontMetrics().height()+2));}
 };
-// Five icon categories remain directly reachable in a narrow dock. Visible
+// Six icon categories remain directly reachable in a narrow dock. Visible
 // category names are kept beside the enable toggle, not repeated on every tab.
 class EffectsCategoryTabs final : public QTabBar {
 public:
@@ -169,7 +169,7 @@ EffectsPanel::EffectsPanel(Canvas *canvas,QWidget *parent) : QWidget(parent),m_c
     m_tabs=new EffectsCategoryTabs(this);m_tabs->setObjectName("effectsTabs");m_tabs->setExpanding(true);m_tabs->setDrawBase(false);m_tabs->setAccessibleName("Effect category");
     m_tabs->setIconSize({ui::metrics::tabIcon,ui::metrics::tabIcon});m_tabs->setProperty("compactDrawingTabs",true);m_tabs->setFocusPolicy(Qt::StrongFocus);
     m_tabs->setSizePolicy(QSizePolicy::Ignored,QSizePolicy::Fixed);
-    const QStringList icons={"square-dashed",featureIconName(FeatureIcon::Blur),"layers","sun","palette"};const QStringList names={"Mask","Blur","Shadow","Glow","Color"};
+    const QStringList icons={"square-dashed",featureIconName(FeatureIcon::Blur),"layers","sun","palette","square"};const QStringList names={"Mask","Blur","Shadow","Glow","Color","Outline"};
     for(int i=0;i<names.size();++i){m_tabs->addTab(appIcon(icons[i]),{});m_tabs->setTabToolTip(i,names[i]);m_tabs->setAccessibleTabName(i,names[i]);}outer->addWidget(m_tabs);
     m_scroll=new QScrollArea(this);m_scroll->setObjectName("effectsScroll");m_scroll->setFrameShape(QFrame::NoFrame);m_scroll->setWidgetResizable(true);m_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);outer->addWidget(m_scroll,1);
     m_pages=new EffectPropertyPages;m_pages->setObjectName("effectsPages");m_scroll->setWidget(m_pages);
@@ -206,12 +206,12 @@ EffectsPanel::EffectsPanel(Canvas *canvas,QWidget *parent) : QWidget(parent),m_c
     auto *invertRow=new PropertyRow("Invert",m_maskPresentationInvert,m_maskPlacement);invertRow->setAccessory(keyButton(m_maskPlacement,KeyframeProperty::MaskInverted));placement->addWidget(invertRow);
     connect(m_maskPresentationInvert,&QToolButton::clicked,this,[this]{maskAction([this]{m_document->invertLayerMask(true);});});
     mask->addWidget(m_maskPlacement);mask->addStretch();
-    const char *toggleIds[]={"effectBlurEnabled","effectShadowEnabled","effectGlowEnabled","effectColorEnabled"};
-    for(int i=0;i<4;++i){auto *page=new QWidget;auto *rows=new QVBoxLayout(page);rows->setContentsMargins(0,0,0,0);rows->setSpacing(ui::metrics::controlGap);m_pages->addWidget(page);
+    const char *toggleIds[]={"effectBlurEnabled","effectShadowEnabled","effectGlowEnabled","effectColorEnabled","effectOutlineEnabled"};
+    for(int i=0;i<5;++i){auto *page=new QWidget;auto *rows=new QVBoxLayout(page);rows->setContentsMargins(0,0,0,0);rows->setSpacing(ui::metrics::controlGap);m_pages->addWidget(page);
         auto *headingWidget=new QWidget(this);headingWidget->setObjectName(QString::fromLatin1(toggleIds[i])+"Heading");m_effectHeadings[i]=headingWidget;
         auto *heading=new QHBoxLayout(headingWidget);heading->setContentsMargins(0,0,0,0);heading->setSpacing(ui::metrics::controlGap);
         auto *enabled=button(headingWidget,toggleIds[i],"eye","Enable "+names[i+1].toLower(),true);m_enabled[i]=enabled;
-        heading->addWidget(enabled);heading->addWidget(new QLabel(names[i+1],headingWidget),1);heading->addWidget(keyButton(headingWidget,effectEnables[i]));
+        heading->addWidget(enabled);heading->addWidget(new QLabel(names[i+1],headingWidget),1);if(i<4)heading->addWidget(keyButton(headingWidget,effectEnables[i]));
         outer->insertWidget(outer->indexOf(m_scroll),headingWidget);headingWidget->hide();
         auto *body=new QWidget(page);body->setObjectName(QString::fromLatin1(toggleIds[i])+"Details");m_effectBodies[i]=body;auto *fields=new QVBoxLayout(body);fields->setContentsMargins(0,0,0,0);fields->setSpacing(ui::metrics::controlGap);rows->addWidget(body);rows->addStretch();
         if(i==0)addValue(fields,"effectBlurRadius","Radius",0,128,4,1,"px",0);
@@ -221,11 +221,12 @@ EffectsPanel::EffectsPanel(Canvas *canvas,QWidget *parent) : QWidget(parent),m_c
         if(i==2){addValue(fields,"effectGlowRadius","Radius",0,128,8,1,"px",5);addValue(fields,"effectGlowOpacity","Opacity",0,100,50,1,"%",6);
             m_glowColor=button(body,"effectGlowColor","circle","Choose glow color");addColor(fields,m_glowColor);}
         if(i==3){addValue(fields,"effectExposure","Exposure",-4,4,0,2,"stops",7)->setSingleStep(.1);addValue(fields,"effectContrast","Contrast",-100,100,0,1,"%",8);addValue(fields,"effectSaturation","Saturation",-100,100,0,1,"%",9);addValue(fields,"effectHue","Hue",-180,180,0,1,"°",10);}
-        connect(enabled,&QToolButton::toggled,this,[this,i](bool enabled){changeEffect([i,enabled](LayerEffects &e){if(i==0)e.blurEnabled=enabled;else if(i==1)e.shadowEnabled=enabled;else if(i==2)e.glowEnabled=enabled;else e.colorEnabled=enabled;});});}
+        if(i==4){addValue(fields,"effectOutlineWidth","Width",0,128,3,1,"px",11)->setSingleStep(.5);m_outlineColor=button(body,"effectOutlineColor","circle","Choose outline color");addColor(fields,m_outlineColor);}
+        connect(enabled,&QToolButton::toggled,this,[this,i](bool enabled){changeEffect([i,enabled](LayerEffects &e){if(i==0)e.blurEnabled=enabled;else if(i==1)e.shadowEnabled=enabled;else if(i==2)e.glowEnabled=enabled;else if(i==3)e.colorEnabled=enabled;else e.outlineEnabled=enabled;});});}
     connect(m_tabs,&QTabBar::currentChanged,this,[this](int index){
         if(!m_refreshing)finishEditing();
         m_scrollPositions[m_currentPage]=m_scroll->verticalScrollBar()->value();m_currentPage=index;m_pages->setCurrentIndex(index);
-        for(int i=0;i<4;++i)m_effectHeadings[i]->setVisible(index==i+1);
+        for(int i=0;i<5;++i)m_effectHeadings[i]->setVisible(index==i+1);
         // Let the new page settle before restoring its own scroll position.
         QTimer::singleShot(0,this,[this,index]{if(m_currentPage==index)m_scroll->verticalScrollBar()->setValue(m_scrollPositions[index]);});
     });
@@ -240,7 +241,7 @@ EffectsPanel::EffectsPanel(Canvas *canvas,QWidget *parent) : QWidget(parent),m_c
     connect(m_maskHideAll,&QToolButton::clicked,this,[this]{maskAction([this]{m_document->fillLayerMask(false);});});
     connect(m_maskPaint,&QToolButton::toggled,this,[this](bool enabled){if(m_refreshing)return;if(prepareAction())m_canvas->maskTool()->setEnabled(enabled);refresh();});
     connect(m_maskMode,&QTabBar::currentChanged,this,[this](int mode){if(!m_refreshing&&m_canvas)m_canvas->maskTool()->setRevealing(mode==0);});
-    connect(m_shadowColor,&QToolButton::clicked,this,[this]{pickColor(true);});connect(m_glowColor,&QToolButton::clicked,this,[this]{pickColor(false);});
+    connect(m_shadowColor,&QToolButton::clicked,this,[this]{pickColor(0);});connect(m_glowColor,&QToolButton::clicked,this,[this]{pickColor(1);});connect(m_outlineColor,&QToolButton::clicked,this,[this]{pickColor(2);});
     m_offset->begin=[this]{finishEditing();beginValue();return m_editing;};
     m_offset->preview=[this](QPointF value){if(!m_editing)return;m_draft.shadowOffset=value;m_document->previewLayerEffects(m_draft);m_values[1]->setValueSilently(value.x());m_values[2]->setValueSilently(value.y());};
     m_offset->finish=[this]{finishValue();};m_offset->cancel=[this]{cancelEditing();};
@@ -312,7 +313,7 @@ LayerMask EffectsPanel::displayedMask() const{
     const auto *layer=activeLayer(m_document);return layer&&layer->mask?evaluateAnimatedLayerMask(m_document->activeShot(),layer->id,m_document->currentFrame(),*layer->mask):LayerMask{};
 }
 ValueSlider *EffectsPanel::addValue(QVBoxLayout *layout,const char *id,const QString &label,double low,double high,double initial,int decimals,const QString &unit,int field){
-    auto *value=new ValueSlider(label,low,high,initial,decimals,unit,layout->parentWidget());value->setObjectName(id);value->setSingleStep(1);auto *row=new PropertyRow(label,value,layout->parentWidget());row->setObjectName(QString::fromLatin1(id)+"Row");row->setAccessory(keyButton(layout->parentWidget(),effectFields[field]));layout->addWidget(row);m_values[field]=value;
+    auto *value=new ValueSlider(label,low,high,initial,decimals,unit,layout->parentWidget());value->setObjectName(id);value->setSingleStep(1);auto *row=new PropertyRow(label,value,layout->parentWidget());row->setObjectName(QString::fromLatin1(id)+"Row");if(field<11)row->setAccessory(keyButton(layout->parentWidget(),effectFields[field]));layout->addWidget(row);m_values[field]=value;
     connect(value,&ValueSlider::editingStarted,this,&EffectsPanel::beginValue);connect(value,&ValueSlider::valueChanged,this,[this,field](double n){previewValue(field,n);});
     connect(value,&ValueSlider::editingFinished,this,&EffectsPanel::finishValue);connect(value,&ValueSlider::editingCancelled,this,&EffectsPanel::cancelEditing);return value;
 }
@@ -338,7 +339,7 @@ void EffectsPanel::previewValue(int field,double value){
     if(m_refreshing||!m_editing||!m_document||!m_document->effectsEditActive())return;
     switch(field){case 0:m_draft.blurRadius=value;break;case 1:m_draft.shadowOffset.setX(value);break;case 2:m_draft.shadowOffset.setY(value);break;
     case 3:m_draft.shadowRadius=value;break;case 4:m_draft.shadowOpacity=value/100;break;case 5:m_draft.glowRadius=value;break;case 6:m_draft.glowOpacity=value/100;break;
-    case 7:m_draft.exposure=value;break;case 8:m_draft.contrast=value;break;case 9:m_draft.saturation=value;break;case 10:m_draft.hue=value;break;default:return;}
+    case 7:m_draft.exposure=value;break;case 8:m_draft.contrast=value;break;case 9:m_draft.saturation=value;break;case 10:m_draft.hue=value;break;case 11:m_draft.outlineWidth=value;break;default:return;}
     m_document->previewLayerEffects(m_draft);m_offset->setOffset(m_draft.shadowOffset);
 }
 void EffectsPanel::finishValue(){
@@ -357,10 +358,10 @@ void EffectsPanel::changeEffect(const std::function<void(LayerEffects &)> &chang
     if(m_refreshing||!prepareAction())return;const auto *layer=activeLayer(m_document);if(!layer)return;
     const auto id=layer->id;auto effects=displayedEffects();change(effects);m_document->setLayerEffects(id,effects,true);refresh();
 }
-void EffectsPanel::pickColor(bool shadow){
+void EffectsPanel::pickColor(int effect){
     if(!prepareAction())return;beginValue();if(!m_editing)return;
-    QColorDialog dialog(shadow?m_draft.shadowColor:m_draft.glowColor,this);dialog.setObjectName("effectColorDialog");dialog.setWindowTitle(shadow?"Shadow color":"Glow color");dialog.setOption(QColorDialog::DontUseNativeDialog);
-    connect(&dialog,&QColorDialog::currentColorChanged,this,[this,shadow](QColor color){if(!m_editing||!color.isValid())return;color.setAlpha(255);if(shadow)m_draft.shadowColor=color;else m_draft.glowColor=color;m_document->previewLayerEffects(m_draft);});
+    QColorDialog dialog(effect==0?m_draft.shadowColor:effect==1?m_draft.glowColor:m_draft.outlineColor,this);dialog.setObjectName("effectColorDialog");dialog.setWindowTitle(effect==0?"Shadow color":effect==1?"Glow color":"Outline color");dialog.setOption(QColorDialog::DontUseNativeDialog);
+    connect(&dialog,&QColorDialog::currentColorChanged,this,[this,effect](QColor color){if(!m_editing||!color.isValid())return;color.setAlpha(255);if(effect==0)m_draft.shadowColor=color;else if(effect==1)m_draft.glowColor=color;else m_draft.outlineColor=color;m_document->previewLayerEffects(m_draft);});
     if(dialog.exec()==QDialog::Accepted)finishValue();else cancelEditing();
 }
 void EffectsPanel::refreshPreviewStatus(){
@@ -389,11 +390,11 @@ void EffectsPanel::refresh(){
         canAdd=canAdd&&!layerIsAnnotation(shot.layers,m_document->activeLayer())&&shot.layers.size()<(shot.animationTracks.isEmpty()?maxDrawingLayers:maxAnimationLayers)
             &&(parent.isEmpty()||m_document->effectsEditReason(parent).isEmpty());}
     m_addAdjustment->setEnabled(canAdd);
-    for(int i=1;i<4;++i)m_tabs->setTabEnabled(i,!adjustment);if(adjustment&&m_tabs->currentIndex()>0&&m_tabs->currentIndex()<4)m_tabs->setCurrentIndex(4);
-    const bool enabled[]={effects.blurEnabled,effects.shadowEnabled,effects.glowEnabled,effects.colorEnabled};
-    for(int i=0;i<4;++i){m_enabled[i]->setEnabled(editable&&effects.enabled&&(!adjustment||i==3));m_enabled[i]->setChecked(enabled[i]);m_effectBodies[i]->setEnabled(m_enabled[i]->isEnabled()&&enabled[i]);m_effectBodies[i]->setVisible(enabled[i]);}
-    if(!m_editing){const double values[]={effects.blurRadius,effects.shadowOffset.x(),effects.shadowOffset.y(),effects.shadowRadius,effects.shadowOpacity*100,effects.glowRadius,effects.glowOpacity*100,effects.exposure,effects.contrast,effects.saturation,effects.hue};for(int i=0;i<11;++i)m_values[i]->setValueSilently(values[i]);m_offset->setOffset(effects.shadowOffset);}
-    colorChip(m_shadowColor,effects.shadowColor);colorChip(m_glowColor,effects.glowColor);
+    for(int i:{1,2,3,5})m_tabs->setTabEnabled(i,!adjustment);if(adjustment&&m_tabs->currentIndex()>0&&m_tabs->currentIndex()!=4)m_tabs->setCurrentIndex(4);
+    const bool enabled[]={effects.blurEnabled,effects.shadowEnabled,effects.glowEnabled,effects.colorEnabled,effects.outlineEnabled};
+    for(int i=0;i<5;++i){m_enabled[i]->setEnabled(editable&&effects.enabled&&(!adjustment||i==3));m_enabled[i]->setChecked(enabled[i]);m_effectBodies[i]->setEnabled(m_enabled[i]->isEnabled()&&enabled[i]);m_effectBodies[i]->setVisible(enabled[i]);}
+    if(!m_editing){const double values[]={effects.blurRadius,effects.shadowOffset.x(),effects.shadowOffset.y(),effects.shadowRadius,effects.shadowOpacity*100,effects.glowRadius,effects.glowOpacity*100,effects.exposure,effects.contrast,effects.saturation,effects.hue,effects.outlineWidth};for(int i=0;i<12;++i)m_values[i]->setValueSilently(values[i]);m_offset->setOffset(effects.shadowOffset);}
+    colorChip(m_shadowColor,effects.shadowColor);colorChip(m_glowColor,effects.glowColor);colorChip(m_outlineColor,effects.outlineColor);
     const auto mask=displayedMask();const bool hasMask=layer&&layer->mask.has_value(),maskEnabled=hasMask&&mask.enabled;auto *tool=m_canvas->maskTool();
     m_maskAdd->setVisible(!hasMask);m_maskSelection->setVisible(!hasMask);m_maskEnabled->setVisible(hasMask);m_maskRemove->setVisible(hasMask);m_maskControls->setVisible(hasMask&&m_maskPropertyTabs->currentIndex()==0);m_maskPlacement->setVisible(hasMask&&m_maskPropertyTabs->currentIndex()==1);m_maskPropertyTabs->setVisible(hasMask);
     m_maskAdd->setEnabled(editable&&!hasMask);m_maskSelection->setEnabled(editable&&!hasMask&&m_document->rasterSelection().active&&!m_document->rasterSelection().path.isEmpty());

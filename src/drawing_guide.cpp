@@ -35,13 +35,14 @@ QString typeKey(GuideType type) {
     case GuideType::ParallelRuler: return "parallel-ruler";
     case GuideType::ThreePoint: return "three-point";
     case GuideType::Fisheye: return "fisheye";
+    case GuideType::Ellipse: return "ellipse";
     }
     return {};
 }
 std::optional<GuideType> parseType(const QJsonValue &value) {
     if (!value.isString()) return {};
     for (auto type : {GuideType::Perspective, GuideType::VanishingPoint, GuideType::TwoPoint, GuideType::ParallelRuler,
-                      GuideType::ThreePoint, GuideType::Fisheye})
+                      GuideType::ThreePoint, GuideType::Fisheye, GuideType::Ellipse})
         if (value.toString() == typeKey(type)) return type;
     return {};
 }
@@ -77,6 +78,7 @@ int guidePointCount(GuideType type) {
     case GuideType::ParallelRuler: return 2;
     case GuideType::ThreePoint: return 4;
     case GuideType::Fisheye: return 3;
+    case GuideType::Ellipse: return 3;
     }
     return 0;
 }
@@ -88,6 +90,7 @@ QString guideTypeName(GuideType type) {
     case GuideType::ParallelRuler: return "Parallel ruler";
     case GuideType::ThreePoint: return "Three-point perspective";
     case GuideType::Fisheye: return "Fisheye perspective";
+    case GuideType::Ellipse: return "Ellipse ruler";
     }
     return {};
 }

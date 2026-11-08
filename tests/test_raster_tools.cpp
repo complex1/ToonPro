@@ -1,4 +1,5 @@
 #include "raster_tools.h"
+#include "advanced_transform.h"
 #include <QtTest>
 #include <QTemporaryDir>
 #include <QElapsedTimer>
@@ -21,6 +22,13 @@ QColor pixel(const Document &document, int x, int y) {
     const auto &layer = document.project().shots[0].layers[document.activeLayer()];
     const auto key = TileKey{int(std::floor(x / qreal(tileSize))), int(std::floor(y / qreal(tileSize)))};
     const auto tile = layer.tiles.constFind(key); return tile == layer.tiles.cend() ? QColor(Qt::transparent) : tile->pixelColor(x - key.first * tileSize, y - key.second * tileSize);
+}
+void outline(QImage &drawing, QRect box, int thickness = 2) {
+    QPainter painter(&drawing);
+    painter.fillRect(box.x(), box.y(), box.width(), thickness, Qt::black);
+    painter.fillRect(box.x(), box.bottom() - thickness + 1, box.width(), thickness, Qt::black);
+    painter.fillRect(box.x(), box.y(), thickness, box.height(), Qt::black);
+    painter.fillRect(box.right() - thickness + 1, box.y(), thickness, box.height(), Qt::black);
 }
 }
 class RasterToolsTest : public QObject {
@@ -139,6 +147,187 @@ private slots:
         document.history()->undo(); document.clearRasterSelection(); document.setLayerAlphaLocked(true);
         const auto before = document.project().shots[0].layers[0].tiles;
         QVERIFY(RasterTools::bucket(&document, {80, 40}, Qt::blue)); QCOMPARE(document.project().shots[0].layers[0].tiles, before);
+    }
+    void bucketExpansionGrowsUnderReferenceButCannotCrossItsBoundary() {
+        auto project = blank(); auto drawing = image(128, Qt::transparent);
+        { QPainter painter(&drawing); painter.fillRect(40, 0, 6, 128, Qt::black); }
+        auto ink = RasterLayer::create("Ink"); putImage(ink, drawing); ink.visible = false;
+        project.shots[0].layers.append(ink); Document document; document.load(project);
+        RasterFillSettings settings; settings.source = RasterSampleSource::ReferenceLayer; settings.referenceLayerId = ink.id;
+        settings.expansion = 3;
+        QVERIFY(RasterTools::bucket(&document, {20, 64}, Qt::blue, settings));
+        QCOMPARE(pixel(document, 42, 64), QColor(Qt::blue)); QCOMPARE(pixel(document, 43, 64).alpha(), 0);
+        QCOMPARE(pixel(document, 46, 64).alpha(), 0); QCOMPARE(document.project().shots[0].layers[1].tiles, ink.tiles);
+        QCOMPARE(document.history()->count(), 1); document.history()->undo();
+        QVERIFY(document.project().shots[0].layers[0].tiles.isEmpty()); settings.expansion = 20;
+        QVERIFY(RasterTools::bucket(&document, {20, 64}, Qt::red, settings));
+        QCOMPARE(pixel(document, 45, 64), QColor(Qt::red)); QCOMPARE(pixel(document, 46, 64).alpha(), 0);
+        document.history()->undo(); settings.expansion = -3;
+        QVERIFY(RasterTools::bucket(&document, {20, 64}, Qt::green, settings));
+        QCOMPARE(pixel(document, 3, 64), QColor(Qt::green)); QCOMPARE(pixel(document, 2, 64).alpha(), 0);
+        QCOMPARE(pixel(document, 36, 64), QColor(Qt::green)); QCOMPARE(pixel(document, 37, 64).alpha(), 0);
+        QCOMPARE(document.project().shots[0].layers[1].tiles, ink.tiles);
+    }
+    void bucketExpansionPreservesOwnInkAndExistingSelection() {
+        auto project = blank(); auto drawing = image(128, Qt::white);
+        { QPainter painter(&drawing); painter.fillRect(40, 0, 3, 128, Qt::black); }
+        putImage(project.shots[0].layers[0], drawing); Document document; document.load(project);
+        document.setRasterSelection(rectangle({0, 30, 90, 40}));
+        RasterFillSettings settings; settings.expansion = 20; settings.source = RasterSampleSource::ActiveLayer;
+        QVERIFY(RasterTools::bucket(&document, {20, 50}, Qt::blue, settings));
+        QCOMPARE(pixel(document, 39, 50), QColor(Qt::blue)); QCOMPARE(pixel(document, 40, 50), QColor(Qt::black));
+        QCOMPARE(pixel(document, 42, 50), QColor(Qt::black)); QCOMPARE(pixel(document, 43, 50), QColor(Qt::white));
+        QCOMPARE(pixel(document, 20, 20), QColor(Qt::white));
+        document.history()->undo(); QCOMPARE(document.project().shots[0].layers[0].tiles, project.shots[0].layers[0].tiles);
+        settings.source = RasterSampleSource::AllLayers;
+        QVERIFY(RasterTools::bucket(&document, {20, 50}, Qt::blue, settings));
+        QCOMPARE(pixel(document, 40, 50), QColor(Qt::black)); QCOMPARE(pixel(document, 43, 50), QColor(Qt::white));
+    }
+    void encloseFillsMultipleClosedRegionsAndRetainsReference_data() {
+        QTest::addColumn<bool>("white"); QTest::addColumn<bool>("marked");
+        for (bool white : {false, true}) for (bool marked : {false, true})
+            QTest::newRow(qPrintable(QString("%1-%2").arg(white ? "white" : "transparent", marked ? "marked" : "chosen"))) << white << marked;
+    }
+    void encloseFillsMultipleClosedRegionsAndRetainsReference() {
+        QFETCH(bool, white); QFETCH(bool, marked);
+        auto project = blank(); auto drawing = image(128, white ? QColor(Qt::white) : QColor(Qt::transparent));
+        outline(drawing, {20, 20, 30, 80}); outline(drawing, {70, 20, 30, 80});
+        auto ink = RasterLayer::create("Ink"); putImage(ink, drawing); ink.visible = false; ink.fillReference = marked;
+        project.shots[0].layers.append(ink); Document document; document.load(project);
+        RasterFillSettings settings; settings.source = marked ? RasterSampleSource::MarkedReferences : RasterSampleSource::ReferenceLayer; settings.referenceLayerId = ink.id;
+        const auto gesture = rectangle({10, 10, 100, 100});
+        QVERIFY(RasterTools::encloseFill(&document, gesture, Qt::blue, settings));
+        QCOMPARE(pixel(document, 30, 50), QColor(Qt::blue)); QCOMPARE(pixel(document, 80, 50), QColor(Qt::blue));
+        QCOMPARE(pixel(document, 60, 50).alpha(), 0); QCOMPARE(pixel(document, 20, 50).alpha(), 0);
+        QCOMPARE(pixel(document, 5, 5).alpha(), 0); QCOMPARE(document.project().shots[0].layers[1].tiles, ink.tiles);
+        QCOMPARE(document.history()->count(), 1); document.history()->undo();
+        QVERIFY(document.project().shots[0].layers[0].tiles.isEmpty()); document.history()->redo();
+        QCOMPARE(pixel(document, 30, 50), QColor(Qt::blue)); QCOMPARE(document.project().shots[0].layers[1].tiles, ink.tiles);
+    }
+    void encloseRejectsOpenExteriorAndPartiallyEnclosedRegions() {
+        auto project = blank(); auto drawing = image(128, Qt::white);
+        outline(drawing, {20, 20, 30, 80}); outline(drawing, {70, 20, 30, 80});
+        { QPainter painter(&drawing); painter.fillRect(30, 20, 3, 2, Qt::white); }
+        auto ink = RasterLayer::create("Ink"); putImage(ink, drawing); project.shots[0].layers.append(ink);
+        Document document; document.load(project); RasterFillSettings settings; settings.source = RasterSampleSource::ReferenceLayer; settings.referenceLayerId = ink.id;
+        QVERIFY(RasterTools::encloseFill(&document, rectangle({10, 10, 100, 100}), Qt::blue, settings));
+        QCOMPARE(pixel(document, 30, 50).alpha(), 0); QCOMPARE(pixel(document, 80, 50), QColor(Qt::blue));
+        QCOMPARE(pixel(document, 60, 50).alpha(), 0); document.history()->undo();
+        QVERIFY(RasterTools::encloseFill(&document, rectangle({75, 40, 15, 20}), Qt::blue, settings));
+        QVERIFY(document.project().shots[0].layers[0].tiles.isEmpty()); QCOMPARE(document.history()->index(), 0);
+        settings.gapClosing = 2;
+        QVERIFY(RasterTools::encloseFill(&document, rectangle({10, 10, 100, 100}), Qt::red, settings));
+        QCOMPARE(pixel(document, 30, 50), QColor(Qt::red)); QCOMPARE(pixel(document, 80, 50), QColor(Qt::red));
+        document.load(blank());
+        QVERIFY(RasterTools::encloseFill(&document, rectangle({10, 10, 100, 100}), Qt::red));
+        QCOMPARE(document.history()->count(), 0); QVERIFY(document.project().shots[0].layers[0].tiles.isEmpty());
+    }
+    void encloseExpansionShrinkSelectionAndOwnInk() {
+        auto project = blank(); auto drawing = image(128, Qt::white); outline(drawing, {20, 20, 80, 80}, 4);
+        auto ink = RasterLayer::create("Ink"); putImage(ink, drawing); project.shots[0].layers.append(ink);
+        Document document; document.load(project); RasterFillSettings settings; settings.source = RasterSampleSource::ReferenceLayer; settings.referenceLayerId = ink.id;
+        settings.expansion = 2;
+        document.setRasterSelection(rectangle({0, 0, 128, 60}));
+        QVERIFY(RasterTools::encloseFill(&document, rectangle({10, 10, 100, 100}), Qt::blue, settings));
+        QCOMPARE(pixel(document, 22, 50), QColor(Qt::blue)); QCOMPARE(pixel(document, 20, 50).alpha(), 0);
+        QCOMPARE(pixel(document, 19, 50).alpha(), 0); QCOMPARE(pixel(document, 50, 70).alpha(), 0);
+        document.history()->undo(); document.clearRasterSelection(); settings.expansion = -2;
+        QVERIFY(RasterTools::encloseFill(&document, rectangle({10, 10, 100, 100}), Qt::red, settings));
+        QCOMPARE(pixel(document, 25, 50).alpha(), 0); QCOMPARE(pixel(document, 26, 50), QColor(Qt::red));
+        document.load(project); document.selectLayer(1); settings.source = RasterSampleSource::ActiveLayer; settings.expansion = 20;
+        QVERIFY(RasterTools::encloseFill(&document, rectangle({10, 10, 100, 100}), Qt::blue, settings));
+        QCOMPARE(pixel(document, 20, 50), QColor(Qt::black)); QCOMPARE(pixel(document, 23, 50), QColor(Qt::black));
+        QCOMPARE(pixel(document, 24, 50), QColor(Qt::blue)); QCOMPARE(pixel(document, 19, 50), QColor(Qt::white));
+    }
+    void encloseRecoversAntialiasingWithoutRepaintingLineCores_data() {
+        QTest::addColumn<bool>("white"); QTest::newRow("transparent") << false; QTest::newRow("white") << true;
+    }
+    void encloseRecoversAntialiasingWithoutRepaintingLineCores() {
+        QFETCH(bool, white); auto project = blank();
+        auto drawing = image(128, white ? QColor(Qt::white) : QColor(Qt::transparent)); outline(drawing, {20, 20, 80, 80});
+        { QPainter painter(&drawing); painter.fillRect(22, 22, 1, 76, QColor(0, 0, 0, 192)); painter.fillRect(23, 22, 1, 76, QColor(0, 0, 0, 64)); }
+        putImage(project.shots[0].layers[0], drawing); Document document; document.load(project);
+        RasterFillSettings settings; settings.source = RasterSampleSource::ActiveLayer;
+        QVERIFY(RasterTools::encloseFill(&document, rectangle({10, 10, 100, 100}), Qt::blue, settings));
+        QCOMPARE(pixel(document, 30, 50), QColor(Qt::blue)); QCOMPARE(pixel(document, 20, 50), QColor(Qt::black));
+        QCOMPARE(pixel(document, 22, 50), QColor(0, 0, 63)); QCOMPARE(pixel(document, 23, 50), QColor(0, 0, 191));
+        QCOMPARE(pixel(document, 10, 50), white ? QColor(Qt::white) : QColor(Qt::transparent));
+        QCOMPARE(document.history()->count(), 1); document.history()->undo();
+        QCOMPARE(document.activeShot().layers[0].tiles, project.shots[0].layers[0].tiles);
+    }
+    void encloseKeepsSolidGrayLineCoresDistinctFromAntialiasing() {
+        auto project = blank(); auto drawing = image(128, Qt::white); outline(drawing, {20, 20, 80, 80});
+        for (int y = 0; y < drawing.height(); ++y) for (int x = 0; x < drawing.width(); ++x)
+            if (drawing.pixelColor(x, y) == QColor(Qt::black)) drawing.setPixelColor(x, y, QColor(80, 80, 80));
+        putImage(project.shots[0].layers[0], drawing); Document document; document.load(project);
+        RasterFillSettings settings; settings.source = RasterSampleSource::ActiveLayer; settings.expansion = 20;
+        QVERIFY(RasterTools::encloseFill(&document, rectangle({10, 10, 100, 100}), Qt::blue, settings));
+        QCOMPARE(pixel(document, 30, 50), QColor(Qt::blue)); QCOMPARE(pixel(document, 20, 50), QColor(80, 80, 80));
+        QCOMPARE(pixel(document, 21, 50), QColor(80, 80, 80)); QCOMPARE(pixel(document, 19, 50), QColor(Qt::white));
+    }
+    void positiveExpansionProtectsOwnInkWhenCompositeOpacityChangesItsPixels() {
+        for (bool white : {false, true}) {
+            auto project = blank(); auto drawing = image(128, white ? QColor(Qt::white) : QColor(Qt::transparent));
+            outline(drawing, {20, 20, 80, 80}); putImage(project.shots[0].layers[0], drawing);
+            project.shots[0].layers[0].opacity = .5; Document document; document.load(project);
+            RasterFillSettings settings; settings.source = RasterSampleSource::AllLayers; settings.expansion = 20;
+            QVERIFY(RasterTools::encloseFill(&document, rectangle({10, 10, 100, 100}), Qt::blue, settings));
+            QCOMPARE(pixel(document, 30, 50), QColor(Qt::blue)); QCOMPARE(pixel(document, 20, 50), QColor(Qt::black));
+            QCOMPARE(pixel(document, 21, 50), QColor(Qt::black));
+            QCOMPARE(pixel(document, 19, 50), white ? QColor(Qt::white) : QColor(Qt::transparent));
+            if (white) {
+                document.load(project); QVERIFY(RasterTools::bucket(&document, {50, 50}, Qt::blue, settings));
+                QCOMPARE(pixel(document, 30, 50), QColor(Qt::blue)); QCOMPARE(pixel(document, 20, 50), QColor(Qt::black));
+                QCOMPARE(pixel(document, 21, 50), QColor(Qt::black)); QCOMPARE(pixel(document, 19, 50), QColor(Qt::white));
+            }
+        }
+    }
+    void encloseRecoversSeparateReferenceEdgesOverWhitePaintTarget() {
+        auto project = blank(); putImage(project.shots[0].layers[0], image(128, Qt::white));
+        auto drawing = image(128, Qt::transparent); outline(drawing, {20, 20, 80, 80});
+        { QPainter painter(&drawing); painter.fillRect(22, 22, 1, 76, QColor(0, 0, 0, 192)); painter.fillRect(23, 22, 1, 76, QColor(0, 0, 0, 64)); }
+        auto ink = RasterLayer::create("Ink"); putImage(ink, drawing); project.shots[0].layers.append(ink);
+        QVector<QMap<TileKey, QImage>> painted;
+        for (const auto source : {RasterSampleSource::AllLayers, RasterSampleSource::ReferenceLayer}) {
+            Document document; document.load(project); RasterFillSettings settings; settings.source = source; settings.referenceLayerId = ink.id;
+            QVERIFY(RasterTools::encloseFill(&document, rectangle({10, 10, 100, 100}), Qt::blue, settings));
+            QCOMPARE(pixel(document, 22, 50), QColor(Qt::blue)); QCOMPARE(pixel(document, 23, 50), QColor(Qt::blue));
+            QCOMPARE(document.activeShot().layers[1].tiles, ink.tiles); painted.append(document.activeShot().layers[0].tiles);
+        }
+        QCOMPARE(painted[0], painted[1]);
+    }
+    void encloseAndExpansionRespectAlphaLockAndRejectInvalidRequests() {
+        auto project = blank(); auto drawing = image(128, Qt::transparent); outline(drawing, {20, 20, 80, 80});
+        auto ink = RasterLayer::create("Ink"); putImage(ink, drawing); project.shots[0].layers.append(ink);
+        Document document; document.load(project); RasterFillSettings settings; settings.source = RasterSampleSource::ReferenceLayer; settings.referenceLayerId = ink.id;
+        document.setLayerAlphaLocked(true); const auto before = document.project().shots[0].layers[0].tiles;
+        QVERIFY(RasterTools::encloseFill(&document, rectangle({10, 10, 100, 100}), Qt::blue, settings));
+        QCOMPARE(document.project().shots[0].layers[0].tiles, before);
+        document.setLayerAlphaLocked(false); document.setLayersLocked({document.activeShot().layers[0].id}, true);
+        QVERIFY(!RasterTools::encloseFill(&document, rectangle({10, 10, 100, 100}), Qt::blue, settings));
+        document.setLayersLocked({document.activeShot().layers[0].id}, false); settings.expansion = 21;
+        QVERIFY(!RasterTools::encloseFill(&document, rectangle({10, 10, 100, 100}), Qt::blue, settings));
+        QVERIFY(!RasterTools::bucket(&document, {50, 50}, Qt::blue, settings));
+        QCOMPARE(document.project().shots[0].layers[0].tiles, before);
+        settings.expansion = 0; settings.referenceLayerId = "missing";
+        QVERIFY(!RasterTools::encloseFill(&document, rectangle({10, 10, 100, 100}), Qt::blue, settings));
+        document.load(blank(8192));
+        QVERIFY(!RasterTools::encloseFill(&document, rectangle({0, 0, 8192, 8192}), Qt::blue));
+        QCOMPARE(document.history()->count(), 0);
+    }
+    void fillsCannotOverwriteRetainedPuppetSourceOrVectorArtwork() {
+        auto project = blank(); auto drawing = image(128, Qt::white); outline(drawing, {20, 20, 80, 80});
+        putImage(project.shots[0].layers[0], drawing); Document document; document.load(project);
+        AdvancedTransform transform; QVERIFY(transform.begin(&document)); QVERIFY(transform.beginPuppet(4)); QVERIFY(transform.apply());
+        QVERIFY(document.activeShot().layers[0].puppetWarp); const auto retained = document.project().toJson();
+        const int history = document.history()->count(); RasterFillSettings settings; settings.expansion = 4;
+        QVERIFY(!RasterTools::bucket(&document, {50, 50}, Qt::red, settings));
+        QVERIFY(!RasterTools::encloseFill(&document, rectangle({10, 10, 100, 100}), Qt::red, settings));
+        QCOMPARE(document.project().toJson(), retained); QCOMPARE(document.history()->count(), history);
+        project.shots[0].layers[0].kind = LayerKind::Vector; project.shots[0].layers[0].tiles.clear(); document.load(project);
+        QVERIFY(!RasterTools::bucket(&document, {50, 50}, Qt::red, settings));
+        QVERIFY(!RasterTools::encloseFill(&document, rectangle({10, 10, 100, 100}), Qt::red, settings));
+        QCOMPARE(document.history()->count(), 0);
     }
     void retouchPressureAndInheritedLocksDoNotMutateArtwork() {
         auto project = blank(); putImage(project.shots[0].layers[0], image(128, QColor(80, 100, 120, 128)));

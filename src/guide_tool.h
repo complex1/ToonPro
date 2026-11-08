@@ -33,7 +33,7 @@ public:
     void release(QPointF position, Qt::KeyboardModifiers modifiers);
     bool dragging() const { return m_dragHandle != -1; }
     quint64 cacheRenderCount() const { return m_cacheRenderCount; }
-    void beginSnap(QPointF artworkPoint);
+    QPointF beginSnap(QPointF artworkPoint);
     std::optional<QPointF> snap(QPointF artworkPoint);
     QVector<QPointF> strokePoints(QPointF filteredPoint);
     void endSnap();
@@ -55,11 +55,12 @@ private:
     QPointF m_dragStart;
     int m_dragHandle = -1; // -2 whole guide, >=0 point, count/count+1 area corners
     QPointF m_snapStart;
-    struct SnapCandidate { GuideConstraint constraint; std::optional<QRectF> area; };
+    struct SnapCandidate { GuideConstraint constraint; std::optional<QRectF> area; bool fixedEllipse = false; };
     QVector<SnapCandidate> m_snapCandidates;
     std::optional<SnapCandidate> m_snapLine;
     QPointF m_lastStrokePoint;
     bool m_snapActive = false;
+    std::optional<qreal> m_ellipsePointerAngle, m_ellipseStrokeAngle;
     struct LineCache {
         QImage image;
         QVector<DrawingGuide> guides;

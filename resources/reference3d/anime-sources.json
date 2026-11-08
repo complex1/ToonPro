@@ -1,0 +1,248 @@
+{
+  "schema": 1,
+  "preparationScript": "scripts/prepare_reference3d_anime.py",
+  "canonicalTool": "tests/reference3d_prepare_asset.cpp",
+  "models": [
+    {
+      "id": "anime/seed-san",
+      "name": "Seed-san",
+      "sourceUrl": "https://raw.githubusercontent.com/vrm-c/vrm-specification/94e82dd346fa6cf0337c4421728640e5252dd38e/samples/Seed-san/vrm/Seed-san.vrm",
+      "sourceRevision": "94e82dd346fa6cf0337c4421728640e5252dd38e",
+      "sourceSha256": "624d0d554bc205bbdc33e22a68a2c3c20edebb3e573011ead8878a65e5329b23",
+      "readySha256": "e5fb0bc373de59dbf59b4fb0931237bc36b1172d8c943ac4bbd7116e8fabf90a",
+      "identityTextureTransformsRemoved": 35,
+      "resizedImages": [
+        {
+          "image": 2,
+          "oldSize": [
+            1024,
+            1024
+          ],
+          "newSize": [
+            768,
+            768
+          ]
+        },
+        {
+          "image": 3,
+          "oldSize": [
+            1024,
+            1024
+          ],
+          "newSize": [
+            768,
+            768
+          ]
+        },
+        {
+          "image": 4,
+          "oldSize": [
+            1024,
+            1024
+          ],
+          "newSize": [
+            768,
+            768
+          ]
+        },
+        {
+          "image": 7,
+          "oldSize": [
+            1024,
+            1024
+          ],
+          "newSize": [
+            768,
+            768
+          ]
+        },
+        {
+          "image": 8,
+          "oldSize": [
+            1024,
+            1024
+          ],
+          "newSize": [
+            768,
+            768
+          ]
+        },
+        {
+          "image": 10,
+          "oldSize": [
+            1024,
+            1024
+          ],
+          "newSize": [
+            768,
+            768
+          ]
+        },
+        {
+          "image": 11,
+          "oldSize": [
+            1024,
+            1024
+          ],
+          "newSize": [
+            768,
+            768
+          ]
+        },
+        {
+          "image": 12,
+          "oldSize": [
+            1024,
+            1024
+          ],
+          "newSize": [
+            768,
+            768
+          ]
+        },
+        {
+          "image": 13,
+          "oldSize": [
+            1024,
+            1024
+          ],
+          "newSize": [
+            768,
+            768
+          ]
+        }
+      ],
+      "canonical": {
+        "activeTriangles": 42042,
+        "activeVertices": 30264,
+        "assetId": "02e84a20ce53bac348ba2193ca0206773df86a358913f626517fc938c285110e",
+        "bodyPoseApplies": true,
+        "bodyPoseError": "",
+        "bones": 51,
+        "canonicalBytes": 21403642,
+        "catalogId": "anime/seed-san",
+        "compressedBytes": 15456697,
+        "detachedOptionalMeshNodes": [
+          {
+            "meshIndex": 3,
+            "meshName": "robo_arm",
+            "nodeIndex": 144,
+            "nodeName": "robo_arm"
+          }
+        ],
+        "encoding": "canonical",
+        "expressions": [
+          "aa",
+          "angry",
+          "blink",
+          "blinkLeft",
+          "blinkRight",
+          "ee",
+          "happy",
+          "ih",
+          "lookDown",
+          "lookLeft",
+          "lookRight",
+          "lookUp",
+          "oh",
+          "ou",
+          "relaxed",
+          "sad",
+          "surprised"
+        ],
+        "fileBytes": 21403642,
+        "frontYawDegrees": 0,
+        "handPoseApplies": true,
+        "handPoseError": "",
+        "height": 1.5801383256912231,
+        "images": 15,
+        "morphTargets": 129,
+        "name": "Seed-san",
+        "nodes": 147,
+        "output": "seed-san-v1.toon3dasset",
+        "outputSha256": "bbae769bbe06c5079f6ec4e350db7ff18802fc66f7113275f885ea2ab7e812af",
+        "skins": 5,
+        "sourceUrl": "https://raw.githubusercontent.com/vrm-c/vrm-specification/94e82dd346fa6cf0337c4421728640e5252dd38e/samples/Seed-san/vrm/Seed-san.vrm",
+        "triangles": 45058,
+        "vertices": 34059,
+        "warnings": [
+          "Optional extension data is retained in metadata but its behavior is not implemented: VRMC_springBone",
+          "Optional extension data is retained in metadata but its behavior is not implemented: VRMC_materials_mtoon",
+          "Optional extension data is retained in metadata but its behavior is not implemented: KHR_materials_emissive_strength",
+          "Optional extension data is retained in metadata but its behavior is not implemented: VRMC_node_constraint",
+          "Texture filter settings are preserved in source metadata; preview filtering uses renderer defaults.",
+          "Unlit material semantics are retained in metadata; the initial reference preview uses its shared lighting model.",
+          "Extended material data is preserved in metadata; only core metallic/roughness material fields are evaluated in this import slice.",
+          "Node extension data is retained in metadata; unsupported constraints and secondary motion remain frozen at the imported pose.",
+          "VRM material/texture expression bindings are retained in metadata; this import slice evaluates morph expression bindings only.",
+          "VRM expression override rules are retained in metadata but are not evaluated yet.",
+          "Expression has no supported morph bindings and remains metadata-only: neutral",
+          "VRM avatar metadata and humanoid/morph mappings are imported; gaze, spring bones, node constraints and full MToon evaluation remain unimplemented."
+        ]
+      }
+    },
+    {
+      "id": "anime/alicia-solid",
+      "name": "Alicia Solid",
+      "sourceUrl": "https://raw.githubusercontent.com/vrm-c/UniVRM/efd20f62f1bf0ac3fcc34de1e497324c5197d146/Tests/Models/Alicia_vrm-0.51/AliciaSolid_vrm-0.51.vrm",
+      "sourceRevision": "efd20f62f1bf0ac3fcc34de1e497324c5197d146",
+      "sourceSha256": "237bb02efadf8c13a114af91dd8e860173081457dee87017e51011c448d05dc2",
+      "readySha256": "237bb02efadf8c13a114af91dd8e860173081457dee87017e51011c448d05dc2",
+      "identityTextureTransformsRemoved": 0,
+      "resizedImages": [],
+      "canonical": {
+        "activeTriangles": 31798,
+        "activeVertices": 52849,
+        "assetId": "2c6acad62815ad7e6597a83faae4442163f7f85bf54604e21844b4a97df5cf93",
+        "bodyPoseApplies": true,
+        "bodyPoseError": "",
+        "bones": 55,
+        "canonicalBytes": 20571476,
+        "catalogId": "anime/alicia-solid",
+        "compressedBytes": 10816370,
+        "detachedOptionalMeshNodes": [],
+        "encoding": "canonical",
+        "expressions": [
+          "a",
+          "i",
+          "u",
+          "e",
+          "o",
+          "blink",
+          "joy",
+          "angry",
+          "sorrow",
+          "fun",
+          "blink_l",
+          "blink_r"
+        ],
+        "fileBytes": 20571476,
+        "frontYawDegrees": 180,
+        "handPoseApplies": true,
+        "handPoseError": "",
+        "height": 1.651627779006958,
+        "images": 8,
+        "morphTargets": 158,
+        "name": "Alicia Solid",
+        "nodes": 144,
+        "output": "alicia-solid-v1.toon3dasset",
+        "outputSha256": "207b37327a9ef4f77ff0379c0328dc6f5541e9921a4fe3691d4d5d303c4af032",
+        "skins": 12,
+        "sourceUrl": "https://raw.githubusercontent.com/vrm-c/UniVRM/efd20f62f1bf0ac3fcc34de1e497324c5197d146/Tests/Models/Alicia_vrm-0.51/AliciaSolid_vrm-0.51.vrm",
+        "triangles": 31798,
+        "vertices": 52849,
+        "warnings": [
+          "Texture filter settings are preserved in source metadata; preview filtering uses renderer defaults.",
+          "Unlit material semantics are retained in metadata; the initial reference preview uses its shared lighting model.",
+          "Expression has no supported morph bindings and remains metadata-only: neutral",
+          "Expression has no supported morph bindings and remains metadata-only: lookup",
+          "Expression has no supported morph bindings and remains metadata-only: lookdown",
+          "Expression has no supported morph bindings and remains metadata-only: lookleft",
+          "Expression has no supported morph bindings and remains metadata-only: lookright",
+          "VRM0 shader/material properties are retained in metadata; MToon rendering is not implemented by this import slice.",
+          "VRM avatar metadata and humanoid/morph mappings are imported; gaze, spring bones, node constraints and full MToon evaluation remain unimplemented."
+        ]
+      }
+    }
+  ]
+}

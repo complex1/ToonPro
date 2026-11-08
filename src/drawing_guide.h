@@ -8,14 +8,14 @@
 #include <optional>
 
 namespace toon {
-enum class GuideType { Perspective, VanishingPoint, TwoPoint, ParallelRuler, ThreePoint, Fisheye };
+enum class GuideType { Perspective, VanishingPoint, TwoPoint, ParallelRuler, ThreePoint, Fisheye, Ellipse };
 inline constexpr int maxDrawingGuides = 64;
 struct DrawingGuide {
     QString id;
     QString name;
     GuideType type = GuideType::Perspective;
     // Quad: 4 corners; VP: 1; two/three-point: VPs + grid anchor;
-    // parallel: 2; fisheye: 2 axis endpoints + perpendicular-radius handle.
+    // parallel: 2; fisheye/ellipse: 2 axis endpoints + perpendicular-radius handle.
     QVector<QPointF> points;
     bool visible = true;
     bool locked = false;

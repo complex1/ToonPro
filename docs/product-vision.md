@@ -77,4 +77,4 @@ Physical tablet feel, production-scale memory/playback, additional platform pack
 
 The published **0.75.0** preview uses the earlier workflow. The new **0.76.0** managed project flow is local development and has not replaced those downloads. Pricing and application licensing remain undecided.
 
-[Create your first drawing](getting-started.md) · [Implemented behavior and limits](managed-workspace.md) · [Development checklist](TODO.md) · [Website vision page source](../website/templates/vision.html)
+[Create your first drawing](getting-started.md) · [Implemented behavior and limits](managed-workspace.md) · [Development checklist](TODO.md) · [Website source guide](../website/README.md)

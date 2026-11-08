@@ -5,6 +5,7 @@
 #include <QPointer>
 namespace toon {
 class Document;
+enum class VectorEraseMode { WholeStroke, Segment, Intersection };
 class ObjectTools {
 public:
     explicit ObjectTools(Document *document);
@@ -27,6 +28,10 @@ public:
     // Segment erasing splits open/closed paths at the intersected cubic segment.
     static bool eraseAt(Document *document, QPointF point, qreal radius, bool segments = false);
     static bool erasePath(Document *document, const QPainterPath &sweep, qreal radius, bool segments = false);
+    // Intersection mode trims centerline intervals bounded by actual crossings
+    // on the active layer, rather than by the path's existing Bézier nodes.
+    static bool eraseAt(Document *document, QPointF point, qreal radius, VectorEraseMode mode);
+    static bool erasePath(Document *document, const QPainterPath &sweep, qreal radius, VectorEraseMode mode);
     static QString hitTest(const RasterLayer &layer, QPointF point, qreal tolerance = 5);
     static const EditableObject *object(const RasterLayer &layer, const QString &id);
     static bool rasterize(Document *document);

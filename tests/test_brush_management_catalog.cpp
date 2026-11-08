@@ -1,4 +1,5 @@
 #include "tool_catalog.h"
+#include "tool_catalog_legacy_fixture.h"
 
 #include <QBuffer>
 #include <QFile>
@@ -251,7 +252,7 @@ private slots:
         QVERIFY(catalog.renameTool("brush/builtin/sketch", "Atmosphere"));
         QVERIFY(catalog.activateTool("brush/builtin/sketch"));
         QVERIFY(catalog.save());
-        auto root = read(catalog.path()); root["version"] = 5; root.remove("deletedBrushPresets");
+        auto root = test_fixture::toolCatalogBefore14(read(catalog.path()), 5); root.remove("deletedBrushPresets");
         QJsonArray tools, entries;
         QSet<QString> referenced;
         // The pre-management catalog predates the expanded native pack and its
@@ -273,14 +274,14 @@ private slots:
         for (const auto &id : referenced) resources[id] = originalResources[id];
         root["tools"] = tools; root["entries"] = entries; root["resources"] = resources;
         QVERIFY(write(catalog.path(), root));
-        ToolCatalog restored(&library, catalog.path()); QVERIFY(restored.load());
+        ToolCatalog restored(&library, catalog.path()); QString error; QVERIFY2(restored.load(&error), qPrintable(error));
         const auto *brush = restored.tool("brush/builtin/sketch"); QVERIFY(brush);
         QCOMPARE(brush->state, state); QCOMPARE(brush->name, QString("Atmosphere"));
         QCOMPARE(brush->tags, QStringList{"My favorites"}); QCOMPARE(brush->brushType, BrushType::Spray);
         QCOMPARE(restored.tool("brush/builtin/ink")->brushType, BrushType::Ink);
         QCOMPARE(restored.activeToolId(), QString("brush/builtin/sketch"));
         QCOMPARE(restored.history()->count(), 0);
-        QVERIFY(restored.save()); QCOMPARE(read(catalog.path())["version"].toInt(), 12);
+        QVERIFY(restored.save()); QCOMPARE(read(catalog.path())["version"].toInt(), 14);
     }
 
     void rejectedEditsAreAtomicAndReportCreationFailures() {

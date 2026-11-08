@@ -13,13 +13,13 @@ namespace {
 QString newId() { return QUuid::createUuid().toString(QUuid::WithoutBraces); }
 QPointF bounded(QPointF point) { return {qBound(-1000000., point.x(), 1000000.), qBound(-1000000., point.y(), 1000000.)}; }
 QPointF center(const DrawingGuide &guide) {
-    if (guide.type == GuideType::Fisheye && guide.points.size() == 3) return (guide.points[0] + guide.points[1]) / 2;
+    if ((guide.type == GuideType::Fisheye || guide.type == GuideType::Ellipse) && guide.points.size() == 3) return (guide.points[0] + guide.points[1]) / 2;
     if (guide.type == GuideType::ThreePoint && guide.points.size() == 4) return guide.points.last();
     QPointF result; for (const auto point : guide.points) result += point;
     return guide.points.isEmpty() ? result : result / guide.points.size();
 }
 void alignFisheyeHeight(DrawingGuide &guide, bool circle = false) {
-    if (guide.type != GuideType::Fisheye || guide.points.size() != 3) return;
+    if ((guide.type != GuideType::Fisheye && guide.type != GuideType::Ellipse) || guide.points.size() != 3) return;
     const auto axis = guide.points[1] - guide.points[0]; const auto length = std::hypot(axis.x(), axis.y());
     if (length < 1e-6) return;
     const QPointF normal(-axis.y() / length, axis.x() / length);
@@ -64,7 +64,7 @@ void paintGuideLines(QPainter &painter, const DrawingGuide &guide, const GuideSe
     const auto ratio = painter.device()->devicePixelRatioF();
     painter.setPen(QPen(color, 1 / ratio)); painter.setBrush(Qt::NoBrush);
     const auto path = mapping.map(guidePath(guide, bounds, detailTolerance(mapping, ratio)));
-    paintPairedPath(painter, path, guide.type == GuideType::Fisheye);
+    paintPairedPath(painter, path, guide.type == GuideType::Fisheye || guide.type == GuideType::Ellipse);
 }
 }
 GuideTool::GuideTool(Canvas *canvas) : QObject(canvas), m_canvas(canvas) {
@@ -133,6 +133,7 @@ void GuideTool::addDefault(GuideType type) {
     case GuideType::ParallelRuler: guide.points = {{w*.3,h*.5},{w*.7,h*.5}}; break;
     case GuideType::ThreePoint: guide.points = {{-w*.2,h*.25},{w*1.2,h*.25},{w*.5,-h*.85},{w*.5,h*.75}}; break;
     case GuideType::Fisheye: guide.points = {{w*.15,h*.5},{w*.85,h*.5},{w*.5,h*.15}}; break;
+    case GuideType::Ellipse: guide.points = {{w*.25,h*.5},{w*.75,h*.5},{w*.5,h*.25}}; break;
     }
     appendGuide(guide);
 }
@@ -194,6 +195,7 @@ QString GuideTool::toolTipAt(QPointF position) const {
             return "Move vanishing point (Shift: constrain direction)";
         if (guide.type == GuideType::TwoPoint || guide.type == GuideType::ThreePoint) return "Move grid anchor (Shift: constrain direction)";
         if (guide.type == GuideType::Fisheye) return handle == 2 ? "Set fisheye height (Shift: circular boundary)" : "Move fisheye axis endpoint";
+        if (guide.type == GuideType::Ellipse) return handle == 2 ? "Set ellipse height (Shift: circle)" : "Resize or rotate ellipse axis";
         return "Move guide handle (Shift: constrain direction)";
     }
     return {};
@@ -260,7 +262,7 @@ void GuideTool::paint(QPainter &painter) const {
         painter.drawLine(move - QPointF(5,0), move + QPointF(5,0)); painter.drawLine(move - QPointF(0,5), move + QPointF(0,5));
     }
     if (creating && editing) {
-        if ((creationType == GuideType::Fisheye || creationType == GuideType::ThreePoint) && m_pending.size() + 1 == guidePointCount(creationType)) {
+        if ((creationType == GuideType::Fisheye || creationType == GuideType::Ellipse || creationType == GuideType::ThreePoint) && m_pending.size() + 1 == guidePointCount(creationType)) {
             DrawingGuide preview; preview.type = creationType; preview.points = m_pending;
             preview.points.append(m_canvas->artworkPoint(m_hover)); alignFisheyeHeight(preview, m_hoverModifiers.testFlag(Qt::ShiftModifier));
             if (validGuideGeometry(preview)) paintGuideLines(painter, preview, global, mapping, bounds);
@@ -292,7 +294,7 @@ void GuideTool::press(QPointF position, Qt::KeyboardModifiers modifiers) {
             alignFisheyeHeight(guide, modifiers.testFlag(Qt::ShiftModifier));
             if (!validGuideGeometry(guide)) {
                 m_pending.removeLast();
-                const auto message = creationType == GuideType::Fisheye ? "Place distinct axis endpoints and a height handle away from the axis."
+                const auto message = (creationType == GuideType::Fisheye || creationType == GuideType::Ellipse) ? "Place distinct axis endpoints and a height handle away from the axis."
                     : creationType == GuideType::ThreePoint ? "Keep three vanishing points off one line, and the grid anchor off their connecting lines."
                     : "Place distinct handles around a convex perspective plane; keep the two-point anchor off the horizon.";
                 emit m_canvas->document()->warning(message);
@@ -323,14 +325,14 @@ void GuideTool::move(QPointF position, Qt::KeyboardModifiers modifiers) {
     m_hover=position; m_hoverModifiers = modifiers; if (creating) { m_canvas->update(); return; }
     if (!dragging()) return;
     auto guide=m_before; auto point=bounded(m_canvas->artworkPoint(position));
-    if ((modifiers & Qt::ShiftModifier) && !(guide.type == GuideType::Fisheye && m_dragHandle == 2)) {
+    if ((modifiers & Qt::ShiftModifier) && !((guide.type == GuideType::Fisheye || guide.type == GuideType::Ellipse) && m_dragHandle == 2)) {
         const auto delta=point-m_dragStart;
         if (qAbs(delta.x()) > qAbs(delta.y())) point.setY(m_dragStart.y()); else point.setX(m_dragStart.x());
     }
     if (m_dragHandle == -2) { const auto delta=point-m_dragStart; for(auto &p:guide.points) p=bounded(p+delta); guide.area.translate(delta); }
     else if (m_dragHandle < guide.points.size()) {
         guide.points[m_dragHandle]=point;
-        if (guide.type == GuideType::Fisheye) {
+        if (guide.type == GuideType::Fisheye || guide.type == GuideType::Ellipse) {
             if (m_dragHandle < 2) {
                 const auto oldAxis = m_before.points[1] - m_before.points[0], newAxis = guide.points[1] - guide.points[0];
                 const auto oldLength = std::hypot(oldAxis.x(), oldAxis.y()), newLength = std::hypot(newAxis.x(), newAxis.y());
@@ -356,13 +358,31 @@ void GuideTool::release(QPointF position, Qt::KeyboardModifiers modifiers) {
     if (result) updateGuide(*result);
     m_canvas->updateSelectionUi(); m_canvas->update();
 }
-void GuideTool::beginSnap(QPointF point) {
+QPointF GuideTool::beginSnap(QPointF point) {
     endSnap(); m_snapStart=point; m_lastStrokePoint=point;
-    const auto global=settings(); if (!global.snapping) return;
+    const auto global=settings(); if (!global.snapping) return point;
+    qreal nearestEllipse = 12 / qMax(.001, m_canvas->artworkZoom());
     for (const auto &guide : guides()) if (guide.snapping) {
         const auto area = guide.limited ? std::optional<QRectF>(guide.area) : std::nullopt;
-        for (const auto &constraint : guideSnapConstraints(guide, point)) m_snapCandidates.append({constraint, area});
+        for (const auto &constraint : guideSnapConstraints(guide, point)) {
+            const bool fixed = guide.type == GuideType::Ellipse;
+            if (fixed) {
+                const auto projected = projectOntoGuideConstraint(point, constraint);
+                const qreal distance = QLineF(point, projected).length();
+                if (distance > 12 / qMax(.001, m_canvas->artworkZoom()) || (area && !area->contains(projected))) continue;
+                if (distance <= nearestEllipse) { nearestEllipse = distance; m_snapLine = SnapCandidate{constraint, area, true}; }
+            }
+            m_snapCandidates.append({constraint, area, fixed});
+        }
     }
+    // A fixed ruler must capture contact before the document paints its first
+    // dab. Other guide families keep their original direction-choice gesture.
+    if (m_snapLine && m_snapLine->fixedEllipse) {
+        point = projectOntoGuideConstraint(point, m_snapLine->constraint);
+        m_ellipsePointerAngle = m_ellipseStrokeAngle = guideEllipseParameter(m_snapLine->constraint, point);
+        m_lastStrokePoint = point; m_snapActive = true;
+    }
+    return point;
 }
 std::optional<QPointF> GuideTool::snap(QPointF point) {
     m_snapActive = false;
@@ -377,27 +397,41 @@ std::optional<QPointF> GuideTool::snap(QPointF point) {
         }
     }
     if (!m_snapLine) return point;
-    const auto projected = projectOntoGuideConstraint(point, m_snapLine->constraint);
+    auto projected = projectOntoGuideConstraint(point, m_snapLine->constraint);
+    if (m_snapLine->fixedEllipse) {
+        const auto parameter = guideEllipseParameter(m_snapLine->constraint, point);
+        if (parameter) m_ellipsePointerAngle = m_ellipsePointerAngle ? unwrapGuideEllipseAngle(*parameter, *m_ellipsePointerAngle) : *parameter;
+        if (m_ellipsePointerAngle) projected = guideEllipsePoint(m_snapLine->constraint, *m_ellipsePointerAngle);
+    }
     if (m_snapLine->area && (!m_snapLine->area->contains(point) || !m_snapLine->area->contains(projected))) return point;
     m_snapActive = true; return projected;
 }
 QVector<QPointF> GuideTool::strokePoints(QPointF point) {
     QVector<QPointF> result;
     if (m_snapActive && m_snapLine && m_snapLine->constraint.kind == GuideConstraint::Kind::Ellipse) {
-        const auto projected = projectOntoGuideConstraint(point, m_snapLine->constraint);
+        auto projected = projectOntoGuideConstraint(point, m_snapLine->constraint);
+        std::optional<qreal> nextAngle;
+        if (m_snapLine->fixedEllipse) {
+            const auto parameter = guideEllipseParameter(m_snapLine->constraint, point);
+            nextAngle = parameter ? (m_ellipseStrokeAngle ? unwrapGuideEllipseAngle(*parameter, *m_ellipseStrokeAngle) : *parameter) : m_ellipseStrokeAngle;
+            if (nextAngle) projected = guideEllipsePoint(m_snapLine->constraint, *nextAngle);
+        }
         if (!m_snapLine->area || (m_snapLine->area->contains(point) && m_snapLine->area->contains(projected))) {
             if (guideConstraintDistance(m_lastStrokePoint, m_snapLine->constraint) < .01) {
-                result = guideConstraintSamples(m_snapLine->constraint, m_lastStrokePoint, projected,
-                    qMin(.2, detailTolerance(transform(), m_canvas->devicePixelRatioF())));
+                const auto tolerance = qMin(.2, detailTolerance(transform(), m_canvas->devicePixelRatioF()));
+                result = m_snapLine->fixedEllipse && m_ellipseStrokeAngle && nextAngle
+                    ? guideEllipseArcSamples(m_snapLine->constraint, *m_ellipseStrokeAngle, *nextAngle, tolerance)
+                    : guideConstraintSamples(m_snapLine->constraint, m_lastStrokePoint, projected, tolerance);
                 // A curved arc can leave a rectangular limit even if both ends
                 // are inside. Release that portion to normal freehand drawing.
                 if (m_snapLine->area) for (const auto p : result) if (!m_snapLine->area->contains(p)) { result.clear(); break; }
             }
             if (result.isEmpty()) result.append(projected);
+            if (m_snapLine->fixedEllipse) m_ellipseStrokeAngle = nextAngle;
         }
     }
-    if (result.isEmpty()) result.append(point);
+    if (result.isEmpty()) { result.append(point); m_ellipseStrokeAngle.reset(); }
     m_lastStrokePoint = result.last(); return result;
 }
-void GuideTool::endSnap() { m_snapCandidates.clear(); m_snapLine.reset(); m_snapActive = false; }
+void GuideTool::endSnap() { m_snapCandidates.clear(); m_snapLine.reset(); m_snapActive = false; m_ellipsePointerAngle.reset(); m_ellipseStrokeAngle.reset(); }
 } // namespace toon

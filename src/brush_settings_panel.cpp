@@ -51,6 +51,80 @@
 
 namespace toon {
 namespace {
+class StrokeModeTabs final : public QTabBar {
+public:
+    StrokeModeTabs(bool compact, QWidget *parent) : QTabBar(parent), m_compact(compact) {}
+    void syncCompactSize() {
+        if (m_compact && count() == 2) setFixedWidth(tabSizeHint(0).width() + tabSizeHint(1).width());
+    }
+protected:
+    QSize tabSizeHint(int index) const override {
+        if (!m_compact) return QTabBar::tabSizeHint(index);
+        return {qMax(64, fontMetrics().horizontalAdvance(tabText(index)) + 12),
+            qMax(ui::metrics::tabHeight, fontMetrics().height() + 8)};
+    }
+    QSize minimumTabSizeHint(int index) const override { return tabSizeHint(index); }
+    void changeEvent(QEvent *event) override {
+        QTabBar::changeEvent(event);
+        if (event->type() == QEvent::FontChange || event->type() == QEvent::StyleChange) syncCompactSize();
+    }
+private:
+    bool m_compact;
+};
+
+class StrokeStabilizationOptions final : public QWidget {
+public:
+    StrokeStabilizationOptions(Canvas *canvas, const QString &prefix, bool compact = false) {
+        setObjectName(prefix + "Options");
+        auto *layout = new QVBoxLayout(this);
+        layout->setContentsMargins(0, 0, 0, 0); layout->setSpacing(ui::metrics::controlGap);
+        auto *mode = new StrokeModeTabs(compact, this); mode->setObjectName(prefix + "Mode");
+        mode->setIconSize({ui::metrics::tabIcon, ui::metrics::tabIcon});
+        mode->setProperty("compactDrawingTabs", true); mode->setAccessibleName("Stroke stabilization mode");
+        mode->setExpanding(true); mode->setElideMode(Qt::ElideNone); mode->setFocusPolicy(Qt::StrongFocus);
+        mode->addTab(appIcon("spline"), "Smooth");
+        mode->addTab(appIcon("hand"), "Stabilizer");
+        mode->setTabToolTip(0, "Smooth freehand strokes with moderate trailing distance");
+        mode->setTabToolTip(1, "Strong stabilization for controlled inking; the painted tip follows farther behind the pen");
+        mode->setAccessibleTabName(0, "Smooth strokes"); mode->setAccessibleTabName(1, "Strong stroke stabilizer");
+        if (compact) {
+            // These filtering choices have no universally recognized pair of
+            // icons. Short visible names make the selected behavior explicit.
+            mode->setTabIcon(0, {}); mode->setTabIcon(1, {});
+            mode->setTabText(0, "Smooth"); mode->setTabText(1, "Strong");
+            mode->setUsesScrollButtons(false);
+            mode->syncCompactSize();
+        }
+        layout->addWidget(mode);
+        auto *deadZone = new ValueSlider("Stabilizer dead zone", 0, 20, canvas->stabilizationDeadZone(), 1);
+        deadZone->setObjectName(prefix + "DeadZone");
+        deadZone->setToolTip("Ignore small pen motions inside this radius, in logical view pixels; zero disables the dead zone");
+        auto *deadRow = new PropertyRow("Dead zone", deadZone); layout->addWidget(deadRow);
+        auto *finish = new QCheckBox("Finish stroke", this); finish->setObjectName(prefix + "Finish");
+        finish->setAccessibleName("Finish stabilized stroke");
+        finish->setToolTip("Finish the retained stroke tail on release; turn off to stop at the last stabilized tip");
+        layout->addWidget(finish);
+        const auto refresh = [canvas, mode, deadZone, deadRow, finish, compact, this] {
+            const QSignalBlocker a(mode), b(finish);
+            mode->setCurrentIndex(int(canvas->stabilizationMode()));
+            deadZone->setValueSilently(canvas->stabilizationDeadZone());
+            deadRow->setVisible(!compact && canvas->stabilizationMode() == StrokeFilterMode::Stabilizer);
+            finish->setVisible(!compact);
+            finish->setChecked(canvas->stabilizationFinishAtEndpoint());
+            setEnabled(canvas->brush.smoothingEnabled);
+        };
+        connect(mode, &QTabBar::currentChanged, this, [canvas](int index) {
+            canvas->setStabilizationMode(StrokeFilterMode(index));
+            if (canvas->hasProject()) canvas->setFocus(Qt::OtherFocusReason);
+        });
+        connect(deadZone, &ValueSlider::valueChanged, canvas, &Canvas::setStabilizationDeadZone);
+        connect(finish, &QCheckBox::toggled, canvas, &Canvas::setStabilizationFinishAtEndpoint);
+        connect(canvas, &Canvas::brushChanged, this, refresh);
+        connect(canvas, &Canvas::toolStateApplied, this, refresh);
+        refresh();
+    }
+};
+
 class BrushCategoryTabs : public QTabBar {
 public:
     using QTabBar::QTabBar;
@@ -284,8 +358,11 @@ BrushSettingsPanel::BrushSettingsPanel(Canvas *canvas, BrushLibrary *library, QW
     });
     auto *quickSmoothing = new ValueSlider("Stroke stabilization", 0, 100, canvas->stabilization());
     quickSmoothing->setObjectName("quickBrushStabilization");
-    quickSmoothing->setToolTip("0 is off; higher values smooth the stroke with more pen lag");
+    quickSmoothing->setToolTip("0 is off; higher values stabilize more strongly with more pen lag. Distances follow the current view zoom.");
     addQuickRow("Smoothing", quickSmoothing);
+    // Keep mode switching direct without pushing the five frequent numeric
+    // controls below a short drawing dock. Less frequent tuning stays in General.
+    actions->insertWidget(0, new StrokeStabilizationOptions(canvas, "quickBrushStabilization", true));
     quickContentLayout->addStretch();
     connect(quickSmoothing, &ValueSlider::valueChanged, canvas, &Canvas::setStabilization);
     m_refreshers.emplace_back([this, quickSmoothing] {
@@ -352,8 +429,9 @@ BrushSettingsPanel::BrushSettingsPanel(Canvas *canvas, BrushLibrary *library, QW
     spacing->setToolTip("Distance between stamps as a percentage of tip size");
     auto *smoothing = new ValueSlider("Stroke stabilization", 0, 100, canvas->stabilization());
     smoothing->setObjectName("brushStabilization");
-    smoothing->setToolTip("0 is off; higher values smooth the stroke with more pen lag");
+    smoothing->setToolTip("0 is off; higher values stabilize more strongly with more pen lag. Distances follow the current view zoom.");
     propertyRow(general, "Smoothing", smoothing);
+    general->addRow(new StrokeStabilizationOptions(canvas, "brushStabilization"));
     connect(smoothing, &ValueSlider::valueChanged, canvas, &Canvas::setStabilization);
     m_refreshers.emplace_back([this, smoothing] {
         const QSignalBlocker block(smoothing); smoothing->setValueSilently(m_canvas->stabilization());

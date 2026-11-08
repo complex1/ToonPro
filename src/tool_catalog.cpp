@@ -1,4 +1,5 @@
 #include "tool_catalog.h"
+#include "feature_flags.h"
 #include "standard_brushes.h"
 #include "catalog_brushes.h"
 #include "icons.h"
@@ -27,6 +28,10 @@ constexpr qint64 maxImageBytes = 6 * 1024 * 1024;
 constexpr qint64 maxColorImageBytes = 17 * 1024 * 1024;
 constexpr qint64 maxResourcePixels = 64 * 1024 * 1024;
 constexpr qsizetype maxOptionBytes = 64 * 1024;
+bool enabledEngine(Canvas::Tool engine) {
+    return features::legacy3DEditor || (engine != Canvas::Tool::SceneObject
+        && engine != Canvas::Tool::SceneCamera && engine != Canvas::Tool::SceneRig);
+}
 
 bool fail(QString *error, const QString &message) {
     if (error) *error = message;
@@ -247,6 +252,25 @@ bool upgradeRecipe(ToolDefinition &definition, const BrushPreset &previous,
     return true;
 }
 bool validState(const ToolState &state, QString *error) {
+    for(const auto &bound:QVector<QPair<QString,QPair<int,int>>>{{"fillExpansion",{-20,20}},{"vectorEraseMode",{0,2}},{"stabilizationMode",{0,1}}}){
+        if(!state.options.contains(bound.first))continue;
+        const auto value=state.options.value(bound.first);const double number=value.toDouble();
+        if(!value.isDouble()||!std::isfinite(number)||number!=std::floor(number)||number<bound.second.first||number>bound.second.second)
+            return fail(error,"A tool has an invalid "+bound.first+" setting.");
+    }
+    if(state.options.contains("encloseFill")&&!state.options.value("encloseFill").isBool())
+        return fail(error,"A tool has an invalid fill gesture setting.");
+    if(state.options.contains("stabilizationFinish")&&!state.options.value("stabilizationFinish").isBool())return fail(error,"A tool has invalid stroke-finishing settings.");
+    for(const auto&bound:QVector<QPair<QString,QPair<qreal,qreal>>>{{"nudgeRadius",{1,256}},{"nudgeStrength",{.01,1}},{"stabilizationDeadZone",{0,20}}}){
+        if(!state.options.contains(bound.first))continue;const auto value=state.options.value(bound.first);
+        if(!value.isDouble()||!std::isfinite(value.toDouble())||value.toDouble()<bound.second.first||value.toDouble()>bound.second.second)return fail(error,"A tool has an invalid "+bound.first+" setting.");
+    }
+    if (state.options.contains("sampleSource")) {
+        const auto value = state.options.value("sampleSource");
+        const double source = value.toDouble(-1);
+        if (!value.isDouble() || !std::isfinite(source) || source != std::floor(source) || source < 0 || source > 3)
+            return fail(error, "A tool has an invalid sampling source.");
+    }
     if (!std::isfinite(state.smoothing) || state.smoothing < 0 || state.smoothing > 100)
         return fail(error, "A tool has invalid stabilization settings.");
     if (!validateBrushSettings(state.brush, error)) return false;
@@ -265,9 +289,9 @@ bool validState(const ToolState &state, QString *error) {
 }
 bool validEngine(Canvas::Tool engine, int variant) {
     using T = Canvas::Tool;
-    if (int(engine) < int(T::Brush) || int(engine) > int(T::Arc) ||
+    if (int(engine) < int(T::Brush) || int(engine) > int(T::VectorNudge) ||
         engine == T::VectorPen) return false;
-    const int maxVariant = engine == T::Gradient || engine == T::AdvancedTransform ? 1 : engine == T::Retouch || engine == T::Guides ? 5 : 0;
+    const int maxVariant = engine == T::Guides?int(GuideType::Ellipse):engine == T::Gradient || engine == T::AdvancedTransform ? 1 : engine == T::Retouch ? 5 : 0;
     return variant >= 0 && variant <= maxVariant;
 }
 bool knownFields(const QJsonObject &object, const QSet<QString> &allowed, QString *error) {
@@ -396,11 +420,8 @@ bool encodeCatalog(const QVector<ToolDefinition> &tools, const QVector<ToolboxEn
                    QByteArray &bytes, QString *error) {
     ResourceEncoder resources;
     QJsonArray definitions, placements;
-    bool dynamicStamps = false, modern = false;
     for (const auto &definition : tools) {
         if (!validState(definition.state, error)) return false;
-        modern |= usesModernBrushFeatures(definition.state.brush);
-        dynamicStamps |= definition.brushType == BrushType::DynamicStamp || definition.state.brush.colorDynamics.applyToColorTip;
         QJsonObject object{{"id", definition.id}, {"name", definition.name}, {"icon", definition.icon},
             {"brushPresetId", definition.brushPresetId}, {"engine", int(definition.engine)},
             {"variant", definition.variant}, {"brush", brushSettingsToJson(definition.state.brush)},
@@ -426,7 +447,8 @@ bool encodeCatalog(const QVector<ToolDefinition> &tools, const QVector<ToolboxEn
     }
     QStringList deletedPresets(deleted.cbegin(), deleted.cend());
     deletedPresets.sort();
-    bytes = QJsonDocument(QJsonObject{{"format", "toonpro.tool-catalog"}, {"version", modern ? 12 : dynamicStamps ? 11 : 10},
+    // Keep the migration marker even after an artist removes the new tools.
+    bytes = QJsonDocument(QJsonObject{{"format", "toonpro.tool-catalog"}, {"version", 14},
         {"tools", definitions}, {"entries", placements}, {"resources", resources.resources},
         {"deletedBrushPresets", QJsonArray::fromStringList(deletedPresets)},
         {"selectedEntryId", selected}, {"activeToolId", active}}).toJson(QJsonDocument::Compact);
@@ -498,9 +520,43 @@ const ToolboxEntry *ToolCatalog::entry(const QString &id) const {
     for (const auto &item : m_entries) if (item.id == id) return &item;
     return nullptr;
 }
+bool ToolCatalog::toolEnabled(const QString &id) const {
+    const auto *definition = tool(id);
+    return definition && enabledEngine(definition->engine);
+}
+QVector<ToolDefinition> ToolCatalog::availableTools() const {
+    auto result = m_tools;
+    if (!features::legacy3DEditor) result.removeIf([](const auto &definition) { return !enabledEngine(definition.engine); });
+    return result;
+}
+QVector<ToolboxEntry> ToolCatalog::availableEntries() const {
+    auto result = m_entries;
+    if (features::legacy3DEditor) return result;
+    for (auto &placement : result) {
+        const bool hadTools = !placement.tools.isEmpty();
+        placement.tools.removeIf([this](const auto &id) { return !toolEnabled(id); });
+        if (!placement.tools.contains(placement.lastToolId))
+            placement.lastToolId = placement.tools.isEmpty() ? QString() : placement.tools.first();
+        if (hadTools && placement.tools.isEmpty()) placement.id.clear();
+    }
+    result.removeIf([](const auto &placement) { return placement.id.isEmpty(); });
+    return result;
+}
+QString ToolCatalog::selectedEntryId() const {
+    if (features::legacy3DEditor) return m_selected;
+    const auto available = availableEntries();
+    for (const auto &placement : available) if (placement.id == m_selected) return m_selected;
+    for (const auto &placement : available) if (!placement.tools.isEmpty()) return placement.id;
+    return available.isEmpty() ? QString() : available.first().id;
+}
+QString ToolCatalog::activeToolId() const {
+    return effectiveActiveTool(snapshot());
+}
 QStringList ToolCatalog::visibleToolIds() const {
-    const auto *selected = entry(m_selected);
-    return selected ? selected->tools : QStringList{};
+    const auto *selected = entry(selectedEntryId());
+    auto result = selected ? selected->tools : QStringList{};
+    if (!features::legacy3DEditor) result.removeIf([this](const auto &id) { return !toolEnabled(id); });
+    return result;
 }
 void ToolCatalog::seed() {
     m_tools.clear();
@@ -568,14 +624,15 @@ void ToolCatalog::seed() {
         add("blur", "Blur", "blend", T::Retouch, 2), add("sharpen", "Sharpen", "triangle", T::Retouch, 3),
         add("dodge", "Dodge", "sun", T::Retouch, 4), add("burn", "Burn", "flame", T::Retouch, 5)});
     QStringList guides;
-    const QStringList guideIcons{"grid-2x2", "focus", "split", "minus", "triangle", "radius"};
-    for (int i = 0; i <= int(GuideType::Fisheye); ++i)
+    const QStringList guideIcons{"grid-2x2", "focus", "split", "minus", "triangle", "radius","circle"};
+    for (int i = 0; i <= int(GuideType::Ellipse); ++i)
         guides.push_back(add(QString("guide-%1").arg(i), guideTypeName(GuideType(i)), guideIcons[i], T::Guides, i));
     group("group/guides", "Guides", "grid-2x2", guides);
     group("group/vector-editing", "Vector Editing", "spline", {
         add("path-edit", "Path Edit", "mouse-pointer-2", T::VectorNode),
         add("simplify-brush", "Simplify Brush", "spline", T::VectorSimplify),
         add("width-brush", "Width Brush", "paintbrush", T::VectorWidth),
+        add("vector-nudge","Vector Nudge",featureIconName(FeatureIcon::VectorNudge),T::VectorNudge),
         add("vector-eraser", "Vector Eraser", "scissors", T::VectorEraser)});
     group("group/scene3d", "3D Reference", "box", {
         add("scene-object", "3D Object", "box", T::SceneObject),
@@ -597,6 +654,28 @@ void ToolCatalog::seed() {
 }
 
 ToolCatalog::Snapshot ToolCatalog::snapshot() const { return {m_tools, m_entries, m_selected, m_active, m_deletedBrushPresets}; }
+QString ToolCatalog::effectiveActiveTool(const Snapshot &state) const {
+    if (features::legacy3DEditor) return state.active;
+    const auto enabled = [&state](const QString &id) {
+        const auto definition = std::find_if(state.tools.cbegin(), state.tools.cend(), [&](const auto &tool) { return tool.id == id; });
+        return definition != state.tools.cend() && enabledEngine(definition->engine);
+    };
+    if (enabled(state.active)) return state.active;
+    const auto firstEnabled = [&enabled](const ToolboxEntry &placement) {
+        if (enabled(placement.lastToolId)) return placement.lastToolId;
+        for (const auto &id : placement.tools) if (enabled(id)) return id;
+        return QString();
+    };
+    for (const auto &placement : state.entries) if (placement.id == state.selected) {
+        const auto id = firstEnabled(placement);
+        if (!id.isEmpty()) return id;
+    }
+    for (const auto &placement : state.entries) {
+        const auto id = firstEnabled(placement);
+        if (!id.isEmpty()) return id;
+    }
+    return {};
+}
 void ToolCatalog::normalizeSelection(Snapshot &state) const {
     auto selected = std::find_if(state.entries.begin(), state.entries.end(), [&](const ToolboxEntry &e) { return e.id == state.selected; });
     if (selected == state.entries.end()) {
@@ -622,7 +701,7 @@ void ToolCatalog::normalizeSelection(Snapshot &state) const {
 
 void ToolCatalog::applySnapshot(Snapshot state, bool preserveCurrentSettings) {
     normalizeSelection(state);
-    const bool activating = state.active != m_active;
+    const bool activating = effectiveActiveTool(state) != activeToolId();
     if (activating) emit aboutToActivate();
     // Organization undo restores names/placements, while settings keep their most
     // recent value even for a temporarily removed duplicate.
@@ -639,12 +718,12 @@ void ToolCatalog::applySnapshot(Snapshot state, bool preserveCurrentSettings) {
     m_selected = std::move(state.selected); m_active = std::move(state.active);
     m_deletedBrushPresets = std::move(state.deletedBrushPresets);
     emit changed();
-    if (activating) emit activationRequested(m_active);
+    if (activating) emit activationRequested(activeToolId());
     scheduleSave();
 }
 bool ToolCatalog::canActivate(Snapshot state) {
     normalizeSelection(state);
-    return state.active == m_active || !m_activationGuard || m_activationGuard();
+    return effectiveActiveTool(state) == activeToolId() || !m_activationGuard || m_activationGuard();
 }
 bool ToolCatalog::commit(const QString &label, Snapshot next, bool preserveNavigation) {
     if (!canActivate(next)) { emit changed(); return false; }
@@ -674,17 +753,22 @@ bool ToolCatalog::validIds(const QStringList &ids) const {
 bool ToolCatalog::selectEntry(const QString &id) {
     const auto *selected = entry(id);
     if (!selected) return false;
+    if (!features::legacy3DEditor && !selected->tools.isEmpty()
+        && std::none_of(selected->tools.cbegin(), selected->tools.cend(), [this](const auto &toolId) { return toolEnabled(toolId); })) return false;
     if (id == m_selected) return true;
     auto next = snapshot();
     next.selected = id;
     next.active = selected->tools.contains(selected->lastToolId) ? selected->lastToolId
-        : selected->tools.isEmpty() ? m_active : selected->tools.first();
+        : selected->tools.isEmpty() ? activeToolId() : selected->tools.first();
+    if (!features::legacy3DEditor && !toolEnabled(next.active)) {
+        for (const auto &toolId : selected->tools) if (toolEnabled(toolId)) { next.active = toolId; break; }
+    }
     if (!canActivate(next)) { emit changed(); return false; }
     applySnapshot(std::move(next));
     return true;
 }
 bool ToolCatalog::activateTool(const QString &id) {
-    if (!tool(id)) return false;
+    if (!toolEnabled(id)) return false;
     if (!visibleToolIds().contains(id)) {
         for (const auto &placement : m_entries) if (placement.tools.contains(id)) {
             auto next = snapshot(); next.selected = placement.id; next.active = id;
@@ -707,7 +791,7 @@ QString ToolCatalog::addGroup(const QString &name, const QString &icon, const QS
     auto next = snapshot();
     const QString id = freshId("group/");
     next.entries.push_back({id, name.trimmed(), icon, true, ids, ids.isEmpty() ? QString{} : ids.first()});
-    next.selected = id; next.active = ids.isEmpty() ? m_active : next.entries.last().lastToolId;
+    next.selected = id; next.active = ids.isEmpty() ? activeToolId() : next.entries.last().lastToolId;
     if (!commit("Add group", std::move(next))) return {};
     return id;
 }
@@ -1133,7 +1217,8 @@ void ToolCatalog::reconcileBrushes() {
         // does not invalidate an existing brush sample. Notify actual edits only
         // after the whole upgrade succeeds, including a deferred retry.
         for (const auto &id : upgradedSettings) emit settingsChanged(id);
-        if (upgradedSettings.contains(m_active)) emit activationRequested(m_active);
+        const auto active = activeToolId();
+        if (upgradedSettings.contains(active)) emit activationRequested(active);
     }
 }
 
@@ -1175,7 +1260,7 @@ bool ToolCatalog::load(QString *error) {
         return fail(error, "The tool library is not valid JSON.");
     const auto root = document.object();
     if (root.value("format").toString() != "toonpro.tool-catalog" ||
-        !root.value("version").isDouble() || (root.value("version").toDouble() != 1 && root.value("version").toDouble() != 2 && root.value("version").toDouble() != 3 && root.value("version").toDouble() != 4 && root.value("version").toDouble() != 5 && root.value("version").toDouble() != 6 && root.value("version").toDouble() != 7 && root.value("version").toDouble() != 8 && root.value("version").toDouble() != 9 && root.value("version").toDouble() != 10 && root.value("version").toDouble() != 11 && root.value("version").toDouble() != 12))
+        !root.value("version").isDouble() || (root.value("version").toDouble() != 1 && root.value("version").toDouble() != 2 && root.value("version").toDouble() != 3 && root.value("version").toDouble() != 4 && root.value("version").toDouble() != 5 && root.value("version").toDouble() != 6 && root.value("version").toDouble() != 7 && root.value("version").toDouble() != 8 && root.value("version").toDouble() != 9 && root.value("version").toDouble() != 10 && root.value("version").toDouble() != 11 && root.value("version").toDouble() != 12 && root.value("version").toDouble() != 13 && root.value("version").toDouble() != 14))
         return fail(error, "This tool library format or version is not supported.");
     const bool hasBrushMetadata = root.value("version").toInt() >= 6;
     QSet<QString> rootFields{"format", "version", "tools", "entries", "resources", "selectedEntryId", "activeToolId"};
@@ -1262,6 +1347,10 @@ bool ToolCatalog::load(QString *error) {
             definition.state.brush.surface.image = image.convertToFormat(QImage::Format_ARGB32_Premultiplied);
         }
         if (!validState(definition.state, error)) return false;
+        if(root.value("version").toInt()<14&&(definition.engine==Canvas::Tool::VectorNudge||(definition.engine==Canvas::Tool::Guides&&definition.variant==int(GuideType::Ellipse))))
+            return fail(error,"Vector Nudge and ellipse guides require tool catalog version 14.");
+        if (root.value("version").toInt() < 13 && definition.state.options.value("sampleSource").toInt() == 3)
+            return fail(error, "Marked-reference sampling requires tool catalog version 13.");
         if (root.value("version").toInt() < 12 && usesModernBrushFeatures(definition.state.brush))
             return fail(error, "Connected brushes, surfaces and advanced dynamics require tool catalog version 12.");
         if (root.value("version").toInt() < 11 && definition.state.brush.colorDynamics.applyToColorTip)
@@ -1270,6 +1359,8 @@ bool ToolCatalog::load(QString *error) {
             return fail(error, "Tip sets and larger brushes require tool catalog version 9.");
         if (root.value("version").toInt() < 7 && usesExtendedBrushDynamics(definition.state.brush))
             return fail(error, "Extended brush dynamics require tool catalog version 7.");
+        if(root.value("version").toInt()<14&&(definition.state.options.contains("stabilizationMode")||definition.state.options.contains("stabilizationDeadZone")||definition.state.options.contains("stabilizationFinish")))
+            return fail(error,"Stroke filter settings require tool catalog version 14.");
         if (hasMetadata && !readMetadata(object, definition.tags, definition.color, error)) return false;
         if (hasBrushMetadata) {
             int type;
@@ -1424,6 +1515,20 @@ bool ToolCatalog::load(QString *error) {
             normalizeSelection(next);
         }
     }
+    if(root.value("version").toInt()<14){
+        const auto appendNewTool=[&](Canvas::Tool engine,int variant,const QString &preferred,const QString &name,const QString &icon,const QString &groupId){
+            if(std::any_of(next.tools.cbegin(),next.tools.cend(),[&](const auto &tool){return tool.engine==engine&&tool.variant==variant;}))return;
+            auto group=std::find_if(next.entries.begin(),next.entries.end(),[&](const auto &entry){return entry.group&&entry.id==groupId;});
+            if(next.tools.size()>=maxTools||(group==next.entries.end()&&next.entries.size()>=maxEntries))return;
+            const auto id=toolIds.contains(preferred)?freshId("tool/"):preferred;
+            next.tools.append({id,name,icon,{},engine,variant,{}});toolIds.insert(id);
+            if(group!=next.entries.end()){const bool empty=group->tools.isEmpty();group->tools.append(id);if(empty)group->lastToolId=id;}
+            else{const auto entryId=entryIds.contains("entry/"+preferred)?freshId("entry/"):QString("entry/"+preferred);next.entries.append({entryId,name,icon,false,{id},id});entryIds.insert(entryId);}
+        };
+        appendNewTool(Canvas::Tool::VectorNudge,0,"vector-nudge","Vector Nudge",featureIconName(FeatureIcon::VectorNudge),"group/vector-editing");
+        appendNewTool(Canvas::Tool::Guides,int(GuideType::Ellipse),"guide-6",guideTypeName(GuideType::Ellipse),"circle","group/guides");
+        normalizeSelection(next);
+    }
     upgradeDrawingIcons(next.tools, next.entries);
     // Loading is deliberate replacement; previously cached session states must
     // not replace settings read from disk. Notify before clearing those caches.
@@ -1435,7 +1540,7 @@ bool ToolCatalog::load(QString *error) {
     m_history.clear();
     m_writable = true;
     emit changed();
-    emit activationRequested(m_active);
+    emit activationRequested(activeToolId());
     reconcileBrushes();
     return true;
 }

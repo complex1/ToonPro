@@ -45,6 +45,7 @@ struct EffectsPreviewSnapshot {
     OnionSkinSettings onionSettings;
     QString onionTrackId;
     QHash<QString,QImage> scenePreviews;
+    QHash<QString,QImage> referencePreviews;
     QImage preparedBackground;
     std::optional<SheetGeometry> preparedGeometry;
 };

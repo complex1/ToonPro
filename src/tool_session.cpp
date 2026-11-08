@@ -107,16 +107,21 @@ ToolState ToolSession::capture() const {
         stops.append(QJsonArray{stop.first, stop.second.name(QColor::HexArgb)});
     const auto &text = c->textStyle;
     result.options = {
+        {"stabilizationMode",int(m_canvas->stabilizationMode())},{"stabilizationDeadZone",m_canvas->stabilizationDeadZone()},
+        {"stabilizationFinish",m_canvas->stabilizationFinishAtEndpoint()},
         {"sampleSource", int(c->fillSettings.source)}, {"referenceLayer", c->fillSettings.referenceLayerId},
         {"tolerance", c->fillSettings.tolerance}, {"gapClosing", c->fillSettings.gapClosing},
+        {"fillExpansion",c->fillSettings.expansion},{"encloseFill",c->encloseFillMode},
         {"gradientStops", stops}, {"shapeStroke", c->shapeStroke}, {"shapeFill", c->shapeFill},
         {"closedPath", c->closedPath}, {"fillColor", c->fillColor.name(QColor::HexArgb)},
         {"strokeWidth", c->strokeWidth}, {"retouchSize", c->retouchSettings.size},
         {"retouchStrength", c->retouchSettings.strength}, {"selectionCombine", int(m_canvas->selectionCombine())},
         {"selectionBoundary", c->selectionBoundary}, {"warpMode", c->warpMode},
+        {"puppetMode",c->puppetMode},{"puppetDensity",c->puppetDensity},{"showPuppetMesh",c->showPuppetMesh},
         {"pathEditMode", int(c->pathEditMode)}, {"simplifyTolerance", c->simplifyTolerance},
         {"widthBrushRadius", c->widthBrushRadius}, {"widthBrushStrength", c->widthBrushStrength},
-        {"widthThicken", c->widthThicken}, {"eraseSegments", c->eraseSegments},
+        {"nudgeRadius",c->nudgeRadius},{"nudgeStrength",c->nudgeStrength},
+        {"widthThicken", c->widthThicken}, {"vectorEraseMode", int(c->vectorEraseMode)},
         {"text", text.text}, {"fontFamily", text.fontFamily}, {"fontSize", text.fontSize},
         {"bold", text.bold}, {"italic", text.italic}, {"alignment", int(text.alignment)},
         {"lineSpacing", text.lineSpacing}, {"textWidth", text.textWidth}
@@ -174,7 +179,7 @@ void ToolSession::apply(const QString &id) {
     m_canvas->setProperty("restoringToolState", true);
     const auto clearRestoring = qScopeGuard([canvas=m_canvas] { if (canvas) canvas->setProperty("restoringToolState", false); });
     const auto *definition = m_catalog->tool(id);
-    if (!definition) {
+    if (!definition || !m_catalog->toolEnabled(id)) {
         m_current.clear();
         m_stampPlacementExplicit = false;
         m_canvas->setStampPlacementEnabled(false);
@@ -204,11 +209,16 @@ void ToolSession::apply(const QString &id) {
     m_canvas->setBrushSettings(brush);
     m_canvas->setStabilization(tool.state.smoothing);
     const auto &o = tool.state.options;
+    m_canvas->setStabilizationMode(static_cast<StrokeFilterMode>(int(number(o,"stabilizationMode",0,0,1))));
+    m_canvas->setStabilizationDeadZone(number(o,"stabilizationDeadZone",0,0,20));
+    m_canvas->setStabilizationFinishAtEndpoint(o.value("stabilizationFinish").toBool(true));
     auto *c = m_canvas->drawingTools();
-    c->fillSettings.source = static_cast<RasterSampleSource>(int(number(o, "sampleSource", 1, 0, 2)));
+    c->fillSettings.source = static_cast<RasterSampleSource>(int(number(o, "sampleSource", 1, 0, 3)));
     c->fillSettings.referenceLayerId = o.value("referenceLayer").toString();
     c->fillSettings.tolerance = int(number(o, "tolerance", 24, 0, 255));
     c->fillSettings.gapClosing = int(number(o, "gapClosing", 0, 0, 20));
+    c->fillSettings.expansion=int(number(o,"fillExpansion",0,-20,20));
+    c->encloseFillMode=o.value("encloseFill").toBool(false);
     c->gradientStops.clear();
     for (const auto &value : o.value("gradientStops").toArray()) {
         const auto stop = value.toArray();
@@ -232,10 +242,15 @@ void ToolSession::apply(const QString &id) {
     c->simplifyTolerance = number(o, "simplifyTolerance", 2, .1, 30);
     c->widthBrushRadius = number(o, "widthBrushRadius", 30, 1, 256);
     c->widthBrushStrength = number(o, "widthBrushStrength", .2, .01, 1);
+    c->nudgeRadius=number(o,"nudgeRadius",40,1,256);c->nudgeStrength=number(o,"nudgeStrength",.75,.01,1);
     c->widthThicken = o.value("widthThicken").toBool(true);
-    c->eraseSegments = o.value("eraseSegments").toBool(false);
+    c->vectorEraseMode=static_cast<VectorEraseMode>(int(number(o,"vectorEraseMode",o.value("eraseSegments").toBool(false)?1:0,0,2)));
     c->selectionBoundary = o.value("selectionBoundary").toBool(false);
     c->warpMode = tool.engine == Canvas::Tool::AdvancedTransform && tool.variant == 1;
+    c->puppetMode=c->warpMode&&o.value("puppetMode").toBool(false);
+    c->puppetDensity=int(number(o,"puppetDensity",16,minPuppetDensity,maxPuppetDensity));
+    c->showPuppetMesh=o.value("showPuppetMesh").toBool(true);
+    if(c->puppetMode)c->selectionBoundary=false;
     c->textStyle = EditableObject::create(ObjectKind::Text);
     c->textStyle.text = o.value("text").toString("Text");
     c->textStyle.fontFamily = o.value("fontFamily").toString("Sans Serif");
@@ -252,7 +267,7 @@ void ToolSession::apply(const QString &id) {
     m_canvas->setToolAvailable(true);
     m_canvas->setTool(tool.engine);
     if (tool.engine == Canvas::Tool::Guides)
-        m_canvas->setGuideCreationType(static_cast<GuideType>(qBound(0, tool.variant, 5)));
+        m_canvas->setGuideCreationType(static_cast<GuideType>(qBound(0, tool.variant, int(GuideType::Ellipse))));
     m_canvas->notifyToolStateApplied();
     c->notifySettings();
 }

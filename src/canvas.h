@@ -8,6 +8,7 @@
 #include <QWidget>
 #include <QPainterPath>
 #include <QRegion>
+#include <QHash>
 #include <QSet>
 #include <QTimer>
 #include <functional>
@@ -18,6 +19,7 @@ class GuideTool;
 class SelectionContextBar;
 class DrawingToolController;
 class Scene3DController;
+class Reference3DCanvasController;
 class KeyframeTransformTool;
 class CameraTool;
 class MaskTool;
@@ -33,9 +35,10 @@ public:
     enum class Tool { Brush, Eraser, Hand, RectangleSelect, LassoSelect, Transform, Guides,
         Eyedropper, Bucket, Gradient, Line, Rectangle, Ellipse, Polygon, Curve,
         EllipseSelect, PolygonSelect, MagicWand, ColorRange, Retouch, Text,
-        VectorPen, VectorNode, VectorEraser, AdvancedTransform, VectorSimplify, VectorWidth, SceneObject, SceneCamera, SceneRig, Arc };
+        VectorPen, VectorNode, VectorEraser, AdvancedTransform, VectorSimplify, VectorWidth, SceneObject, SceneCamera, SceneRig, Arc, VectorNudge };
     DrawingToolController *drawingTools() const { return m_drawingTools; }
     Scene3DController *scene3D() const { return m_scene3D; }
+    Reference3DCanvasController *reference3D() const { return m_reference3D; }
     KeyframeTransformTool *keyframeTransformTool() const { return m_keyframeTransformTool; }
     CameraTool *cameraTool() const { return m_cameraTool; }
     MaskTool *maskTool() const { return m_maskTool; }
@@ -62,6 +65,12 @@ public:
     void setPressureSize(bool enabled);
     void setStabilization(qreal amount);
     qreal stabilization() const { return m_stabilization; }
+    StrokeFilterMode stabilizationMode() const { return m_stabilizationMode; }
+    qreal stabilizationDeadZone() const { return m_stabilizationDeadZone; }
+    bool stabilizationFinishAtEndpoint() const { return m_stabilizationFinishAtEndpoint; }
+    void setStabilizationMode(StrokeFilterMode mode);
+    void setStabilizationDeadZone(qreal pixels);
+    void setStabilizationFinishAtEndpoint(bool enabled);
     void finishStroke();
     bool holdShapeEnabled() const { return m_holdShapeEnabled; }
     void setHoldShapeEnabled(bool enabled);
@@ -124,9 +133,14 @@ public:
     QPointF artworkPoint(QPointF position) const;
     QRectF paperRect() const;
     QTransform viewTransform() const;
+    QTransform artworkViewTransform() const;
     QPolygonF visiblePolygon() const;
     qreal zoom() const { return m_zoom; }
     qreal rotation() const { return m_rotation; }
+    bool canvasMirrored() const { return m_canvasMirrored; }
+    // Panels that consume canvas events own their contact state. Register it
+    // here so reflecting the view cannot change coordinates during a gesture.
+    void setExternalViewGestureActive(QObject *owner, bool active);
     QPointF center() const { return m_center; }
     bool canvasSmoothing() const { return m_canvasSmoothing; }
     bool animationPlayback() const { return m_animationPlayback; }
@@ -143,6 +157,7 @@ public slots:
     void fitSheet();
     void setZoom(qreal zoom);
     void setRotation(qreal degrees);
+    void setCanvasMirrored(bool enabled);
     void centerOn(QPointF point);
     void setCanvasSmoothing(bool enabled);
     void refreshLayerSelectionContext();
@@ -151,6 +166,7 @@ signals:
     void guideSelectionChanged();
     void guideCreationChanged();
     void viewChanged();
+    void canvasMirroredChanged(bool enabled);
     void canvasSmoothingChanged(bool enabled);
     void holdShapeEnabledChanged(bool enabled);
     void stampPlacementEnabledChanged(bool enabled);
@@ -194,6 +210,7 @@ private:
     friend class CanvasSelectionOverlay;
     friend class GuideTool;
     friend class DrawingToolController;
+    friend class DrawingToolPanel;
     friend class Scene3DController;
     friend class KeyframeTransformTool;
     friend class CameraTool;
@@ -228,7 +245,6 @@ private:
     void cancelOverlayDrag();
     void beginTransformDrag(QPointF position);
     void updateTransformDrag(QPointF position, Qt::KeyboardModifiers modifiers);
-    QTransform artworkViewTransform() const;
     QPolygonF transformBox() const;
     QPointF rotationHandle() const;
     void paintTransformHandles(QPainter &painter) const;
@@ -252,6 +268,7 @@ private:
     GuideTool *m_guides;
     DrawingToolController *m_drawingTools;
     Scene3DController *m_scene3D;
+    Reference3DCanvasController *m_reference3D = nullptr;
     KeyframeTransformTool *m_keyframeTransformTool;
     CameraTool *m_cameraTool;
     MaskTool *m_maskTool;
@@ -265,6 +282,8 @@ private:
     bool m_tabletCursorOwned = false;
     qreal m_zoom = .4;
     qreal m_rotation = 0;
+    bool m_canvasMirrored = false;
+    QHash<QObject *, QMetaObject::Connection> m_externalViewGestures;
     QPointF m_center;
     QPointF m_last;
     bool m_dragging = false;
@@ -328,6 +347,9 @@ private:
     Tool m_transformFailureTool = Tool::Transform;
     bool m_transformFailureBoundary = false, m_transformFailureWarp = false;
     qreal m_stabilization = 0;
+    StrokeFilterMode m_stabilizationMode = StrokeFilterMode::Smooth;
+    qreal m_stabilizationDeadZone = 0;
+    bool m_stabilizationFinishAtEndpoint = true;
     StrokeFilter m_strokeFilter;
     BrushSpeedTracker m_brushSpeedTracker;
     enum class StrokeConstraint { None, AxisPending, Horizontal, Vertical, Straight };

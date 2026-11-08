@@ -74,10 +74,15 @@ public:
     QString path() const { return m_path; }
     const QVector<ToolDefinition> &tools() const { return m_tools; }
     const QVector<ToolboxEntry> &entries() const { return m_entries; }
+    // UI projections omit quarantined tools without rewriting saved definitions,
+    // custom group membership, icons, names or remembered navigation.
+    QVector<ToolDefinition> availableTools() const;
+    QVector<ToolboxEntry> availableEntries() const;
+    bool toolEnabled(const QString &id) const;
     const ToolDefinition *tool(const QString &id) const;
     const ToolboxEntry *entry(const QString &id) const;
-    QString selectedEntryId() const { return m_selected; }
-    QString activeToolId() const { return m_active; }
+    QString selectedEntryId() const;
+    QString activeToolId() const;
     QStringList visibleToolIds() const;
     ToolOrganizationHistory *history() { return &m_history; }
     void setActivationGuard(std::function<bool()> guard) { m_activationGuard = std::move(guard); }
@@ -129,6 +134,7 @@ private:
         QSet<QString> deletedBrushPresets;
     };
     Snapshot snapshot() const;
+    QString effectiveActiveTool(const Snapshot &state) const;
     void applySnapshot(Snapshot snapshot, bool preserveCurrentSettings = true);
     bool commit(const QString &label, Snapshot next, bool preserveNavigation = false);
     bool canActivate(Snapshot state);

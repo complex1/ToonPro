@@ -212,6 +212,7 @@ bool validGuideGeometry(const DrawingGuide &guide) {
     case GuideType::ParallelRuler: expected = 2; break;
     case GuideType::ThreePoint: expected = 4; break;
     case GuideType::Fisheye: expected = 3; break;
+    case GuideType::Ellipse: expected = 3; break;
     default: return false;
     }
     if (guide.points.size() != expected || (guide.limited && !finiteRect(guide.area))) return false;
@@ -239,7 +240,7 @@ bool validGuideGeometry(const DrawingGuide &guide) {
         for (int i = 0; i < 3; ++i)
             if (!offLine(guide.points[i], guide.points[(i + 1) % 3], guide.points[3])) return false;
     }
-    if (guide.type == GuideType::Fisheye) {
+    if (guide.type == GuideType::Fisheye || guide.type == GuideType::Ellipse) {
         Ellipse ellipse;
         return ellipseGeometry(fisheyeEllipse(guide), &ellipse);
     }
@@ -295,6 +296,9 @@ QPainterPath guidePath(const DrawingGuide &guide, const QRectF &visibleBounds, q
         }
         break;
     }
+    case GuideType::Ellipse:
+        addEllipse(path, fisheyeEllipse(guide), bounds, detailTolerance);
+        break;
     case GuideType::ParallelRuler: {
         auto direction = difference(guide.points[1], guide.points[0]);
         const auto rulerLength = length(direction);
@@ -360,7 +364,7 @@ QVector<QLineF> guideSnapLines(const DrawingGuide &guide, QPointF strokeStart) {
     case GuideType::ThreePoint:
         for (int i = 0; i < 3; ++i) addSnapLine(lines, strokeStart, difference(guide.points[i], strokeStart));
         break;
-    case GuideType::Fisheye: break; // Curved constraints are exposed by guideSnapConstraints.
+    case GuideType::Fisheye: case GuideType::Ellipse: break; // Curved constraints are exposed by guideSnapConstraints.
     }
     return lines;
 }
@@ -388,6 +392,11 @@ qreal guideLineDistance(QPointF point, const QLineF &line) {
 
 QVector<GuideConstraint> guideSnapConstraints(const DrawingGuide &guide, QPointF strokeStart) {
     QVector<GuideConstraint> constraints;
+    if (guide.type == GuideType::Ellipse) {
+        if (guide.snapping && finite(strokeStart) && validGuideGeometry(guide) &&
+            (!guide.limited || guide.area.contains(strokeStart))) constraints.append(fisheyeEllipse(guide));
+        return constraints;
+    }
     if (guide.type != GuideType::Fisheye) {
         for (const auto &line : guideSnapLines(guide, strokeStart)) {
             GuideConstraint constraint; constraint.line = line; constraints.append(constraint);
@@ -510,6 +519,32 @@ QVector<QPointF> guideConstraintSamples(const GuideConstraint &constraint, QPoin
     samples.reserve(count);
     for (int i = 1; i < count; ++i) samples.append(ellipsePoint(ellipse, first + delta * i / count));
     samples.append(end);
+    return samples;
+}
+
+std::optional<qreal> guideEllipseParameter(const GuideConstraint &constraint, QPointF point) {
+    Ellipse ellipse;
+    if (!finite(point) || !ellipseGeometry(constraint, &ellipse)) return {};
+    const auto local = ellipseLocal(ellipse, point);
+    if (std::hypot(local.x, local.y) <= 1e-8L) return {};
+    return qreal(ellipseAngle(ellipse, projectOntoGuideConstraint(point, constraint)));
+}
+QPointF guideEllipsePoint(const GuideConstraint &constraint, qreal radians) {
+    Ellipse ellipse;
+    if (!std::isfinite(radians) || !ellipseGeometry(constraint, &ellipse)) return constraint.center;
+    return ellipsePoint(ellipse, radians);
+}
+qreal unwrapGuideEllipseAngle(qreal radians, qreal previous) {
+    if (!std::isfinite(radians) || !std::isfinite(previous)) return previous;
+    return previous + qreal(std::remainder(static_cast<long double>(radians) - previous, tau));
+}
+QVector<QPointF> guideEllipseArcSamples(const GuideConstraint &constraint, qreal first, qreal last, qreal maxError) {
+    QVector<QPointF> samples; Ellipse ellipse;
+    if (!std::isfinite(first) || !std::isfinite(last) || !ellipseGeometry(constraint, &ellipse)) return samples;
+    const long double delta = static_cast<long double>(last) - first;
+    const auto desired = std::ceil(std::abs(delta) / angularStep(ellipse, maxError));
+    const int count = int(std::clamp(desired, 1.0L, 512.0L)); samples.reserve(count);
+    for (int i = 1; i <= count; ++i) samples.append(ellipsePoint(ellipse, first + delta * i / count));
     return samples;
 }
 } // namespace toon

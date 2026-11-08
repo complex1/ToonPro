@@ -2,6 +2,7 @@
 #include "symbol_poses.h"
 #include "vector_brush_storage.h"
 #include "scene_model_io.h"
+#include "reference3d_layer_serialization.h"
 
 #include <QFile>
 #include <QHash>
@@ -31,7 +32,7 @@ QVector<Shot *> projectArtworkShots(Project &project) {
 int projectTileCount(const Project &project, const QString &excludedLayerId) {
     int count = 0;
     for (const auto *shot : projectArtworkShots(project)) for (const auto &layer : shot->layers)
-        if (layer.id != excludedLayerId) count += layer.tiles.size();
+        if (layer.id != excludedLayerId) count += layer.tiles.size()+(layer.puppetWarp?layer.puppetWarp->sourceTiles.size():0);
     return count;
 }
 int projectMaskTileCount(const Project &project, const QString &excludedLayerId) {
@@ -281,6 +282,7 @@ QString Project::validateStructure() const {
         return "A movie must contain between 1 and 10,000 shots.";
     if (symbols.size() > maxProjectSymbols) return "A project supports up to 128 symbols.";
     QSet<QUuid> ids;
+    QSet<QString> referenceAssetIds; qint64 referenceSourceBytes=0;
     QHash<QString, const SymbolDefinition *> definitions;
     for (const auto &symbol : symbols) {
         if (QUuid(symbol.id).isNull() || ids.contains(QUuid(symbol.id)))
@@ -293,7 +295,7 @@ QString Project::validateStructure() const {
             || !content.audioClips.isEmpty() || content.camera2D != Camera2D{}
             || !content.camera2DKeys.isEmpty() || !content.sceneCameraAnimations.isEmpty() || !content.timelineCues.isEmpty())
             return "Symbols support 2D artwork and animation; references, guides, saved selections, timeline cues, audio and cameras must remain in the shot.";
-        for (const auto &layer : content.layers) if (layer.kind == LayerKind::Scene3D || layer.scene3d)
+        for (const auto &layer : content.layers) if (layer.kind == LayerKind::Scene3D || layer.scene3d || layer.reference3d)
             return "3D reference scenes cannot be stored inside symbols.";
     }
     // Validate the complete library, including unused definitions. This prevents
@@ -371,18 +373,34 @@ QString Project::validateStructure() const {
                 || layer.opacity < 0 || layer.opacity > 1 || layerBlendModeKey(layer.blendMode).isEmpty()
                 || (layer.rowColor.isValid() && layer.rowColor.alpha() != 255)) return "Invalid layer properties.";
             if (layerKindKey(layer.kind).isEmpty() || layer.objects.size() > 1024
-                || ((layer.group || layer.kind == LayerKind::Raster || layer.kind == LayerKind::Scene3D || layer.kind == LayerKind::Symbol) && !layer.objects.isEmpty())
+                || ((layer.group || layer.kind == LayerKind::Raster || layer.kind == LayerKind::Scene3D || layer.kind == LayerKind::Reference3D || layer.kind == LayerKind::Symbol) && !layer.objects.isEmpty())
                 || (layer.group && layer.kind != LayerKind::Raster)
                 || (layer.kind != LayerKind::Raster && layer.alphaLocked)) return "Invalid editable layer properties.";
             if ((layer.kind == LayerKind::Scene3D) != layer.scene3d.has_value())
                 return "3D scene data does not match its layer type.";
+            if ((layer.kind == LayerKind::Reference3D) != layer.reference3d.has_value())
+                return "Editable reference data does not match its layer type.";
+            if (layer.reference3d) {
+                if (!layer.tiles.isEmpty() || !layer.objects.isEmpty() || layer.group || layer.adjustment || layer.scene3d || layer.symbol
+                    || layer.clipped || layer.mask || layer.effects != LayerEffects{})
+                    return "3D reference layers cannot contain independent pixels, objects, masks or effects.";
+                const auto problem=validateReferenceScene(*layer.reference3d);if(!problem.isEmpty())return problem;
+                for(const auto &instance:layer.reference3d->instances)if(!referenceAssetIds.contains(instance.asset->id)){
+                    referenceAssetIds.insert(instance.asset->id);if(referenceAssetIds.size()>64)return "A project supports up to 64 reference model resources.";
+                    const auto &asset=*instance.asset;
+                    for(const auto &mesh:asset.meshes)for(const auto &primitive:mesh.primitives){referenceSourceBytes+=qint64(primitive.vertices.size())*sizeof(ReferenceVertex)+qint64(primitive.indices.size())*sizeof(quint32);for(const auto &morph:primitive.morphTargets)referenceSourceBytes+=qint64(morph.positionDeltas.size()+morph.normalDeltas.size()+morph.tangentDeltas.size())*sizeof(QVector3D);}
+                    for(const auto &material:asset.materials)for(const auto *image:{&material.baseColorTexture,&material.metallicRoughnessTexture,&material.normalTexture,&material.occlusionTexture,&material.emissiveTexture})referenceSourceBytes+=image->sizeInBytes();
+                    for(const auto &image:asset.sourceImages)referenceSourceBytes+=image.size();
+                    if(referenceSourceBytes>256LL*1024*1024)return "Reference models exceed the 256 MiB source-data budget.";
+                }
+            }
             if ((layer.kind == LayerKind::Symbol) != layer.symbol.has_value())
                 return "Symbol instance data does not match its layer type.";
             if (layer.symbol) {
                 const auto &instance = *layer.symbol;
                 const auto definition = definitions.value(instance.symbolId, nullptr);
                 if (!definition) return "A symbol instance refers to a missing definition.";
-                if (!layer.tiles.isEmpty() || layer.group || layer.adjustment || layer.alphaLocked || layer.scene3d)
+                if (!layer.tiles.isEmpty() || layer.group || layer.adjustment || layer.alphaLocked || layer.scene3d || layer.reference3d)
                     return "Symbol instances cannot contain independent artwork, groups or adjustments.";
                 if (symbolPlaybackKey(instance.playback).isEmpty() || instance.startFrame < 0 || instance.startFrame > 1000000
                     || instance.durationFrames < -1 || instance.durationFrames > 1000000
@@ -397,6 +415,11 @@ QString Project::validateStructure() const {
             }
             const auto effectError = validateLayerEffects(layer.effects);
             if (!effectError.isEmpty()) return effectError;
+            if(layer.puppetWarp){
+                if(layer.kind!=LayerKind::Raster||layer.group||layer.adjustment)return "Editable Puppet Warp requires a raster artwork layer.";
+                const auto error=validatePuppetWarpState(*layer.puppetWarp,m_puppetResourcesLoaded);if(!error.isEmpty())return error;
+                tileCount+=layer.puppetWarp->sourceTiles.size();if(tileCount>maxProjectTiles)return "Project exceeds the 1024-tile limit including retained warp sources.";
+            }
             if (layer.mask) {
                 const auto maskError = validateLayerMask(*layer.mask, m_maskResourcesLoaded);
                 if (!maskError.isEmpty()) return maskError;
@@ -404,8 +427,8 @@ QString Project::validateStructure() const {
                 if (maskTileCount > maxProjectMaskTiles) return "Project exceeds the 1024-mask-tile / 64 MiB decoded-memory limit.";
             }
             if (layer.adjustment && (layer.kind != LayerKind::Raster || layer.group || layer.alphaLocked || layer.clipped || !layer.tiles.isEmpty()
-                || !layer.objects.isEmpty() || layer.scene3d || layer.effects.blurEnabled
-                || layer.effects.shadowEnabled || layer.effects.glowEnabled))
+                || !layer.objects.isEmpty() || layer.scene3d || layer.reference3d || layer.effects.blurEnabled
+                || layer.effects.shadowEnabled || layer.effects.glowEnabled || layer.effects.outlineEnabled))
                 return "Adjustment layers support color corrections only and cannot contain artwork.";
             if (layer.kind == LayerKind::Scene3D && (layer.effects != LayerEffects{} || layer.mask || layer.adjustment))
                 return "3D reference layers cannot contain effects, masks or adjustments.";
@@ -578,6 +601,7 @@ QString Project::validate() const {
     if(!m_sceneResourcesLoaded) return "3D model resources have not been loaded from the project container.";
     if(!m_audioResourcesLoaded) return "Audio resources have not been loaded from the project container.";
     if(!m_maskResourcesLoaded) return "Layer mask resources have not been loaded from the project container.";
+    if(!m_puppetResourcesLoaded) return "Puppet Warp source pixels have not been loaded from the project container.";
     const auto structure = validateStructure();
     if (!structure.isEmpty()) return structure;
     const auto audioError = validateProjectAudio(*this);
@@ -637,10 +661,15 @@ QString Project::validate() const {
 }
 
 QJsonObject Project::toJson() const {
+    bool fillReferences=false;for(const auto *shot:projectArtworkShots(*this))for(const auto &layer:shot->layers)fillReferences|=layer.fillReference;
+    bool outlineSettings=false;for(const auto *shot:projectArtworkShots(*this))for(const auto &layer:shot->layers)outlineSettings|=hasLayerOutlineSettings(layer.effects);
+    bool retainedWarp=false;for(const auto *shot:projectArtworkShots(*this))for(const auto &layer:shot->layers)retainedWarp|=layer.puppetWarp.has_value();
     bool studyTracks=false;
     for(const auto *shot:projectArtworkShots(*this))for(const auto &track:shot->animationTracks)
         for(const auto &layer:shot->layers)if(layer.id==track.rootGroupLayerId&&layer.annotation)studyTracks=true;
-    bool productionMetadata = studyTracks || kind != ProjectKind::Film;
+    QHash<QString,ReferenceAssetPtr> referenceAssets;bool hasReference3D=false;
+    for(const auto *shot:projectArtworkShots(*this))for(const auto &layer:shot->layers)if(layer.reference3d){hasReference3D=true;for(const auto &instance:layer.reference3d->instances)if(instance.asset)referenceAssets.insert(instance.asset->id,instance.asset);}
+    bool productionMetadata = fillReferences || outlineSettings || hasReference3D || retainedWarp || studyTracks || kind != ProjectKind::Film;
     for (const auto *shot : projectArtworkShots(*this))
         productionMetadata |= !shot->episode.isEmpty() || shot->productionStage != "planning" || !shot->productionNotes.isEmpty();
     bool sheetPresentation = false;
@@ -689,7 +718,9 @@ QJsonObject Project::toJson() const {
                 {"alphaLocked", layer.alphaLocked}, {"positionLocked", layer.positionLocked},
                 {"blendMode", layerBlendModeKey(layer.blendMode)},
                 {"rowColor", layer.rowColor.isValid() ? layer.rowColor.name(QColor::HexRgb) : QString()}};
+            if (layer.fillReference) metadata.insert("fillReference", true);
             if (layer.scene3d) metadata.insert("scene3d", scene3DToJson(*layer.scene3d));
+            if (layer.reference3d) metadata.insert("reference3d", referenceLayerSceneToJson(*layer.reference3d));
             if (layer.symbol) {
                 QJsonObject instance{{"symbolId", layer.symbol->symbolId}, {"playback", symbolPlaybackKey(layer.symbol->playback)},
                     {"startFrame", layer.symbol->startFrame}, {"firstFrame", layer.symbol->firstFrame}, {"speed", layer.symbol->speed}};
@@ -703,6 +734,7 @@ QJsonObject Project::toJson() const {
             }
             if (layer.effects != LayerEffects{}) metadata.insert("effects", layerEffectsToJson(layer.effects));
             if (layer.mask) metadata.insert("mask", layerMaskToJson(*layer.mask));
+            if(layer.puppetWarp)metadata.insert("puppetWarp",puppetWarpStateToJson(*layer.puppetWarp));
             if (layer.adjustment) metadata.insert("adjustment", true);
             layers.append(metadata);
         }
@@ -764,9 +796,10 @@ QJsonObject Project::toJson() const {
     for (const auto &id : modelResources(*this).keys()) models.append(QJsonObject{{"id", id}});
     const bool characterColors = std::any_of(characters.cbegin(), characters.cend(), [](const CharacterModel &character) { return !character.colors.isEmpty(); });
     const bool characterVariants = std::any_of(characters.cbegin(), characters.cend(), [](const CharacterModel &character) { return !character.colorVariants.isEmpty(); });
-    QJsonObject result{{"format", "toon-pro"}, {"version", studyTracks ? 39 : productionMetadata ? 38 : sheetPresentation ? 37 : extendedCompositing ? 36 : nestedTracks ? 35 : symbolPoses ? 34 : cueMetadata ? 33 : symbolClips ? 32 : !symbols.isEmpty() ? 31 : characterVariants ? 30 : persistentAids ? 29 : characterColors ? 28 : !characters.isEmpty() ? 27 : modernBrushes ? 26 : imageColorDynamics ? 25 : advancedBrushTips ? 24 : audioFinishing ? 23 : sceneMetadata ? 22 : extendedBrushDynamics ? 21 : colored ? 20 : 19}, {"movie", movie}, {"brushResources",resources}, {"modelResources",models}, {"audioResources", audioResourcesToJson(*this)},
+    QJsonObject result{{"format", "toon-pro"}, {"version", fillReferences ? 43 : outlineSettings ? 42 : hasReference3D ? 41 : retainedWarp ? 40 : studyTracks ? 39 : productionMetadata ? 38 : sheetPresentation ? 37 : extendedCompositing ? 36 : nestedTracks ? 35 : symbolPoses ? 34 : cueMetadata ? 33 : symbolClips ? 32 : !symbols.isEmpty() ? 31 : characterVariants ? 30 : persistentAids ? 29 : characterColors ? 28 : !characters.isEmpty() ? 27 : modernBrushes ? 26 : imageColorDynamics ? 25 : advancedBrushTips ? 24 : audioFinishing ? 23 : sceneMetadata ? 22 : extendedBrushDynamics ? 21 : colored ? 20 : 19}, {"movie", movie}, {"brushResources",resources}, {"modelResources",models}, {"audioResources", audioResourcesToJson(*this)},
         {"output", QJsonObject{{"width", width}, {"height", height}, {"fps", fps},
             {"profile", "sRGB"}, {"bitDepth", 8}, {"transparent", transparent}}}, {"shots", list}};
+    if(hasReference3D||outlineSettings||fillReferences)result.insert("reference3DAssets",referenceLayerAssetsToJson(referenceAssets));
     if (!symbols.isEmpty() || cueMetadata || nestedTracks || extendedCompositing || sheetPresentation || productionMetadata) result.insert("symbols", symbolList);
     if (!characters.isEmpty() || persistentAids || !symbols.isEmpty() || cueMetadata || nestedTracks || extendedCompositing || sheetPresentation || productionMetadata) {
         QJsonArray characterList;
@@ -809,9 +842,18 @@ std::optional<Project> Project::fromJson(const QJsonObject &o, QString *error) {
         return std::nullopt;
     };
     if (o.value("format") != "toon-pro" || (o.value("version") != 1 && o.value("version") != 2
-        && o.value("version") != 3 && o.value("version") != 4 && o.value("version") != 5 && o.value("version") != 6 && o.value("version") != 7 && o.value("version") != 8 && o.value("version") != 9 && o.value("version") != 10 && o.value("version") != 11 && o.value("version") != 12 && o.value("version") != 13 && o.value("version") != 14 && o.value("version") != 15 && o.value("version") != 16 && o.value("version") != 17 && o.value("version") != 18 && o.value("version") != 19 && o.value("version") != 20 && o.value("version") != 21 && o.value("version") != 22 && o.value("version") != 23 && o.value("version") != 24 && o.value("version") != 25 && o.value("version") != 26 && o.value("version") != 27 && o.value("version") != 28 && o.value("version") != 29 && o.value("version") != 30 && o.value("version") != 31 && o.value("version") != 32 && o.value("version") != 33 && o.value("version") != 34 && o.value("version") != 35 && o.value("version") != 36 && o.value("version") != 37 && o.value("version") != 38 && o.value("version") != 39))
-        return fail("This file is not a supported Toon Pro project (version 1 through 39 required).");
+        && o.value("version") != 3 && o.value("version") != 4 && o.value("version") != 5 && o.value("version") != 6 && o.value("version") != 7 && o.value("version") != 8 && o.value("version") != 9 && o.value("version") != 10 && o.value("version") != 11 && o.value("version") != 12 && o.value("version") != 13 && o.value("version") != 14 && o.value("version") != 15 && o.value("version") != 16 && o.value("version") != 17 && o.value("version") != 18 && o.value("version") != 19 && o.value("version") != 20 && o.value("version") != 21 && o.value("version") != 22 && o.value("version") != 23 && o.value("version") != 24 && o.value("version") != 25 && o.value("version") != 26 && o.value("version") != 27 && o.value("version") != 28 && o.value("version") != 29 && o.value("version") != 30 && o.value("version") != 31 && o.value("version") != 32 && o.value("version") != 33 && o.value("version") != 34 && o.value("version") != 35 && o.value("version") != 36 && o.value("version") != 37 && o.value("version") != 38 && o.value("version") != 39 && o.value("version") != 40 && o.value("version") != 41 && o.value("version") != 42 && o.value("version") != 43))
+        return fail("This file is not a supported Toon Pro project (version 1 through 43 required).");
     const int version = o.value("version").toInt();
+    QHash<QString,ReferenceAssetPtr> pendingReferenceAssets;
+    if(version>=41){if(!o.value("reference3DAssets").isArray())return fail("Missing reference model asset table.");if(!referenceLayerAssetsFromJson(o.value("reference3DAssets").toArray(),&pendingReferenceAssets,error))return {};}
+    else if(o.contains("reference3DAssets"))return fail("Editable reference layers require project format 41.");
+
+    qint64 tileDescriptors=0;
+    for(const auto &shot:artworkShotMetadata(o))for(const auto &layer:shot.toObject()["layers"].toArray()){
+        const auto metadata=layer.toObject();tileDescriptors+=metadata["tiles"].toArray().size()+metadata["puppetWarp"].toObject()["sourceTiles"].toArray().size();
+        if(tileDescriptors>maxProjectTiles)return fail("Project exceeds the 1024-tile limit including retained sources.");
+    }
     if (version < 38) {
         if (o.contains("projectKind")) return fail("Project types require project format 38.");
         for (const auto &shot : artworkShotMetadata(o)) {
@@ -1050,6 +1092,10 @@ std::optional<Project> Project::fromJson(const QJsonObject &o, QString *error) {
                 layer.id = l.value("id").toString(); layer.name = l.value("name").toString();
                 layer.visible = l.value("visible").toBool(); layer.locked = l.value("locked").toBool();
                 layer.annotation = l.value("annotation").toBool(); layer.opacity = l.value("opacity").toDouble();
+                if (l.contains("fillReference")) {
+                    if (version < 43 || !l.value("fillReference").isBool()) return fail("Fill reference marks require project format 43 and a boolean value.");
+                    layer.fillReference = l.value("fillReference").toBool();
+                }
                 if (version >= 4) {
                     if (!l.value("parentId").isString() || !l.value("group").isBool()
                         || !l.value("clipped").isBool() || !l.value("alphaLocked").isBool())
@@ -1108,6 +1154,10 @@ std::optional<Project> Project::fromJson(const QJsonObject &o, QString *error) {
                         layer.scene3d = scene3DFromJson(l.value("scene3d").toObject(), pendingModels, &sceneError);
                         if (!layer.scene3d) return fail(sceneError);
                     } else if (l.contains("scene3d")) return fail("3D scene data does not match its layer type.");
+                    if(layer.kind==LayerKind::Reference3D){
+                        if(version<41||!l.value("reference3d").isObject())return fail("Editable reference layers require project format 41.");
+                        QString problem;layer.reference3d=referenceLayerSceneFromJson(l.value("reference3d").toObject(),pendingReferenceAssets,&problem);if(!layer.reference3d)return fail(problem);
+                    }else if(l.contains("reference3d"))return fail("Editable reference data does not match its layer type.");
                     for(const auto &object:l.value("objects").toArray()) {
                         const auto brush=object.toObject().value("brushStroke");
                         if(!brush.isUndefined()) {
@@ -1121,8 +1171,14 @@ std::optional<Project> Project::fromJson(const QJsonObject &o, QString *error) {
                     if (layer.kind != LayerKind::Raster && !l.value("tiles").toArray().isEmpty())
                         return fail("Editable layer caches must not be embedded in the project.");
                 }
+                if(l.contains("puppetWarp")){
+                    if(version<40||!l["puppetWarp"].isObject())return fail("Editable Puppet Warp requires project format 40.");
+                    PuppetWarpState state;if(!puppetWarpStateFromJson(l["puppetWarp"].toObject(),&state,error))return {};
+                    layer.puppetWarp=std::move(state);p.m_puppetResourcesLoaded=false;
+                }
                 if (l.contains("effects")) {
                     if (!l["effects"].isObject()) return fail("Invalid layer effect metadata.");
+                    if(version<42){const auto fx=l["effects"].toObject();if(fx.contains("outlineEnabled")||fx.contains("outlineWidth")||fx.contains("outlineColor"))return fail("Layer outline requires project format 42.");}
                     if (!layerEffectsFromJson(l["effects"].toObject(), &layer.effects, error)) return {};
                 }
                 if (l.contains("mask")) {

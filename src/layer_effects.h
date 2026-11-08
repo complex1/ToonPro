@@ -22,6 +22,9 @@ struct LayerEffects {
     qreal glowRadius = 8;
     QColor glowColor{Qt::white};
     qreal glowOpacity = .5;
+    bool outlineEnabled = false;
+    qreal outlineWidth = 3;
+    QColor outlineColor{Qt::white};
     bool colorEnabled = false;
     qreal exposure = 0; // Stops.
     qreal contrast = 0; // -100 ... 100.
@@ -50,6 +53,7 @@ bool layerEffectsFromJson(const QJsonObject &json, LayerEffects *effects, QStrin
 QJsonObject layerMaskToJson(const LayerMask &mask);
 bool layerMaskFromJson(const QJsonObject &json, LayerMask *mask, QString *error);
 bool hasLayerEffects(const LayerEffects &effects);
+bool hasLayerOutlineSettings(const LayerEffects &effects);
 bool layerMaskHasProperties(const LayerMask &mask);
 QTransform layerMaskTransform(const LayerMask &mask);
 } // namespace toon

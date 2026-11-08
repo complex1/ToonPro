@@ -16,6 +16,12 @@ int insertVectorNode(EditableObject &object, QPointF artworkPoint, qreal toleran
 void resampleVectorWidthNodes(EditableObject &object, qreal artworkSpacing, int limit = 4096);
 bool brushVectorWidths(EditableObject &object, QPointF from, QPointF to, qreal radius,
                        qreal strength, bool thicken);
+// A local push always evaluates a gesture's original source, never its previous
+// preview. Center, displacement and radius are measured in artwork pixels.
+// The optional layer transform preserves that metric for transformed layers.
+std::optional<EditableObject> nudgedVectorPath(const EditableObject &source, QPointF center,
+    QPointF displacement, qreal radius, qreal strength, const QTransform &layerTransform = {},
+    QString *error = nullptr);
 QVector<QPointF> vectorTransformHandles(const EditableObject &object);
 QTransform vectorHandleTransform(const EditableObject &object, int handle, QPointF start,
                                  QPointF current, bool constrain);

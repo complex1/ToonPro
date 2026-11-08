@@ -20,6 +20,8 @@ bool effectRenderCancelled();
 bool layerStackHasEffects(const QVector<RasterLayer> &layers);
 QString effectRenderError();
 void clearEffectRenderError();
+// Propagate exact native-layer render failures to canvas/export callers.
+void reportLayerRenderError(const QString &error);
 // Bounded inspector preview of evaluated coverage in the layer's local space.
 QImage layerMaskCoveragePreview(const LayerMask &mask, QRectF layerBounds, QSize size, bool smooth = true);
 bool checkEffectClipping(const QVector<RasterLayer> &layers);

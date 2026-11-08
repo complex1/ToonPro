@@ -1,3 +1,4 @@
+#include "feature_flags.h"
 #include "tool_session.h"
 #include "drawing_tool_controller.h"
 #include "drawing_tool_panel.h"
@@ -26,6 +27,31 @@ class ToolSessionTests final : public QObject {
         return {};
     }
 private slots:
+    void nudgeAndStrokeFilterOptionsPersistPerTool(){
+        QTemporaryDir dir;ToolCatalog catalog(nullptr,dir.filePath("tools.json"));QVERIFY(catalog.load());Canvas canvas;canvas.setProject(Project::create());ToolSession session(&canvas,&catalog);
+        const auto brush=catalog.activeToolId(),nudge=toolId(catalog,Canvas::Tool::VectorNudge),ellipse=toolId(catalog,Canvas::Tool::Guides,int(GuideType::Ellipse));QVERIFY(!nudge.isEmpty());QVERIFY(!ellipse.isEmpty());
+        canvas.setStabilizationMode(StrokeFilterMode::Stabilizer);canvas.setStabilizationDeadZone(3.5);canvas.setStabilizationFinishAtEndpoint(false);canvas.setStabilization(64);
+        QVERIFY(catalog.activateTool(nudge));QCOMPARE(canvas.stabilizationMode(),StrokeFilterMode::Smooth);QCOMPARE(canvas.stabilizationDeadZone(),0.);QVERIFY(canvas.stabilizationFinishAtEndpoint());
+        canvas.drawingTools()->nudgeRadius=67;canvas.drawingTools()->nudgeStrength=.42;canvas.notifyToolSettingsEdited();
+        QVERIFY(catalog.activateTool(ellipse));QCOMPARE(canvas.guideCreationType(),GuideType::Ellipse);
+        QVERIFY(catalog.activateTool(brush));QCOMPARE(canvas.stabilizationMode(),StrokeFilterMode::Stabilizer);QCOMPARE(canvas.stabilizationDeadZone(),3.5);QVERIFY(!canvas.stabilizationFinishAtEndpoint());QCOMPARE(canvas.stabilization(),64.);
+        QVERIFY(catalog.activateTool(nudge));QCOMPARE(canvas.drawingTools()->nudgeRadius,67.);QCOMPARE(canvas.drawingTools()->nudgeStrength,.42);session.flush();
+        ToolCatalog restored(nullptr,catalog.path());QVERIFY(restored.load());Canvas second;ToolSession other(&second,&restored);QCOMPARE(second.drawingTools()->nudgeRadius,67.);QCOMPARE(second.drawingTools()->nudgeStrength,.42);QVERIFY(restored.activateTool(brush));QCOMPARE(second.stabilizationMode(),StrokeFilterMode::Stabilizer);QCOMPARE(second.stabilizationDeadZone(),3.5);QVERIFY(!second.stabilizationFinishAtEndpoint());
+    }
+    void fillOptionsAndEraseModeSurviveSwitchesAndReopen(){
+        QTemporaryDir dir;BrushLibrary library(dir.filePath("brushes.json"));QVERIFY(library.load());const auto path=dir.filePath("tools.json");
+        ToolCatalog catalog(&library,path);QVERIFY(catalog.load());Canvas canvas;canvas.setProject(Project::create());ToolSession session(&canvas,&catalog);DrawingToolPanel panel(&canvas);
+        const auto bucket=toolId(catalog,Canvas::Tool::Bucket),eraser=toolId(catalog,Canvas::Tool::VectorEraser);QVERIFY(!bucket.isEmpty());QVERIFY(!eraser.isEmpty());
+        auto legacy=catalog.tool(eraser)->state;legacy.options.remove("vectorEraseMode");legacy.options["eraseSegments"]=true;QVERIFY(catalog.updateToolState(eraser,legacy));
+        QVERIFY(catalog.activateTool(eraser));QCOMPARE(canvas.drawingTools()->vectorEraseMode,VectorEraseMode::Segment);
+        panel.findChild<QTabBar*>("vectorEraseMode")->setCurrentIndex(2);QCOMPARE(canvas.drawingTools()->vectorEraseMode,VectorEraseMode::Intersection);
+        QVERIFY(catalog.activateTool(bucket));panel.findChild<QTabBar*>("fillMode")->setCurrentIndex(1);panel.findChild<ValueSlider*>("fillExpansion")->setValue(-4);
+        QVERIFY(catalog.activateTool(eraser));QCOMPARE(canvas.drawingTools()->vectorEraseMode,VectorEraseMode::Intersection);
+        QVERIFY(catalog.activateTool(bucket));QVERIFY(canvas.drawingTools()->encloseFillMode);QCOMPARE(canvas.drawingTools()->fillSettings.expansion,-4);session.flush();
+        ToolCatalog restored(&library,path);QVERIFY(restored.load());Canvas second;second.setProject(Project::create());ToolSession restoredSession(&second,&restored);
+        QVERIFY(second.drawingTools()->encloseFillMode);QCOMPARE(second.drawingTools()->fillSettings.expansion,-4);QVERIFY(restored.activateTool(eraser));QCOMPARE(second.drawingTools()->vectorEraseMode,VectorEraseMode::Intersection);
+        QCOMPARE(canvas.document()->history()->count(),0);QCOMPARE(second.document()->history()->count(),0);
+    }
     void acceptedToolSwitchCommitsDraftToSource_data() {
         QTest::addColumn<qreal>("targetSize"); QTest::addColumn<bool>("floating");
         QTest::newRow("same-value-docked") << qreal(12) << false;
@@ -173,6 +199,7 @@ private slots:
         const auto warp=toolId(catalog,Canvas::Tool::AdvancedTransform,1); QVERIFY(!warp.isEmpty()); QVERIFY(catalog.activateTool(warp)); QVERIFY(canvas.drawingTools()->warpMode);
     }
     void sceneToolsKeepDrawingSettingsAndRouteRigRequests() {
+        if (!features::legacy3DEditor) QSKIP("Legacy 3D authoring is retired; compatibility coverage remains enabled.");
         QTemporaryDir dir; BrushLibrary library(dir.filePath("brushes.json")); QVERIFY(library.load());
         ToolCatalog catalog(&library, dir.filePath("tools.json")); QVERIFY(catalog.load());
         Canvas canvas; canvas.setProject(Project::create()); ToolSession session(&canvas, &catalog);

@@ -1,5 +1,7 @@
 # Product requirements
 
+**Superseding 3D direction, 7 November 2026:** the artist rejected the legacy skeleton-building/weight-painting module; it remains retired while saved scenes retain compatibility display/storage. The approved [3D reference workspace](3d-reference-workspace.md) is enabled by default with an explicit OFF option. Its cube / **View → 3D reference…** entry opens docked controls for editable reference layers directly on the drawing canvas, including posing and **Draw above**. Full CSP parity and full VRoid authoring remain incomplete; the [parity requirements](3d-reference-replacement-plan.md) govern remaining work. Earlier 3D milestones below are historical records.
+
 Source: [Anime Production App Requirements Draft](https://chatgpt.com/space/page_7d21eaa04628819188fbcd80d1953fbe)
 
 Snapshot taken on 13 October 2026. This records the agreed product scope; implementation status lives in DEVELOPMENT.md. The Page remains the discussion reference.

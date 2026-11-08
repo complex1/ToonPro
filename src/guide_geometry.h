@@ -28,4 +28,13 @@ QPainterPath guideConstraintPath(const GuideConstraint &constraint, const QRectF
 // The maximum is 512 samples, independent of document size or pointer speed.
 QVector<QPointF> guideConstraintSamples(const GuideConstraint &constraint, QPointF from,
                                       QPointF to, qreal maxError = .5);
+// Closest-curve parameter; the center has no stable parameter. The stateful
+// guide tool retains its previous angle there rather than jumping across it.
+std::optional<qreal> guideEllipseParameter(const GuideConstraint &, QPointF);
+QPointF guideEllipsePoint(const GuideConstraint &, qreal radians);
+qreal unwrapGuideEllipseAngle(qreal radians, qreal previous);
+// Explicit unwrapped angles retain direction across the +/-pi seam and loops.
+// As with the stateless sampler, each update is bounded to 512 samples.
+QVector<QPointF> guideEllipseArcSamples(const GuideConstraint &, qreal first, qreal last,
+                                      qreal maxError = .5);
 } // namespace toon

@@ -10,6 +10,12 @@ These are native Toon Pro effects. They cover the requested setting groups but d
 
 The guide properties’ **All guides → Snap to guides** toggle can constrain brush/eraser stroke paths to the shot's enabled [perspective drawing guides](guides.md). Guide geometry and shared snapping settings belong to the project, not the brush preset. Native brush dynamics, scatter, texture and symmetry still operate on the resulting stroke path.
 
+## Stroke stabilization — local 0.76
+
+The quick header's **Smooth / Strong** tabs choose the input filter; the existing **Smoothing** slider sets strength 0–100. Smooth provides moderate low-pass smoothing; Strong uses a longer trailing leash for deliberate inking. Both now use logical view distance, including camera zoom. **Advanced → General** exposes the full **Smooth / Stabilizer** mode names, **Dead zone** (0–20 view pixels, Stabilizer only) and **Finish stroke**. Finish on follows the retained tail in order on release; off stops at the stable tip. Higher strength adds lag and can reduce small-curve detail.
+
+Mode, dead zone and finishing are editor-input preferences saved per tool in catalog 14, separate from native brush resources retained for stroke replay. Settings changed during contact apply to the next stroke. Strength zero or Behavior → Smoothing off gives direct input. Start with Strong 50–70, dead zone 1–2 and Finish on, then evaluate against your tablet and drawing scale. [Research, algorithm choices, fixture plots and limits](stroke-stabilization.md).
+
 ## Editable stamp placement
 
 In **0.47.1**, the quick properties show an **Adjust stamp** row with an explicit **On/Off** toggle for sampled grayscale/colored Brush tools. It defaults on for the Stamp and Colored Stamp types and remembers an explicit override independently for each tool. Enable it for other sampled brushes when placing individual elements; disable it to place the current pending stamp and return to continuous stamp trails. The mode is a tool interaction preference, not a brush rendering parameter or a change to saved vector strokes. [Placement controls and limits](drawing-tools.md#editable-stamp-placement).

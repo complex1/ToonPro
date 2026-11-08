@@ -120,34 +120,71 @@ DrawingToolPanel::DrawingToolPanel(Canvas *canvas,QWidget*parent):QScrollArea(pa
     auto *c=canvas->drawingTools();auto *doc=canvas->document();
     auto page=[&]{auto*w=new QWidget;auto*l=new QVBoxLayout(w);l->setContentsMargins(0,0,0,0);l->setSpacing(ui::metrics::controlGap);m_pages->addWidget(w);return l;};
     // 0: color sampling / flood regions.
-    auto*region=page();auto*source=tabs(region,{{"layers","Sample visible layers"},{"image","Sample active layer"},{"pin","Sample reference layer"}},"sampleSource");
-    auto *reference=new QComboBox;reference->setObjectName("fillReferenceLayer");reference->setAccessibleName("Reference layer");reference->setToolTip("Layer used to find color boundaries");reference->setMinimumWidth(100);reference->setSizePolicy(QSizePolicy::Ignored,QSizePolicy::Fixed);auto *referenceRow=new PropertyRow("Layer",reference);region->addWidget(referenceRow);
+    auto*region=page();
+    auto*fillMode=tabs(region,{{"paint-bucket","Point fill — click a region"},{"lasso","Enclose closed regions in line art; open or partially enclosed regions are skipped"}},"fillMode");
+    fillMode->setAccessibleName("Fill gesture");fillMode->setTabText(0,"Point");fillMode->setTabText(1,"Enclose");
+    connect(fillMode,&QTabBar::currentChanged,this,[=](int index){c->cancel();c->encloseFillMode=index==1;c->notifySettings();canvas->setFocus();});
+    auto*source=tabs(region,{{"layers","Whole drawing — use visible layers for boundaries"},{"image","Current layer — use this layer for boundaries"},{"toon-fill-reference","Reference layers — use marked references for boundaries"}},"sampleSource");
+    source->setAccessibleName("Fill boundary source");
+    auto *sourceCaption=new QLabel;sourceCaption->setObjectName("fillBoundarySourceLabel");sourceCaption->setTextFormat(Qt::PlainText);sourceCaption->setWordWrap(true);sourceCaption->setSizePolicy(QSizePolicy::Ignored,QSizePolicy::Preferred);sourceCaption->setToolTip("Boundary sampling never changes the paint target: fill color goes onto the active editable raster layer.");region->addWidget(sourceCaption);
+    auto *reference=new QComboBox;reference->setObjectName("fillReferenceLayer");reference->setAccessibleName("Reference boundary source");reference->setToolTip("Use all marked fill references, or choose one explicit layer. Color goes onto the active paint layer.");reference->setMinimumWidth(90);reference->setSizePolicy(QSizePolicy::Ignored,QSizePolicy::Fixed);reference->setPlaceholderText("Choose reference layer");
+    auto *referenceControls=new QWidget;auto *referenceLayout=new QHBoxLayout(referenceControls);referenceLayout->setContentsMargins(0,0,0,0);referenceLayout->setSpacing(ui::metrics::controlGap);referenceLayout->addWidget(reference,1);
+    auto *useMarked=button(referenceLayout,"toon-fill-reference","Use marked reference layers","fillUseMarkedReferences");useMarked->setCheckable(true);
+    auto *referenceRow=new PropertyRow("Source",referenceControls);region->addWidget(referenceRow);
+    auto *referenceSummary=new QLabel;referenceSummary->setObjectName("fillReferenceSummary");referenceSummary->setTextFormat(Qt::PlainText);referenceSummary->setWordWrap(true);referenceSummary->setSizePolicy(QSizePolicy::Ignored,QSizePolicy::Preferred);referenceSummary->setAccessibleName("Reference boundary sources");referenceSummary->setToolTip("Marked references supply boundaries even while hidden or faded. Their source pixels stay unchanged; color goes onto the active paint layer.");region->addWidget(referenceSummary);
+    const auto refreshReferenceSource=[=]{
+        const bool marked=c->fillSettings.source==RasterSampleSource::MarkedReferences;
+        const bool explicitLayer=c->fillSettings.source==RasterSampleSource::ReferenceLayer;
+        const QSignalBlocker a(source),b(reference),d(useMarked);
+        source->setCurrentIndex(c->fillSettings.source==RasterSampleSource::AllLayers?0:c->fillSettings.source==RasterSampleSource::ActiveLayer?1:2);
+        sourceCaption->setText(c->fillSettings.source==RasterSampleSource::AllLayers?"Boundaries: Whole drawing":c->fillSettings.source==RasterSampleSource::ActiveLayer?"Boundaries: Current layer":"Boundaries: Reference layers");
+        referenceRow->setVisible(marked||explicitLayer);referenceSummary->setVisible(marked||explicitLayer);useMarked->setChecked(marked);
+        const int explicitIndex=reference->findData(c->fillSettings.referenceLayerId);
+        reference->setCurrentIndex(marked?0:explicitIndex>0?explicitIndex:-1);
+        if(!doc->isOpen()){referenceSummary->clear();return;}
+        if(explicitLayer){const int selected=reference->findData(c->fillSettings.referenceLayerId);referenceSummary->setText(selected>0?QString("Reference: %1").arg(reference->itemText(selected)):QString("Choose a reference layer"));return;}
+        QStringList names;int hidden=0;
+        const auto present=activeLayerIds(doc->activeShot(),doc->currentFrame());
+        for(const auto &layer:doc->activeShot().layers)if(layer.fillReference&&present.contains(layer.id)){
+            names.append(layer.name);bool visible=layer.visible;auto parent=layer.parentId;
+            for(int depth=0;!parent.isEmpty()&&depth<8;++depth){bool found=false;for(const auto &ancestor:doc->activeShot().layers)if(ancestor.id==parent){visible&=ancestor.visible;parent=ancestor.parentId;found=true;break;}if(!found)break;}
+            if(!visible)++hidden;
+        }
+        const auto reason=RasterTools::referenceSourceReason(doc);
+        referenceSummary->setText(!reason.isEmpty()?reason:QString("%1 reference %2%3").arg(names.size()).arg(names.size()==1?"layer":"layers").arg(hidden?QString(" · %1 hidden").arg(hidden):QString()));
+        referenceSummary->setAccessibleDescription(names.join(", "));
+    };
     reference->setProperty("layersDirty",true);
-    auto rebuildLayers=[doc,reference,c]{
+    auto rebuildLayers=[doc,reference,c,refreshReferenceSource]{
         QStringList state,drawings;
         if(doc->isOpen()) {
             const auto &shot=doc->activeShot();
             for(const auto &track:shot.animationTracks){drawings.append(track.id);const auto *drawing=drawingAtFrame(track,doc->currentFrame());drawings.append(drawing?drawing->id:QString());}
-            if(!reference->property("layersDirty").toBool()&&reference->property("displayDrawings").toStringList()==drawings)return;
+            if(!reference->property("layersDirty").toBool()&&reference->property("displayDrawings").toStringList()==drawings){refreshReferenceSource();return;}
             const auto present=activeLayerIds(shot,doc->currentFrame());
-            for(const auto &layer:shot.layers)if(!layer.group&&present.contains(layer.id))state<<layer.id<<layer.name;
+            for(const auto &layer:shot.layers)if(present.contains(layer.id))state<<layer.id<<layer.name;
         }
         reference->setProperty("layersDirty",false);reference->setProperty("displayDrawings",drawings);
-        if(reference->property("layerState").toStringList()==state)return;
+        if(reference->property("layerState").toStringList()==state){refreshReferenceSource();return;}
         reference->setProperty("layerState",state);QSignalBlocker block(reference);reference->clear();
+        reference->addItem("Marked reference layers",QString());
         for(int i=0;i+1<state.size();i+=2)reference->addItem(state[i+1],state[i]);
         const int selected=reference->findData(c->fillSettings.referenceLayerId);
-        reference->setCurrentIndex(selected>=0?selected:reference->count()?0:-1);
-        c->fillSettings.referenceLayerId=reference->currentData().toString();
+        if(selected<0)c->fillSettings.referenceLayerId.clear();
+        refreshReferenceSource();
     };
     connect(doc,&Document::selectionChanged,reference,rebuildLayers);
     connect(doc,&Document::changed,reference,[doc,reference,rebuildLayers]{reference->setProperty("layersDirty",true);if(!doc->editingGestureActive()&&!doc->layerPropertyEditActive())rebuildLayers();});
     connect(doc,&Document::frameChanged,reference,rebuildLayers);connect(doc,&Document::animationSelectionChanged,reference,rebuildLayers);
-    rebuildLayers();referenceRow->setVisible(false);
-    connect(reference,&QComboBox::currentIndexChanged,this,[=]{c->fillSettings.referenceLayerId=reference->currentData().toString();});
-    connect(source,&QTabBar::currentChanged,this,[=](int index){c->fillSettings.source=index==0?RasterSampleSource::AllLayers:index==1?RasterSampleSource::ActiveLayer:RasterSampleSource::ReferenceLayer;referenceRow->setVisible(index==2);});
+    rebuildLayers();
+    connect(reference,&QComboBox::currentIndexChanged,this,[=](int index){if(index<0)return;c->fillSettings.source=index==0?RasterSampleSource::MarkedReferences:RasterSampleSource::ReferenceLayer;c->fillSettings.referenceLayerId=reference->currentData().toString();refreshReferenceSource();c->notifySettings();});
+    connect(useMarked,&QToolButton::clicked,this,[=]{c->fillSettings.source=RasterSampleSource::MarkedReferences;refreshReferenceSource();c->notifySettings();});
+    connect(source,&QTabBar::currentChanged,this,[=](int index){c->fillSettings.source=index==0?RasterSampleSource::AllLayers:index==1?RasterSampleSource::ActiveLayer:RasterSampleSource::MarkedReferences;refreshReferenceSource();c->notifySettings();});
     auto*tolerance=scalar(region,"Tolerance","fillTolerance",0,255,c->fillSettings.tolerance);connect(tolerance,&ValueSlider::valueChanged,this,[=](qreal v){c->fillSettings.tolerance=qRound(v);});
     auto*gap=scalar(region,"Close gaps","fillGapClosing",0,20,c->fillSettings.gapClosing," px");connect(gap,&ValueSlider::valueChanged,this,[=](qreal v){c->fillSettings.gapClosing=qRound(v);});
+    auto*expansion=scalar(region,"Expansion","fillExpansion",-20,20,c->fillSettings.expansion," px");
+    expansion->setToolTip("Expand under line art with positive values; shrink the filled region with negative values (artwork pixels)");
+    connect(expansion,&ValueSlider::valueChanged,this,[=](qreal v){c->fillSettings.expansion=qRound(v);});
     auto*regionSelection=new SelectionExtras(canvas);region->addWidget(regionSelection);region->addStretch();
     // 1: gradient stop editor.
     auto*gradient=page();auto*gradientMode=tabs(gradient,{{featureIconName(FeatureIcon::LinearGradient),"Linear gradient"},{featureIconName(FeatureIcon::RadialGradient),"Radial gradient"}},"gradientMode");connect(gradientMode,&QTabBar::currentChanged,this,[=](int i){c->radialGradient=i==1;});
@@ -163,7 +200,11 @@ DrawingToolPanel::DrawingToolPanel(Canvas *canvas,QWidget*parent):QScrollArea(pa
     // 3: retouch / vector eraser.
     auto*retouch=page();auto*retouchMode=tabs(retouch,{{"hand","Smudge"},{"blend","Mixer"},{featureIconName(FeatureIcon::Blur),"Blur"},{"triangle","Sharpen"},{"sun","Dodge"},{"flame","Burn"}},"retouchMode");connect(retouchMode,&QTabBar::currentChanged,this,[=](int i){c->retouchSettings.mode=static_cast<RetouchMode>(i);});
     auto*size=scalar(retouch,"Size","retouchSize",1,512,c->retouchSettings.size," px",1);connect(size,&ValueSlider::valueChanged,this,[=](qreal v){c->retouchSettings.size=v;c->notifySettings();});auto*strength=scalar(retouch,"Strength","retouchStrength",1,100,c->retouchSettings.strength*100," %");connect(strength,&ValueSlider::valueChanged,this,[=](qreal v){c->retouchSettings.strength=v/100;});
-    auto*eraseMode=tabs(retouch,{{"spline","Erase whole vector stroke"},{"scissors","Erase intersecting Bézier segments"}},"vectorEraseMode");connect(eraseMode,&QTabBar::currentChanged,this,[=](int i){c->eraseSegments=i==1;});retouch->addStretch();
+    auto*eraseMode=tabs(retouch,{{"spline","Erase whole vector stroke"},{"scissors","Erase touched Bézier segments"},{"split","Erase between intersections with other strokes on this vector layer"}},"vectorEraseMode");
+    eraseMode->setAccessibleName("Vector erasing mode");
+    auto*eraseCaption=new QLabel;eraseCaption->setObjectName("vectorEraseModeLabel");eraseCaption->setAccessibleName("Selected erasing mode");retouch->addWidget(eraseCaption);
+    const auto refreshEraseCaption=[=]{eraseCaption->setText(c->vectorEraseMode==VectorEraseMode::WholeStroke?"Whole stroke":c->vectorEraseMode==VectorEraseMode::Segment?"Bézier segment":"Between intersections");};
+    connect(eraseMode,&QTabBar::currentChanged,this,[=](int i){c->vectorEraseMode=static_cast<VectorEraseMode>(i);refreshEraseCaption();});retouch->addStretch();
     // 4: text contents and layout.
     auto*text=page();auto*editor=new QPlainTextEdit;editor->setObjectName("artworkText");editor->setAccessibleName("Artwork text");editor->installEventFilter(this);editor->setPlainText(c->textStyle.text);editor->setMinimumHeight(76);editor->setMaximumHeight(96);editor->setMinimumWidth(100);text->addWidget(editor);
     auto*font=new QFontComboBox;font->setObjectName("artworkFont");font->setAccessibleName("Font family");font->setMinimumWidth(100);font->setSizePolicy(QSizePolicy::Ignored,QSizePolicy::Fixed);text->addWidget(new PropertyRow("Font",font));showFontFamily(font,c->textStyle.fontFamily);
@@ -179,11 +220,46 @@ DrawingToolPanel::DrawingToolPanel(Canvas *canvas,QWidget*parent):QScrollArea(pa
     // 5: selection shape, feathering and saved selections.
     auto*selection=page();selection->addWidget(new SelectionExtras(canvas));auto*end=button(selection,"check","Finish polygon selection (Enter)","finishPolygonSelection");connect(end,&QToolButton::clicked,this,[=]{c->finishPath(true);canvas->setFocus();});selection->addStretch();
     // 6: reversible spatial transforms.
-    auto*transform=page();auto*mode=tabs(transform,{{"square-dashed-mouse-pointer","Distort / perspective corners"},{featureIconName(FeatureIcon::Warp),"Warp mesh"}},"advancedTransformMode");connect(mode,&QTabBar::currentChanged,this,[=](int i){c->warpMode=i==1;c->notifySettings();});
+    auto*transform=page();auto*mode=tabs(transform,{{"square-dashed-mouse-pointer","Distort / perspective corners"},{featureIconName(FeatureIcon::Warp),"Warp mesh"}},"advancedTransformMode");
+    connect(mode,&QTabBar::currentChanged,this,[=](int i){
+        if((i==1)==c->warpMode)return;
+        if(!canvas->resolvePendingTransform()){c->notifySettings();return;}
+        c->warpMode=i==1;if(!c->warpMode)c->puppetMode=false;
+        canvas->refreshLayerSelectionContext();if(canvas->hasProject())c->beginAdvanced({},c->selectionBoundary);c->notifySettings();
+    });
     auto*targets=propertyActions(transform);auto*contentTarget=button(targets,"layers","Transform selected layers / folder","transformLayerTarget");auto*boundaryTarget=button(targets,"square-dashed","Transform selection boundary only","transformBoundaryTarget");contentTarget->setCheckable(true);boundaryTarget->setCheckable(true);auto*targetGroup=new QButtonGroup(this);targetGroup->addButton(contentTarget);targetGroup->addButton(boundaryTarget);contentTarget->setChecked(true);
     connect(contentTarget,&QToolButton::clicked,this,[=]{c->beginAdvanced({},false);});connect(boundaryTarget,&QToolButton::clicked,this,[=]{c->beginAdvanced({},true);});
+    auto*warpType=tabs(transform,{{featureIconName(FeatureIcon::Warp),"Grid warp"},{"pin","Puppet pins"}},"warpTypeTabs");warpType->setTabText(0,"Grid");warpType->setTabText(1,"Pins");
+    connect(warpType,&QTabBar::currentChanged,this,[=](int i){c->setPuppetMode(i==1);});
+    auto*puppetControls=new QWidget;puppetControls->setObjectName("puppetWarpControls");auto*puppetLayout=new QVBoxLayout(puppetControls);puppetLayout->setContentsMargins(0,0,0,0);puppetLayout->setSpacing(ui::metrics::controlGap);transform->addWidget(puppetControls);
+    auto*density=scalar(puppetLayout,"Density","puppetMeshDensity",minPuppetDensity,maxPuppetDensity,16);
+    density->setToolTip("Mesh cells along the longer side; changing density retains the current pins");
+    connect(density,&ValueSlider::valueChanged,this,[=](double value){c->setPuppetDensity(qRound(value));});
+    auto*pinActions=propertyActions(puppetLayout);auto*meshVisible=button(pinActions,"grid-2x2","Show mesh","showPuppetMesh");meshVisible->setCheckable(true);meshVisible->setChecked(true);
+    auto*deletePin=button(pinActions,"trash","Delete selected pins (Delete / Alt-click)","deletePuppetPins");
+    auto*resetPins=button(pinActions,"rotate-ccw","Reset deformation and keep pins","resetPuppetWarp");
+    auto*editPins=button(pinActions,"pin","Reopen saved mesh","editRetainedPuppetWarp");
+    connect(editPins,&QToolButton::clicked,this,[=]{c->beginAdvanced({},false);canvas->setFocus();});
+    connect(meshVisible,&QToolButton::toggled,this,[=](bool visible){c->showPuppetMesh=visible;c->notifySettings();});
+    connect(deletePin,&QToolButton::clicked,this,[=]{c->removeSelectedPuppetPins();canvas->setFocus();});
+    connect(resetPins,&QToolButton::clicked,this,[=]{c->transform()->resetPuppet();canvas->setFocus();});
+    auto*pinStatus=new QLabel("Click the mesh to place pins",puppetControls);pinStatus->setObjectName("puppetPinStatus");pinStatus->setWordWrap(true);puppetLayout->addWidget(pinStatus);
+    pinStatus->setToolTip("Drag pins to deform; other pins hold their positions. Shift-click selects several pins. Alt-click or Delete removes selected pins.");
     auto*flipRow=propertyActions(transform);auto*horizontal=button(flipRow,"arrow-left-right","Flip horizontally","flipArtworkHorizontal");auto*vertical=button(flipRow,"arrow-down","Flip vertically","flipArtworkVertical");connect(horizontal,&QToolButton::clicked,this,[=]{if(!c->transform()->active())c->beginAdvanced({},c->selectionBoundary);c->transform()->flip(true);});connect(vertical,&QToolButton::clicked,this,[=]{if(!c->transform()->active())c->beginAdvanced({},c->selectionBoundary);c->transform()->flip(false);});
     auto*skewX=scalar(transform,"Skew X","artworkSkewX",-75,75,0," °",1);auto*skewY=scalar(transform,"Skew Y","artworkSkewY",-75,75,0," °",1);auto*skewApply=button(transform,"spline","Preview skew","previewArtworkSkew");connect(skewApply,&QToolButton::clicked,this,[=]{if(!c->transform()->active())c->beginAdvanced({},c->selectionBoundary);c->transform()->skew(std::tan(skewX->value()*M_PI/180),std::tan(skewY->value()*M_PI/180));});
+    auto refreshWarp=[=]{
+        const bool pins=c->warpMode&&c->puppetMode;QSignalBlocker a(warpType),b(meshVisible),d(mode);
+        mode->setCurrentIndex(c->warpMode?1:0);warpType->setCurrentIndex(pins?1:0);warpType->setVisible(c->warpMode);puppetControls->setVisible(pins);
+        density->setValueSilently(c->puppetDensity);meshVisible->setChecked(c->showPuppetMesh);boundaryTarget->setEnabled(!pins);
+        horizontal->setVisible(!pins);vertical->setVisible(!pins);showScalar(skewX,!pins);showScalar(skewY,!pins);skewApply->setVisible(!pins);
+        const bool retained=doc->isOpen()&&doc->activeShot().layers[doc->activeLayer()].puppetWarp.has_value();
+        density->setEnabled(!retained||c->transform()->active());
+        if(retained&&!c->transform()->active())density->setValueSilently(doc->activeShot().layers[doc->activeLayer()].puppetWarp->density);
+        editPins->setVisible(retained&&!c->transform()->active());
+        const int count=c->transform()->puppet()?c->transform()->pins().size():0;pinStatus->setText(count?QString("%1 pins · %2 selected").arg(count).arg(c->selectedPuppetPinCount()):retained?QString("Saved mesh · reopen to edit"):QString("Click the mesh to place pins"));
+        deletePin->setEnabled(c->selectedPuppetPinCount()>0);resetPins->setEnabled(c->transform()->puppet()&&c->transform()->modified());
+    };
+    connect(c,&DrawingToolController::changed,this,refreshWarp);connect(canvas,&Canvas::toolStateApplied,this,refreshWarp);refreshWarp();
     // Completion remains outside the scrolling settings, including short docks.
     m_transformFooter=new QWidget(this);m_transformFooter->setObjectName("advancedTransformFooter");
     auto*commit=new QHBoxLayout(m_transformFooter);commit->setContentsMargins(ui::metrics::panelMargin,ui::metrics::controlGap,ui::metrics::panelMargin,ui::metrics::panelMargin);commit->setSpacing(ui::metrics::controlGap);
@@ -209,23 +285,21 @@ DrawingToolPanel::DrawingToolPanel(Canvas *canvas,QWidget*parent):QScrollArea(pa
         }
     });
     connect(doc->history(),&QUndoStack::indexChanged,this,[=]{editor->setProperty("draftDirty",false);c->notifySettings();});
-    const auto updateToolVisibility = [=, this]{auto t=canvas->tool();regionSelection->setVisible(t==Canvas::Tool::MagicWand||t==Canvas::Tool::ColorRange);showScalar(tolerance,t!=Canvas::Tool::Eyedropper);showScalar(gap,t!=Canvas::Tool::Eyedropper&&t!=Canvas::Tool::ColorRange);bool eraser=t==Canvas::Tool::VectorEraser;eraseMode->setVisible(eraser);retouchMode->setVisible(!eraser && !canvas->property("toolCatalogManaged").toBool());showScalar(strength,!eraser);refresh();};
+    const auto updateToolVisibility = [=, this]{auto t=canvas->tool();regionSelection->setVisible(t==Canvas::Tool::MagicWand||t==Canvas::Tool::ColorRange);fillMode->setVisible(t==Canvas::Tool::Bucket);showScalar(expansion,t==Canvas::Tool::Bucket);showScalar(tolerance,t!=Canvas::Tool::Eyedropper);showScalar(gap,t!=Canvas::Tool::Eyedropper&&t!=Canvas::Tool::ColorRange);bool eraser=t==Canvas::Tool::VectorEraser;eraseMode->setVisible(eraser);eraseCaption->setVisible(eraser);refreshEraseCaption();retouchMode->setVisible(!eraser && !canvas->property("toolCatalogManaged").toBool());showScalar(strength,!eraser);refresh();};
     connect(canvas,&Canvas::toolChanged,this,updateToolVisibility);
     const auto syncState = [=] {
         QSignalBlocker a(source), b(reference), d(gradientMode), e(stroke), f(fill), g(close),
             h(retouchMode), i(eraseMode), j(editor), k(font), l(bold), n(italic), p(alignment), q(mode),
-            r(contentTarget), s(boundaryTarget);
-        source->setCurrentIndex(c->fillSettings.source == RasterSampleSource::AllLayers ? 0
-            : c->fillSettings.source == RasterSampleSource::ActiveLayer ? 1 : 2);
-        reference->setCurrentIndex(reference->findData(c->fillSettings.referenceLayerId));
-        referenceRow->setVisible(c->fillSettings.source == RasterSampleSource::ReferenceLayer);
+            r(contentTarget), s(boundaryTarget), u(fillMode);
+        refreshReferenceSource();
         tolerance->setValueSilently(c->fillSettings.tolerance); gap->setValueSilently(c->fillSettings.gapClosing);
+        expansion->setValueSilently(c->fillSettings.expansion);fillMode->setCurrentIndex(c->encloseFillMode?1:0);
         gradientMode->setCurrentIndex(c->radialGradient ? 1 : 0); stops->setStops(c->gradientStops);
         stroke->setChecked(c->shapeStroke); fill->setChecked(c->shapeFill); close->setChecked(c->closedPath);
         width->setValueSilently(c->strokeWidth); colorButton(fillChip,c->fillColor);
         retouchMode->setCurrentIndex(int(c->retouchSettings.mode));
         size->setValueSilently(c->retouchSettings.size); strength->setValueSilently(c->retouchSettings.strength*100);
-        eraseMode->setCurrentIndex(c->eraseSegments ? 1 : 0);
+        eraseMode->setCurrentIndex(int(c->vectorEraseMode));
         editor->setProperty("draftDirty",false); editor->setProperty("objectId",QString());
         editor->setPlainText(c->textStyle.text); showFontFamily(font,c->textStyle.fontFamily);
         fontSize->setValueSilently(c->textStyle.fontSize); bold->setChecked(c->textStyle.bold); italic->setChecked(c->textStyle.italic);

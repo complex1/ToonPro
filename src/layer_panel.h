@@ -23,6 +23,10 @@ public:
     void setImportImageAction(QAction *action);
     void refreshReferencePreviews() { refreshThumbnails(); }
 signals:
+    void reference3DLayerRequested(bool create);
+    void convertToLineArtRequested();
+    void editPuppetWarpRequested();
+    void detectPerspectiveRequested();
     void selectedLayersChanged();
     void convertToSymbolRequested(const QStringList &layerIds);
     void symbolActionRequested(const QString &action);
@@ -37,7 +41,7 @@ private:
     LayerTree *m_tree;
     QComboBox *m_blend;
     ValueSlider *m_opacity;
-    QToolButton *m_locked, *m_positionLocked, *m_alphaLocked, *m_clipped, *m_annotation;
+    QToolButton *m_locked, *m_positionLocked, *m_alphaLocked, *m_clipped, *m_annotation, *m_fillReference;
     QToolButton *m_add, *m_importImage, *m_notes, *m_group, *m_duplicate, *m_remove, *m_merge, *m_more;
     QTimer *m_thumbnailTimer;
     QHash<QString, bool> m_expanded;

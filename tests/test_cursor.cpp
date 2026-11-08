@@ -1,3 +1,4 @@
+#include "feature_flags.h"
 #include "canvas.h"
 #include "catalog_brushes.h"
 #include "object_tools.h"
@@ -34,6 +35,7 @@ private slots:
         QTest::newRow("3D camera") << true;
     }
     void sceneToolsKeepVisibleCursors() {
+        if (!features::legacy3DEditor) QSKIP("Legacy 3D authoring is retired; compatibility coverage remains enabled.");
         QFETCH(bool, camera);
         Canvas canvas; canvas.resize(1000, 800);
         auto project = Project::create(); project.width = 640; project.height = 480;

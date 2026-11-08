@@ -1,0 +1,12 @@
+Blue Hour is an imported test illustration, not artwork created by Toon Pro.
+
+The illustration was originally generated for the previous Toon Pro website
+with the built-in image generation tool on 4 November 2026. It is retained here
+only as a deterministic local UI and image-conversion test fixture.
+
+blue-hour.png was decoded from the prior tracked website's blue-hour.webp
+with macOS sips on 8 November 2026
+because the pinned Qt SDK used for validation does not include a WebP plugin.
+
+The drawing gallery and line-conversion screenshots contain this imported
+sample artwork. Their screenshot manifests identify that distinction.

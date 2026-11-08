@@ -1,3 +1,4 @@
+#include "feature_flags.h"
 #include "canvas.h"
 #include "main_window.h"
 #include "ui_metrics.h"
@@ -259,12 +260,14 @@ private slots:
             QStringList expectedPanels{
                 "controlPanel", "toolsPanel", "brushPresetPanel", "propertiesPanel", "layersPanel",
                 "colorsPanel", "referencesPanel", "effectsPanel", "celPaintCheckPanel", "celShadingPanel",
-                "animationPanel", "framePropertiesPanel", "symbolsPanel", "historyPanel", "autoActionsPanel",
+                "animationPanel", "framePropertiesPanel", "inbetweenPanel", "symbolsPanel", "historyPanel", "autoActionsPanel",
                 "modelLibraryPanel", "shotsPanel", "toolManagementPanel", "brushManagementPanel"};
+            if (!features::legacy3DEditor) expectedPanels.removeAll("modelLibraryPanel");
             actualPanels.sort(); expectedPanels.sort();
             QCOMPARE(actualPanels, expectedPanels);
             QVERIFY(window.findChild<QDockWidget *>("shotsPanel")->isHidden());
-            QVERIFY(window.findChild<QDockWidget *>("modelLibraryPanel")->isHidden());
+            if (features::legacy3DEditor) QVERIFY(window.findChild<QDockWidget *>("modelLibraryPanel")->isHidden());
+            else QVERIFY(!window.findChild<QDockWidget *>("modelLibraryPanel"));
             QVERIFY(window.findChild<QDockWidget *>("toolManagementPanel")->isHidden());
             QVERIFY(window.findChild<QDockWidget *>("brushManagementPanel")->isHidden());
             QVERIFY(window.findChild<QDockWidget *>("historyPanel")->isHidden());
@@ -354,9 +357,12 @@ private slots:
     void toolManagementAndViewPreferencesSurviveReopen() {
         QTemporaryDir temp;
         const auto settingsPath = temp.filePath("workspace.ini");
+        const auto projectPath = temp.filePath("editor.toonproj");
+        QString error; QVERIFY(saveProject(Project::create(), projectPath, &error));
         QString active;
         {
             MainWindow window(settingsPath); window.show();
+            QVERIFY(window.openProject(projectPath));
             auto *tools = window.findChild<ToolNavigationPanel *>("toolListContent");
             auto *dock = window.findChild<QDockWidget *>("toolManagementPanel");
             auto *manager = qobject_cast<ToolManagementPanel *>(dock->widget());
@@ -385,6 +391,7 @@ private slots:
         }
         {
             MainWindow restored(settingsPath); restored.show();
+            QVERIFY(restored.openProject(projectPath));
             auto *tools = restored.findChild<ToolNavigationPanel *>("toolListContent");
             QVERIFY(tools && tools->iconsOnly());
             QCOMPARE(tools->tagFilter(), QString("Inking"));

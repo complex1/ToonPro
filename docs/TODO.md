@@ -1,6 +1,94 @@
 # Toon Pro development checklist
 
-Updated 6 November 2026. Current source implementation: **0.76.0**, with the managed Drawing / Animation / Movie project flow and independent editor tabs described below. The earlier Film / Series foundation is retained as implementation history. Current build and verification evidence is recorded in [the development log](DEVELOPMENT.md); earlier release counts below are historical. Public downloads remain **0.75.0**. GitHub Actions is disabled; build and release work stays local/manual.
+Updated 8 November 2026. Current source implementation: **0.76.0**, with the managed Drawing / Animation / Movie project flow and independent editor tabs described below. The earlier Film / Series foundation is retained as implementation history. Current build and verification evidence is recorded in [the development log](DEVELOPMENT.md); earlier release counts below are historical. Public downloads remain **0.75.0**. GitHub Actions is disabled; build and release work stays local/manual.
+
+## Drawing cleanup — local 0.76 implementation
+
+- [x] Per-editor canvas mirror through the toolbar, View menu and Shift+M, with mirrored input and unchanged output.
+- [x] Signed −20…+20 pixel fill expansion, remembered per tool and replayed by Point-fill Auto Actions.
+- [x] Active-vector-layer intersection trimming, retaining editable curves, width profiles and recorded brush source.
+- [x] Bucket Point/Enclose modes with one-gesture filling of wholly enclosed transparent/white-paper line-art regions.
+- [ ] Artist acceptance on actual drawings and the physical tablet, including large and fragmented artwork.
+
+See [Drawing tools](drawing-tools.md) for restrictions and [the development log](DEVELOPMENT.md) for current build and test evidence. Public preview packages are unchanged.
+
+## Ellipse, local nudge and steadier brushes — local 0.76 implementation
+
+- [x] Editable fixed ellipse ruler with immediate capture, curved snapping, axis/height handles and project/guide-set persistence.
+- [x] Vector Nudge with local radius/strength, source-preserving previews, one-step Undo and cancellation. Unsupported animated paths and unreliable curved-symmetry inverses are refused.
+- [x] Zoom-consistent Smooth and stronger pulled-string Stabilizer modes, optional dead zone, ordered stroke finishing and saved per-tool preferences.
+- [x] Research public CSP/Krita behavior and filtering alternatives; distinguish documented controls from unpublished vendor internals.
+- [ ] Evaluate physical-tablet feel on production drawings. Automatic speed adjustment, post-stroke fitting and arbitrary slicing remain separate work.
+
+See [Guides](guides.md), [vector drawing controls](drawing-tools.md#editable-vector-brush-strokes) and [stabilization research and settings](stroke-stabilization.md).
+
+## 3D reference workspace — approved; full parity in progress
+
+The artist rejected the skeleton-building/weight-painting workflow and requested full Clip Studio Paint style drawing-reference parity. The [full plan](3d-reference-replacement-plan.md) remains the acceptance target. The artist reviewed and approved the [reference workspace](3d-reference-workspace.md) for normal-app use on 7 November 2026. The model/import/posing/material controls are available through **View → 3D reference…** and the editor toolbar cube action. This approval does not close the remaining full-parity requirements.
+
+- [x] Audit the existing scene/import/rig/skin/pose/material architecture and identify replacement/reuse boundaries.
+- [x] Retire legacy rig/weight authoring in all builds, retaining old data/render compatibility.
+- [x] Obtain artist approval for the reviewed workspace and enable it in the normal app; `TOON_ENABLE_EXPERIMENTAL_3D` defaults to ON with an explicit OFF opt-out.
+- [x] Implement a separate canonical hierarchy/skin/morph/expression domain, logical content IDs, bounded checked scene packages and semantic limb IK.
+- [x] Add bounded GLB/glTF/VRM import preserving actual bind transforms, sparse morphs, textures, humanoid mappings, expressions and source diagnostics; retain unsupported extension data without claiming its evaluation.
+- [x] Add the independent review viewport, FK/basic limb IK, original adjustable study figures/heads/hands, typed reusable materials, Undo and scene save/reopen.
+- [x] Add native drawing-canvas `Reference3D` layers with docked model controls, direct object/joint/camera manipulation, Draw above, shared drawing Undo and portable project/managed-revision source storage.
+- [ ] Complete native rigged GLB/VRM, morphable-asset, platform-renderer and local image-inference proof gates.
+- [ ] Implement the authored model library, direct posing, body/head/hand shapes, expressions, character imports, typed materials and full scene/camera/light workflow.
+- [ ] Complete image/hand pose capture, multi-view, texture/primitive/physics/interchange and line/tone integration parity requirements.
+- [ ] Record all remaining requirement-level evidence and obtain full-parity acceptance before claiming CSP equivalence.
+
+## RIFE in-betweens — local 0.76 follow-up
+
+- [x] Dockable panel and direct timeline action for two drawing cels, fixed endpoint times, ones/twos, shared custom easing and source thumbnails.
+- [x] Local background RIFE generation with progress, cancellation, full-resolution preview, frame strip, zoom/pan and playback.
+- [x] Atomic raster-cel insertion with one Undo/Redo command, save/reopen, stale-preview rejection and collision/lock/pixel-budget checks.
+- [x] Build and bundle the optional compact v4.6 runtime on Apple Silicon Mac; pass two new suites and eight related regression suites. Verify real model generation/insertion on offscreen, native Cocoa and Retina views.
+- [ ] Validate with the artist's production pose pairs and physical pen; verify additional platforms and release packaging.
+- [x] Automatically matte transparent source drawings on white; offer single-ink transparent output with soft edges and a checkerboard preview.
+- [ ] Add general multicolor RGBA generation, persistent inference, automatic low-resolution previews and retained generation recipes separately.
+
+See [workflow, setup and limits](inbetweens.md).
+
+## Drawing extension — layer outline
+
+- [x] Add a direct Outline tab in Effects with enable, live width from 0–128 source pixels and a color chip.
+- [x] Keep artwork pixels editable; support Undo/Redo and save/reopen, including disabled custom settings.
+- [x] Render smooth outer contours and holes through the existing tiled compositor, masks, folder isolation and export rendering.
+- [ ] Complete artist acceptance with production artwork and physical pen; validate additional platforms and release packaging.
+
+See [Outline controls and limits](layer-outline.md). The current implementation adds static layer settings; the existing animation channels are unchanged.
+
+## Drawing extensions — fill references and perspective detection
+
+Implemented locally in the requested order. [Fill reference workflow](fill-reference.md) and [perspective detection](perspective-detection.md) document current controls and limits; the [original design](fill-reference-and-perspective-plan.md) is retained as planning history. Published packages remain unchanged.
+
+- [x] Add persistent reference marks, multi-layer/folder sampling, direct Layers access and clear Fill boundary-source modes while preserving explicit-layer tools/actions.
+- [x] Prove bounded local one/two-point and parallel detection with known geometry, negative fixtures and independent-edge deduplication.
+- [x] Add local-file/selected-layer analysis, editable candidate review, regions, edge exclusions, manual two-line fallback and one-Undo insertion into the existing Guides system.
+- [x] Verify source preservation, transformed/masked coordinates, save/reopen, snapping, cancellation, stale jobs and normal editor entry points; record synthetic and architectural-photo review separately from production acceptance.
+- [ ] Complete artist production-background/physical-pen acceptance and additional-platform/release-package verification. Automatic three-point/fisheye inference and linked regeneration remain later work.
+
+## Drawing extension — raster Puppet Warp
+
+- [x] Add Pins beside the existing Grid warp, with freely placed anchors, density 4–32, live deformation and retained pin positions when density changes.
+- [x] Add direct Edit access, multi-pin selection/dragging, pin deletion, Show mesh and Reset, using the existing Apply/Cancel and one-step Undo/save flow.
+- [x] Keep original pixels throughout preview and guard locks, unsupported layer types, complex selections, project limits and folded meshes.
+- [x] Retain original raster sources and editable mesh/pin settings after Apply and save/reopen, with independent layers, cancellation, Bake and Undo.
+- [ ] Complete physical-pen, broader production-image and additional platform acceptance. Pin rotation, overlap ordering, silhouette meshes and animated rigs remain separate work.
+
+See [Puppet Warp workflow and limits](puppet-warp.md).
+
+## Drawing extension — line and tone conversion
+
+The local implementation converts selected image/drawing layers into editable raster lines and separate tones. [Controls, algorithms and limits](line-and-tone-conversion.md) describe the implemented scope. Public 0.75 downloads are unchanged.
+
+- [x] Image line extraction with transparent raster output, live comparison and separate cel/grayscale tone layers.
+- [x] Edge-preserving denoising, flow-guided contours and antialiased line widths, with a Background cleanup preset and architectural quality checks.
+- [ ] 3D integration is deferred by the artist while the 3D module is revamped; future rendered snapshots can use the same image conversion path.
+- [x] Raster screentones, original-source preservation, current-drawing output groups and one-step Undo/save/reopen.
+- [ ] Complete physical-tablet, photographic production-reference, large-mesh and additional platform/package acceptance.
+- [ ] Add editable vector lines, retained conversion recipes/presets and more advanced per-object line/shadow styling separately.
 
 ## Product communication — local website update
 

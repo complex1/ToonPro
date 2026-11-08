@@ -73,7 +73,7 @@ private slots:
  }
  void libraryAndCatalogKeepImagesAndRefuseOldVersion(){
     QTemporaryDir dir;auto b=tipSet(true);QString error;BrushLibrary library(dir.filePath("brushes.json"));QVERIFY(library.load());QVERIFY(library.saveCurrent("Painted set",b,4,&error));auto saved=QJsonDocument::fromJson(read(library.path())).object();QCOMPARE(saved["version"].toInt(),5);BrushLibrary reloaded(library.path());QVERIFY(reloaded.load(&error));QCOMPARE(reloaded.presets().last().brush,b);
-    ToolCatalog catalog(&library,dir.filePath("tools.json"));QVERIFY(catalog.load());const auto id=catalog.activeToolId();auto state=catalog.tool(id)->state;state.brush=b;QVERIFY(catalog.updateToolState(id,state));QVERIFY(catalog.save(&error));ToolCatalog next(&library,catalog.path());QVERIFY2(next.load(&error),qPrintable(error));QCOMPARE(next.tool(id)->state.brush,b);QCOMPARE(QJsonDocument::fromJson(read(catalog.path())).object()["version"].toInt(),12);
+    ToolCatalog catalog(&library,dir.filePath("tools.json"));QVERIFY(catalog.load());const auto id=catalog.activeToolId();auto state=catalog.tool(id)->state;state.brush=b;QVERIFY(catalog.updateToolState(id,state));QVERIFY(catalog.save(&error));ToolCatalog next(&library,catalog.path());QVERIFY2(next.load(&error),qPrintable(error));QCOMPARE(next.tool(id)->state.brush,b);QCOMPARE(QJsonDocument::fromJson(read(catalog.path())).object()["version"].toInt(),14);
     saved["version"]=4;QFile file(library.path());QVERIFY(file.open(QIODevice::WriteOnly));file.write(QJsonDocument(saved).toJson());file.close();QVERIFY(!reloaded.load(&error));QVERIFY(error.contains("format 5"));QCOMPARE(reloaded.presets().last().brush,b);
  }
  void missingAtlasAndDeviceScaleAreHandled(){

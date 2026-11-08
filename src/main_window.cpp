@@ -2,6 +2,7 @@
 #include "cel_paint_check_panel.h"
 #include "character_color_panel.h"
 #include "character_recolor_dialog.h"
+#include "inbetween_panel.h"
 #include "cel_shading_panel.h"
 #include "light_table.h"
 #include "auto_actions.h"
@@ -11,7 +12,14 @@
 #include "model_library.h"
 #include "model_library_panel.h"
 #include "scene3d_controller.h"
+#include "feature_flags.h"
+#include "reference3d_review.h"
+#include "reference3d_layer_panel.h"
+#include "reference3d_canvas.h"
+#include "layer_panel.h"
 #include "main_window.h"
+#include "line_art_document.h"
+#include "guide_panel.h"
 #include "symbol_library_panel.h"
 #include "symbol_editor_dialog.h"
 #include "symbols.h"
@@ -209,7 +217,7 @@ MainWindow::MainWindow(const QString &settingsPath, QWidget *parent, bool manage
 
     m_modelLibrary = new ModelLibrary(QFileInfo(path).absolutePath() + "/models3d", this);
     QString modelLibraryError;
-    if(!m_modelLibrary->load(&modelLibraryError)) QTimer::singleShot(0,this,[this,modelLibraryError]{statusBar()->showMessage(modelLibraryError,12000);});
+    if(features::legacy3DEditor && !m_modelLibrary->load(&modelLibraryError)) QTimer::singleShot(0,this,[this,modelLibraryError]{statusBar()->showMessage(modelLibraryError,12000);});
     auto *stack = new QStackedWidget;
     m_canvas = new Canvas;
     m_timeline = new TimelineController(m_canvas, this);
@@ -305,6 +313,7 @@ MainWindow::MainWindow(const QString &settingsPath, QWidget *parent, bool manage
     m_projectActions.append(importAudio);
     connect(importAudio, &QAction::triggered, m_timeline, &TimelineController::importAudio);
     connect(importArtwork, &QAction::triggered, this, [this] {
+        if (!m_canvas->hasProject() || !prepareStudioTransition()) return;
         const auto path = QFileDialog::getOpenFileName(this, "Import artwork image", {}, "Images (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff)");
         if (!path.isEmpty()) importArtworkFile(path);
     });
@@ -338,7 +347,7 @@ MainWindow::MainWindow(const QString &settingsPath, QWidget *parent, bool manage
             redo->setEnabled(m_toolCatalog->history()->canRedo());
             return;
         }
-        const bool preview = m_canvas->scene3D()->editing() || m_canvas->document()->transformActive() || m_canvas->drawingTools()->active() || m_canvas->document()->layerPropertyEditActive();
+        const bool preview = m_canvas->document()->reference3DEditActive() || m_canvas->scene3D()->editing() || m_canvas->document()->transformActive() || m_canvas->drawingTools()->active() || m_canvas->document()->layerPropertyEditActive();
         undo->setEnabled(preview || (m_canvas->document()->keyframeEditActive() || m_canvas->document()->cameraEditActive() || m_canvas->document()->effectsEditActive()) || m_timeline->hasPendingEdits() || history->canUndo());
         redo->setEnabled(!preview && !(m_canvas->document()->keyframeEditActive() || m_canvas->document()->cameraEditActive() || m_canvas->document()->effectsEditActive()) && !m_timeline->hasPendingEdits() && history->canRedo());
     };
@@ -354,6 +363,7 @@ MainWindow::MainWindow(const QString &settingsPath, QWidget *parent, bool manage
     connect(m_timeline, &TimelineController::changed, this, updateHistoryActions);
     connect(undo, &QAction::triggered, this, [this, history, organizationFocused] {
         if (organizationFocused()) { m_toolCatalog->history()->undo(); return; }
+        if(m_canvas->document()->reference3DEditActive()){if(m_referenceLayerPanel)m_referenceLayerPanel->cancelEditing();else m_canvas->reference3D()->finishInteraction(true);return;}
         m_timeline->setPlaying(false);
         if (m_timeline->hasPendingEdits()) { m_timeline->cancelEditing(); return; }
         if ((m_canvas->document()->keyframeEditActive() || m_canvas->document()->cameraEditActive() || m_canvas->document()->effectsEditActive())) { m_timeline->cancelEditing(); return; }
@@ -364,6 +374,7 @@ MainWindow::MainWindow(const QString &settingsPath, QWidget *parent, bool manage
         m_canvas->finishStroke(); history->undo();
     });
     connect(redo, &QAction::triggered, this, [this, history, organizationFocused] {
+        if(m_canvas->document()->reference3DEditActive())return;
         if (organizationFocused()) { m_toolCatalog->history()->redo(); return; }
         m_timeline->setPlaying(false);
         if (m_timeline->hasPendingEdits()) return;
@@ -447,6 +458,15 @@ MainWindow::MainWindow(const QString &settingsPath, QWidget *parent, bool manage
         m_canvas->drawingTools()->beginAdvanced(layers ? layers->selectedLayerIds() : QStringList());
     });
     connect(boundary, &QAction::triggered, this, [this] { m_canvas->drawingTools()->beginAdvanced({}, true); });
+    auto *puppet=new QAction(appIcon("pin"),"Puppet Warp…",this);puppet->setObjectName("puppetWarpAction");edit->addAction(puppet);
+    auto *bakePuppet=new QAction("Bake Puppet Warp",this);bakePuppet->setObjectName("bakePuppetWarpAction");edit->addAction(bakePuppet);
+    connect(bakePuppet,&QAction::triggered,document,&Document::bakePuppetWarp);
+    connect(puppet,&QAction::triggered,this,[this]{
+        QString warpId;for(const auto &tool:m_toolCatalog->tools())if(tool.engine==Canvas::Tool::AdvancedTransform&&tool.variant==1&&m_toolCatalog->toolEnabled(tool.id)){warpId=tool.id;break;}
+        if(warpId.isEmpty()){showActionFeedback("Add the Warp tool from Add Tools to use Puppet Warp.",true);return;}
+        if(!m_toolCatalog->activateTool(warpId))return;
+        m_canvas->drawingTools()->setPuppetMode(true);m_canvas->setFocus();
+    });
     selectMenu->addSeparator();
     auto *fill = selectionAction("Fill selection with foreground", "fillSelectionAction", {});
     auto *clearPixels = selectionAction("Clear selected pixels", "clearSelectedPixelsAction", QKeySequence(Qt::Key_Backspace));
@@ -454,11 +474,12 @@ MainWindow::MainWindow(const QString &settingsPath, QWidget *parent, bool manage
     connect(clearPixels, &QAction::triggered, this, [this, document] {
         if (m_canvas->tool() != Canvas::Tool::Guides) document->clearSelectedPixels();
     });
-    auto updateSelectionActions = [this, document, saveAction, saveAsAction, selectAll, invert, deselect, transform, advanced, boundary, apply, cancel, fill, clearPixels] {
+    auto updateSelectionActions = [this, document, saveAction, saveAsAction, selectAll, invert, deselect, transform, advanced, boundary, apply, cancel, fill, clearPixels,puppet,bakePuppet] {
         const bool idle = document->isOpen() && !document->editingGestureActive();
         selectAll->setEnabled(idle); invert->setEnabled(idle);
         deselect->setEnabled(idle && document->rasterSelection().active);
-        transform->setEnabled(idle); advanced->setEnabled(idle);
+        transform->setEnabled(idle); advanced->setEnabled(idle);puppet->setEnabled(idle);
+        bakePuppet->setEnabled(idle&&document->activeShot().layers[document->activeLayer()].puppetWarp.has_value()&&layerCanEdit(document->activeShot().layers,document->activeLayer())&&!layerPositionLocked(document->activeShot().layers,document->activeLayer()));
         boundary->setEnabled(idle && document->rasterSelection().active && !document->rasterSelection().path.isEmpty());
         const bool transforming = document->transformActive() || m_canvas->drawingTools()->transform()->active();
         apply->setEnabled(transforming); cancel->setEnabled(transforming);
@@ -494,6 +515,29 @@ MainWindow::MainWindow(const QString &settingsPath, QWidget *parent, bool manage
     connect(document, &Document::selectionChanged, this, updateSelectionActions);
     connect(m_canvas, &Canvas::toolChanged, this, updateSelectionActions);
     updateSelectionActions();
+    edit->addSeparator();
+    auto *lineArt=edit->addAction(appIcon("pen-tool"),"Convert to line art…");
+    lineArt->setObjectName("convertToLineArtAction");
+    lineArt->setToolTip("Convert the selected image or drawing to editable line and shade layers");
+    auto refreshLineArt=[document,lineArt]{
+        const bool ready=document->isOpen()&&!document->editingGestureActive()&&!document->layerPropertyEditActive();
+        lineArt->setEnabled(ready&&lineArtSourceReason(document->project(),document->activeShotIndex(),document->activeShot().layers[document->activeLayer()].id,document->currentFrame()).isEmpty());
+    };
+    connect(document,&Document::changed,this,refreshLineArt);
+    connect(document,&Document::selectionChanged,this,refreshLineArt);
+    connect(document,&Document::frameChanged,this,refreshLineArt);
+    connect(document,&Document::transformChanged,this,refreshLineArt);
+    connect(lineArt,&QAction::triggered,this,&MainWindow::convertToLineArt);
+    refreshLineArt();
+    auto *perspective=edit->addAction(appIcon("sparkles"),"Detect perspective…");
+    perspective->setObjectName("detectPerspectiveAction");
+    perspective->setToolTip("Create editable perspective guides from a selected layer or local image");
+    const auto refreshPerspective=[document,perspective]{perspective->setEnabled(document->isOpen()&&!document->editingGestureActive()&&!document->layerPropertyEditActive());};
+    connect(document,&Document::changed,this,refreshPerspective);
+    connect(document,&Document::transformChanged,this,refreshPerspective);
+    connect(document,&Document::selectionChanged,this,refreshPerspective);
+    connect(perspective,&QAction::triggered,this,&MainWindow::detectPerspective);
+    refreshPerspective();
     auto *view = menuBar()->addMenu("&View");
     auto *fit = view->addAction("Fit sheet", QKeySequence("Ctrl+0"));
     fit->setIcon(appIcon("scan"));
@@ -501,6 +545,21 @@ MainWindow::MainWindow(const QString &settingsPath, QWidget *parent, bool manage
     auto *actualSize = view->addAction("Actual size", QKeySequence("Ctrl+1"));
     connect(actualSize, &QAction::triggered, this, [this] { m_canvas->setZoom(1); });
     connect(view->addAction("Reset view rotation"), &QAction::triggered, this, [this] { m_canvas->setRotation(0); m_canvas->fitSheet(); });
+    auto *mirrorCanvas = view->addAction(appIcon("arrow-left-right"), "Mirror canvas view");
+    mirrorCanvas->setObjectName("canvasMirrorAction");
+    mirrorCanvas->setToolTip("Mirror canvas view · display only");
+    mirrorCanvas->setCheckable(true);
+    mirrorCanvas->setShortcut(QKeySequence("Shift+M"));
+    mirrorCanvas->setShortcutContext(Qt::WidgetShortcut);
+    m_canvas->addAction(mirrorCanvas);
+    connect(mirrorCanvas, &QAction::triggered, this, [this, mirrorCanvas](bool enabled) {
+        m_canvas->setCanvasMirrored(enabled);
+        mirrorCanvas->setChecked(m_canvas->canvasMirrored());
+    });
+    connect(m_canvas, &Canvas::canvasMirroredChanged, mirrorCanvas, &QAction::setChecked);
+    const auto refreshMirrorAction = [this, mirrorCanvas] { mirrorCanvas->setEnabled(m_canvas->hasProject()); };
+    connect(m_canvas, &Canvas::documentChanged, this, refreshMirrorAction);
+    refreshMirrorAction();
     m_canvas->setCanvasSmoothing(m_settings->value("view/canvasSmoothing", true).toBool());
     m_canvas->setHoldShapeEnabled(m_settings->value("drawing/holdShape", true).toBool());
     connect(m_canvas, &Canvas::holdShapeEnabledChanged, this, [this](bool enabled) {
@@ -559,6 +618,9 @@ MainWindow::MainWindow(const QString &settingsPath, QWidget *parent, bool manage
     toolbar->addSeparator();
     toolbar->addAction(editAction);
     toolbar->addAction(fit);
+    toolbar->addAction(mirrorCanvas);
+    if (auto *button = qobject_cast<QToolButton *>(toolbar->widgetForAction(mirrorCanvas)))
+        button->setAccessibleName("Mirror canvas view");
     toolbar->addAction(canvasSmoothing);
     if (auto *button = qobject_cast<QToolButton *>(toolbar->widgetForAction(canvasSmoothing))) {
         // AA is a more recognizable label for this view option than a generic icon.
@@ -571,6 +633,13 @@ MainWindow::MainWindow(const QString &settingsPath, QWidget *parent, bool manage
     view->addSeparator();
     view->addAction(m_quickAccess->drawingModeAction());
     view->addAction(m_quickAccess->toggleViewAction());
+    if (features::experimental3D) {
+        auto *review = view->addAction(appIcon("box"), "3D reference…");
+        review->setObjectName("reference3DReviewAction");
+        review->setToolTip("Open body, head, hand, anime and pet references");
+        toolbar->addAction(review);
+        connect(review, &QAction::triggered, this, &MainWindow::showReference3DLayerPanel);
+    }
     connect(m_quickAccess, &QuickAccessToolbar::drawingModeRequested, this, [this] {
         setDrawingMode(!m_drawingMode);
     });
@@ -578,6 +647,9 @@ MainWindow::MainWindow(const QString &settingsPath, QWidget *parent, bool manage
     // are hidden for drawing mode. These are the same actions, not duplicates.
     addActions({newAction, openAction, saveAction, saveAsAction, undo, redo, fit, actualSize, quit});
     createPanels();
+    for(auto *guides:findChildren<GuidePanel*>())connect(guides,&GuidePanel::detectPerspectiveRequested,this,&MainWindow::detectPerspective);
+    for(auto *layers:findChildren<LayerPanel*>())connect(layers,&LayerPanel::detectPerspectiveRequested,this,&MainWindow::detectPerspective);
+    if(auto *layers=findChild<LayerPanel*>())connect(layers,&LayerPanel::reference3DLayerRequested,this,[this](bool create){showReference3DLayerPanel();if(create&&m_referenceLayerPanel)if(auto *add=m_referenceLayerPanel->findChild<QToolButton*>("referenceNewLayer"))add->click();});
     createProductionWorkspace();
     const auto updateToolTitle = [this] {
         auto *properties = findChild<QDockWidget *>("propertiesPanel");
@@ -1033,7 +1105,7 @@ void MainWindow::createPanels() {
             {"layersPanel", "layers"}, {"colorsPanel", "palette"}, {"controlPanel", "scan"},
             {"referencesPanel", "image"}, {"symbolsPanel", "toon-symbol"}, {"effectsPanel", "sparkles"}, {"animationPanel", "clapperboard"},
             {"celPaintCheckPanel", "toon-paint-check"}, {"celShadingPanel", "toon-cel-shading"},
-            {"framePropertiesPanel", "sliders-horizontal"}, {"shotsPanel", "clapperboard"},
+            {"framePropertiesPanel", "sliders-horizontal"}, {"inbetweenPanel", "sparkles"}, {"shotsPanel", "clapperboard"},
             {"historyPanel", "undo-2"}, {"autoActionsPanel", "play"}, {"toolManagementPanel", "settings-2"}, {"brushManagementPanel", "brush"}, {"brushPresetPanel", "circle"}, {"modelLibraryPanel", "box"}};
         panel->setWindowIcon(appIcon(icons.value(id)));
         panel->toggleViewAction()->setIcon(panel->windowIcon());
@@ -1184,6 +1256,12 @@ void MainWindow::createPanels() {
         }
         dock(spec.title, spec.id, content, spec.area);
     }
+    auto *inbetweens = new InbetweenPanel(m_timeline, nullptr, m_settings.get());
+    auto *inbetweenDock = dock("In-betweens", "inbetweenPanel", inbetweens, Qt::RightDockWidgetArea);
+    connect(findChild<TimelinePanel *>(), &TimelinePanel::inbetweensRequested, this, [this,inbetweenDock,inbetweens] {
+        if (!m_timeline->prepareTimelineEdit()) return;
+        inbetweenDock->show(); inbetweenDock->raise(); inbetweens->useSelectedCels();
+    });
     auto *symbols = new SymbolLibraryPanel(m_canvas, m_timeline, m_toolCatalog);
     symbols->setTransitionGuard([this]{return resolveCelWorkflows();});
     auto *symbolDock = dock("Symbols", "symbolsPanel", symbols, Qt::RightDockWidgetArea);
@@ -1212,6 +1290,9 @@ void MainWindow::createPanels() {
         m_timeline->editAnimatedTransform();m_canvas->setFocus(Qt::OtherFocusReason);
     });
     for (auto *layers : findChildren<LayerPanel *>()) {
+        layers->setProperty("lineArtEnabled",true);
+        connect(layers,&LayerPanel::convertToLineArtRequested,this,&MainWindow::convertToLineArt);
+        connect(layers,&LayerPanel::editPuppetWarpRequested,this,[this]{if(auto *action=findChild<QAction*>("puppetWarpAction"))action->trigger();});
         layers->setProperty("symbolsEnabled",true);
         connect(layers,&LayerPanel::convertToSymbolRequested,this,[this,symbols,symbolDock](const QStringList &ids){
             if (!resolveCelWorkflows() || !m_timeline->prepareTimelineEdit()) return;
@@ -1285,8 +1366,10 @@ void MainWindow::createPanels() {
     connect(m_canvas->scene3D(),&Scene3DController::changed,this,updateWorkflowAvailability);
     connect(m_autoActions,&AutoActions::stateChanged,this,updateWorkflowAvailability);
     updateWorkflowAvailability();
-    auto *modelLibrary = dock("3D Library", "modelLibraryPanel", new ModelLibraryPanel(m_modelLibrary,m_canvas->scene3D()), Qt::LeftDockWidgetArea);
-    modelLibrary->setFloating(true);modelLibrary->resize(320,480);
+    if (features::legacy3DEditor) {
+        auto *modelLibrary = dock("3D Library", "modelLibraryPanel", new ModelLibraryPanel(m_modelLibrary,m_canvas->scene3D()), Qt::LeftDockWidgetArea);
+        modelLibrary->setFloating(true);modelLibrary->resize(320,480);
+    }
     auto *shots = new ShotsPanel(m_canvas->document(), [this] { return m_timeline->prepareTimelineEdit(); });
     auto *shotsDock = dock("Shots", "shotsPanel", shots, Qt::LeftDockWidgetArea);
     shotsDock->setFloating(true); shotsDock->resize(420, 540);
@@ -1328,7 +1411,7 @@ void MainWindow::createPanels() {
         if (!visible) m_timeline->setPlaying(false);
         else if (m_canvas->hasProject() && !m_arrangingWorkspace) findChild<QDockWidget *>("framePropertiesPanel")->show();
     });
-    for (const auto *id : {"effectsPanel", "celPaintCheckPanel", "celShadingPanel", "historyPanel", "autoActionsPanel", "framePropertiesPanel"})
+    for (const auto *id : {"effectsPanel", "celPaintCheckPanel", "celShadingPanel", "historyPanel", "autoActionsPanel", "framePropertiesPanel", "inbetweenPanel"})
         tabifyDockWidget(layers, findChild<QDockWidget *>(id));
     resizeDocks({tools, colors}, {220, 264}, Qt::Horizontal);
     resizeDocks({tools, brushPresets, properties}, {318, 228, 250}, Qt::Vertical);
@@ -1841,6 +1924,7 @@ bool MainWindow::resolveCelWorkflows() {
     return true;
 }
 bool MainWindow::save(bool choosePath) {
+    finishReference3DEdits();
     if(choosePath&&!m_studioRoot.isEmpty())return saveStudioCopy();
     if (!resolveCelWorkflows()) return false;
     if (!m_canvas->hasProject()) return false;
@@ -1893,6 +1977,7 @@ bool MainWindow::save(bool choosePath) {
     return exact;
 }
 bool MainWindow::confirmDiscard() {
+    finishReference3DEdits();
     if (!resolveCelWorkflows()) return false;
     m_timeline->setPlaying(false); m_timeline->finishEditing();
     m_canvas->scene3D()->endEdit();
@@ -2019,6 +2104,7 @@ void MainWindow::setManagedDocument(const Project &project,const std::function<b
     enforceManagedBoundary();m_canvas->fitSheet();
 }
 bool MainWindow::prepareManagedLeave(){
+    if(QApplication::mouseButtons()==Qt::NoButton)finishReference3DEdits();
     if(m_canvas->document()->strokeActive())return false;
     if(!resolveCelWorkflows()||!m_timeline->prepareTimelineEdit())return false;
     return canChangeDrawingWorkspace();
@@ -2037,10 +2123,35 @@ void MainWindow::enforceManagedBoundary(){
     if(auto *a=findChild<QAction *>("saveProjectAction")){a->setText("Save document");a->setToolTip("Save document ("+QKeySequence(QKeySequence::Save).toString(QKeySequence::NativeText)+")");}
     refreshDockTabs();
 }
+void MainWindow::finishReference3DEdits(){
+    if(m_referenceLayerPanel)m_referenceLayerPanel->finishEditing();
+    if(m_canvas&&m_canvas->reference3D())m_canvas->reference3D()->finishInteraction();
+}
+void MainWindow::showReference3DLayerPanel(){
+    if(!features::experimental3D)return;
+    if(!m_referenceLayerDock){
+        m_referenceLayerDock=new QDockWidget("3D reference",this);m_referenceLayerDock->setObjectName("reference3DLayerDock");
+        m_referenceLayerPanel=new Reference3DLayerPanel(m_canvas->document(),m_canvas->reference3D(),m_referenceLayerDock);
+        m_referenceLayerDock->setWidget(m_referenceLayerPanel);m_referenceLayerDock->setAllowedAreas(Qt::LeftDockWidgetArea|Qt::RightDockWidgetArea);
+        addDockWidget(Qt::RightDockWidgetArea,m_referenceLayerDock);if(!restoreDockWidget(m_referenceLayerDock))resizeDocks({m_referenceLayerDock},{350},Qt::Horizontal);
+        connect(m_referenceLayerPanel,&Reference3DLayerPanel::drawAboveRequested,this,[this]{m_canvas->setTool(Canvas::Tool::Brush);m_canvas->setFocus();});
+        connect(m_referenceLayerPanel,&Reference3DLayerPanel::warning,m_canvas->document(),&Document::warning);
+        m_panels.append(m_referenceLayerDock);
+    }
+    m_referenceLayerDock->show();m_referenceLayerDock->raise();
+}
+bool MainWindow::closeReferenceWorkspace() {
+    // An inactive managed tab can own a hidden, unsaved reference window.
+    // Ask it to close before its editor is deleted, including hidden windows.
+    for (auto *reference : findChildren<Reference3DReviewWindow *>("reference3DReviewWindow", Qt::FindDirectChildrenOnly))
+        if (!reference->close()) return false;
+    return true;
+}
 void MainWindow::closeEvent(QCloseEvent *event) {
-    if(m_managed){if(!prepareManagedLeave()||!confirmDiscard())event->ignore();else event->accept();return;}
+    if(m_managed){if(!prepareManagedLeave()||!confirmDiscard()||!closeReferenceWorkspace())event->ignore();else event->accept();return;}
     for(auto *study:findChildren<MotionStudyWindow *>())if(study->isVisible()&&!study->close()){event->ignore();return;}
     if (!confirmDiscard()) { event->ignore(); return; }
+    if (!closeReferenceWorkspace()) { event->ignore(); return; }
     m_settings->setValue("geometry", m_drawingMode ? m_normalGeometry : saveGeometry());
     m_toolSession->flush();
     m_settings->setValue("layoutV3", m_drawingMode ? m_normalLayout : m_browsingStudio ? m_editorLayout : saveState(3));

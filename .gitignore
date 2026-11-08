@@ -9,3 +9,8 @@ __pycache__/
 .DS_Store
 /aqtinstall.log
 
+
+# Generated 3D review captures remain local; publish curated website images.
+/test-artifacts/reference3d-review/
+/test-artifacts/reference3d-review-native/
+/test-artifacts/reference3d-review-retina/

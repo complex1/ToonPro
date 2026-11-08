@@ -1,3 +1,4 @@
+#include "feature_flags.h"
 #include "tool_catalog.h"
 #include "standard_brushes.h"
 #include "catalog_brushes.h"
@@ -27,6 +28,12 @@ class ToolCatalogTests : public QObject {
         return file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size();
     }
     static QJsonObject legacyBrushResources(QJsonObject root) {
+        if(root.value("version").toInt()<14){
+            QJsonArray retained;QSet<QString> removed;
+            for(const auto&value:root["tools"].toArray()){auto object=value.toObject();if(object["engine"].toInt()==int(Canvas::Tool::VectorNudge)||(object["engine"].toInt()==int(Canvas::Tool::Guides)&&object["variant"].toInt()==int(GuideType::Ellipse))){removed.insert(object["id"].toString());continue;}auto options=object["options"].toObject();for(const auto*key:{"stabilizationMode","stabilizationDeadZone","stabilizationFinish","nudgeRadius","nudgeStrength"})options.remove(key);object["options"]=options;retained.append(object);}
+            root["tools"]=retained;QJsonArray entries;
+            for(const auto&value:root["entries"].toArray()){auto entry=value.toObject();QJsonArray members;for(const auto&id:entry["tools"].toArray())if(!removed.contains(id.toString()))members.append(id);if(!entry["group"].toBool()&&members.isEmpty())continue;entry["tools"]=members;if(removed.contains(entry["lastToolId"].toString()))entry["lastToolId"]=members.isEmpty()?QString():members.first().toString();entries.append(entry);}root["entries"]=entries;
+        }
         // Historical schema fixtures must not carry newer pressure curves,
         // per-stroke jitter or RGBA tips merely because today's defaults do.
         auto tools = root["tools"].toArray();
@@ -173,6 +180,23 @@ class ToolCatalogTests : public QObject {
         return {};
     }
 private slots:
+    void nudgeAndEllipseMigrateOnceWithoutResettingArtistCatalog(){
+        QTemporaryDir directory;ToolCatalog catalog(nullptr,directory.filePath("tools.json"));QVERIFY(catalog.load());QVERIFY(catalog.renameEntry("group/vector-editing","Line cleanup"));QVERIFY(catalog.activateTool("ellipse"));QVERIFY(catalog.save());
+        auto root=QJsonDocument::fromJson(read(catalog.path())).object();root["version"]=13;root=legacyBrushResources(root);QVERIFY(write(catalog.path(),QJsonDocument(root).toJson()));
+        QVERIFY(catalog.load());QCOMPARE(catalog.activeToolId(),QString("ellipse"));QCOMPARE(catalog.entry("group/vector-editing")->name,QString("Line cleanup"));QVERIFY(catalog.entry("group/vector-editing")->tools.contains("vector-nudge"));QVERIFY(catalog.entry("group/guides")->tools.contains("guide-6"));
+        QVERIFY(catalog.save());auto encoded=QJsonDocument::fromJson(read(catalog.path())).object();QCOMPARE(encoded["version"].toInt(),14);auto downgraded=encoded;downgraded["version"]=13;QVERIFY(write(catalog.path(),QJsonDocument(downgraded).toJson()));QVERIFY(!catalog.load());QVERIFY(write(catalog.path(),QJsonDocument(encoded).toJson()));QVERIFY(catalog.load());
+        auto vectorTools=catalog.entry("group/vector-editing")->tools;vectorTools.removeAll("vector-nudge");QVERIFY(catalog.setEntryTools("group/vector-editing",vectorTools));auto guides=catalog.entry("group/guides")->tools;guides.removeAll("guide-6");QVERIFY(catalog.setEntryTools("group/guides",guides));QVERIFY(catalog.save());QVERIFY(catalog.load());QVERIFY(!catalog.entry("group/vector-editing")->tools.contains("vector-nudge"));QVERIFY(!catalog.entry("group/guides")->tools.contains("guide-6"));QCOMPARE(catalog.activeToolId(),QString("ellipse"));
+    }
+    void fillAndEraseOptionsRejectInvalidValuesWithoutChangingStoredState(){
+        QTemporaryDir directory;BrushLibrary library(directory.filePath("brushes.json"));QVERIFY(library.load());ToolCatalog catalog(&library,directory.filePath("tools.json"));QVERIFY(catalog.load());
+        const auto id=catalog.activeToolId();auto state=catalog.tool(id)->state;
+        state.options["fillExpansion"]=-20;state.options["encloseFill"]=true;state.options["vectorEraseMode"]=2;state.options["artistCustomOption"]="retained";QVERIFY(catalog.updateToolState(id,state));
+        const auto accepted=catalog.tool(id)->state;
+        for(const auto &bad:QVector<QPair<QString,QJsonValue>>{{"fillExpansion",-21},{"fillExpansion",21},{"fillExpansion",1.5},{"fillExpansion","2"},{"encloseFill",1},{"vectorEraseMode",-1},{"vectorEraseMode",3},{"vectorEraseMode",.5},{"nudgeRadius",0},{"nudgeStrength",2},{"stabilizationMode",2},{"stabilizationDeadZone",-1},{"stabilizationFinish",1}}){
+            auto invalid=accepted;invalid.options[bad.first]=bad.second;QVERIFY(!catalog.updateToolState(id,invalid));QCOMPARE(catalog.tool(id)->state,accepted);
+        }
+        QVERIFY(catalog.save());ToolCatalog reopened(&library,catalog.path());QVERIFY(reopened.load());QCOMPARE(reopened.tool(id)->state,accepted);
+    }
     void semanticDefaultsUpgradeWithoutChangingCustomArtworkOrToolIdentity() {
         QTemporaryDir dir; ToolCatalog catalog(nullptr, dir.filePath("tools.json")); QVERIFY(catalog.load());
         QCOMPARE(catalog.tool("arc")->icon, featureIconName(FeatureIcon::Arc));
@@ -603,7 +627,7 @@ private slots:
         QCOMPARE(catalog.tool("brush/builtin/ink")->tags, (QStringList{"Line art", "Favorite"}));
         QString error; QVERIFY2(catalog.save(&error), qPrintable(error));
         auto root = QJsonDocument::fromJson(read(path)).object();
-        QCOMPARE(root.value("version").toInt(), 12); QCOMPARE(root.value("resources").toObject().size(), initialResources+1);
+        QCOMPARE(root.value("version").toInt(), 14); QCOMPARE(root.value("resources").toObject().size(), initialResources+1);
         ToolCatalog restored(&library, path); QVERIFY2(restored.load(&error), qPrintable(error));
         QCOMPARE(restored.tool(copy)->tags, QStringList{"Independent"});
         QCOMPARE(restored.tool(copy)->color, QColor("#ce5939"));
@@ -633,7 +657,7 @@ private slots:
         QVERIFY(catalog.tool("ellipse")->tags.isEmpty()); QVERIFY(!catalog.tool("ellipse")->color.isValid());
         QVERIFY(catalog.setToolTags({"ellipse"}, {"Keep"})); QVERIFY(catalog.save());
         root = QJsonDocument::fromJson(read(path)).object();
-        QCOMPARE(root.value("version").toInt(), 10);
+        QCOMPARE(root.value("version").toInt(), 14);
         for (int variant = 0; variant < 8; ++variant) {
             auto broken = root;
             auto tools = broken["tools"].toArray(); auto tool = tools[0].toObject();
@@ -656,6 +680,7 @@ private slots:
     }
 
     void schemaFourAddsRigToCustomizedSceneGroupOnce() {
+        if (!features::legacy3DEditor) QSKIP("Legacy 3D authoring is retired; compatibility coverage remains enabled.");
         QTemporaryDir dir;
         BrushLibrary library(dir.filePath("brushes.json")); QVERIFY(library.load());
         const auto path = dir.filePath("tools.json");
@@ -689,7 +714,7 @@ private slots:
         QCOMPARE(catalog.tool("scene-camera")->color, QColor("#3d91f0"));
         QCOMPARE(catalog.history()->count(), 0);
         const auto count = catalog.tools().size(); QVERIFY(catalog.save());
-        QCOMPARE(QJsonDocument::fromJson(read(path)).object()["version"].toInt(), 10);
+        QCOMPARE(QJsonDocument::fromJson(read(path)).object()["version"].toInt(), 14);
         QVERIFY2(catalog.load(&error), qPrintable(error)); QCOMPARE(catalog.tools().size(), count);
         QCOMPARE(catalog.entry("group/my-room")->tools.count("scene-rig"), 1);
         // Removing the new placement remains a deliberate customization on the
@@ -738,7 +763,11 @@ private slots:
         QCOMPARE(catalog.activeToolId(), root["activeToolId"].toString());
         QCOMPARE(catalog.selectedEntryId(), root["selectedEntryId"].toString());
         QCOMPARE(bool(catalog.tool("scene-rig")), expectRig);
-        QCOMPARE(catalog.tools().size(), tools.size() + (expectRig ? 1 : 0));
+        const int expectedDrawingAdditions=qMin(2,ToolCatalog::maxTools-int(tools.size())-(expectRig?1:0));
+        const auto expectedTools=tools.size()+(expectRig?1:0)+expectedDrawingAdditions;
+        QCOMPARE(catalog.tools().size(),expectedTools);QVERIFY(catalog.tools().size()<=ToolCatalog::maxTools);
+        QCOMPARE(catalog.entry("group/vector-editing")->tools.contains("vector-nudge"),expectedDrawingAdditions>=1);
+        QCOMPARE(catalog.entry("group/guides")->tools.contains("guide-6"),expectedDrawingAdditions>=2);
         QCOMPARE(catalog.entries().size(), entries.size() + (expectRig && !sceneGroup ? 1 : 0));
         if (expectRig && sceneGroup) QVERIFY(catalog.entry("group/scene3d")->tools.contains("scene-rig"));
         if (!sceneGroup) {
@@ -746,7 +775,7 @@ private slots:
             QCOMPARE(catalog.entry("group/scene3d")->tools, QStringList{"hand"});
         }
         QVERIFY(catalog.save()); QVERIFY2(catalog.load(&error), qPrintable(error));
-        QCOMPARE(catalog.tools().size(), tools.size() + (expectRig ? 1 : 0));
+        QCOMPARE(catalog.tools().size(),expectedTools);
     }
 
     void rejectsOversizedGroupIconsAndColorBrushResources() {
@@ -1356,13 +1385,13 @@ private slots:
     void extendedDynamicsPersistAndRequireVersionSeven() {
         QTemporaryDir dir; BrushLibrary library(dir.filePath("brushes.json"));QVERIFY(library.load());
         ToolCatalog catalog(nullptr,dir.filePath("tools.json"));QVERIFY(catalog.load());QVERIFY(catalog.save());
-        QCOMPARE(QJsonDocument::fromJson(read(catalog.path())).object()["version"].toInt(),10);
+        QCOMPARE(QJsonDocument::fromJson(read(catalog.path())).object()["version"].toInt(),14);
         const auto id=catalog.activeToolId();auto state=catalog.tool(id)->state;
         state.brush.sizeDynamics.control=BrushControl::Pressure;state.brush.sizeDynamics.response={0,.1,.2,.5,1};
         state.brush.angleDynamics.control=BrushControl::Rotation;state.brush.angleDynamics.jitterPerStroke=true;
         state.brush.lockRandomSeed=true;state.brush.randomSeed=0xffffffffu;
         QVERIFY(catalog.updateToolState(id,state));QVERIFY(catalog.save());
-        auto root=QJsonDocument::fromJson(read(catalog.path())).object();QCOMPARE(root["version"].toInt(),10);
+        auto root=QJsonDocument::fromJson(read(catalog.path())).object();QCOMPARE(root["version"].toInt(),14);
         ToolCatalog restored(nullptr,catalog.path());QString error;QVERIFY2(restored.load(&error),qPrintable(error));
         QCOMPARE(restored.tool(id)->state,state);
         root["version"]=6;const auto invalid=QJsonDocument(root).toJson();QVERIFY(write(catalog.path(),invalid));

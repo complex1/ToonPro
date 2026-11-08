@@ -15,6 +15,11 @@ public:
     bool active() const { return !m_document.isNull(); }
     bool selectionOnly() const { return m_selectionOnly; }
     bool warped() const { return !m_nodes.isEmpty(); }
+    bool modified() const;
+    bool puppet() const { return m_puppet; }
+    const PuppetMesh &puppetMesh() const { return m_puppetMesh; }
+    const QVector<PuppetPin> &pins() const { return m_pins; }
+    int puppetDensity() const { return m_puppetDensity; }
     QRectF bounds() const { return m_bounds; }
     QTransform matrix() const { return m_matrix; }
     QPolygonF quad() const;
@@ -24,6 +29,13 @@ public:
     bool setMatrix(const QTransform &matrix);
     bool setQuad(const QPolygonF &corners);
     bool setWarp(const QVector<QPointF> &nodes);
+    bool beginPuppet(int density=16);
+    bool setPuppetDensity(int density);
+    int addPuppetPin(QPointF position);
+    bool setPuppetTargets(const QVector<QPointF> &targets);
+    bool removePuppetPin(int index);
+    bool removePuppetPins(const QVector<int> &indices);
+    bool resetPuppet();
     bool flip(bool horizontal);
     bool skew(qreal horizontal, qreal vertical);
     bool apply();
@@ -34,6 +46,7 @@ private:
     bool fail(const QString &message) const;
     bool validatePlacement(const QTransform &matrix, const QVector<QPointF> &nodes) const;
     void refreshPreview();
+    bool updatePuppet(const QVector<PuppetPin> &pins,int density);
     QPointer<Document> m_document;
     QMetaObject::Connection m_documentConnection;
     Project m_before;
@@ -43,6 +56,14 @@ private:
     QRectF m_bounds;
     QTransform m_matrix;
     QVector<QPointF> m_nodes;
+    PuppetMesh m_puppetMesh;
+    QVector<PuppetPin> m_pins;
+    int m_puppetDensity=16;
+    bool m_puppet=false;
+    bool m_reopenedPuppet=false;
+    QVector<PuppetPin> m_initialPuppetPins;
+    int m_initialPuppetDensity=16;
+    RasterLayerPreview m_puppetPreviewSource;
     bool m_selectionOnly = false;
 };
 // Render only a preview's moving pixels. Caller handles layer compositing and

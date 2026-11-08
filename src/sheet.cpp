@@ -6,6 +6,7 @@
 #include <QFontMetricsF>
 #include <QSaveFile>
 #include <cmath>
+#include <algorithm>
 
 namespace toon {
 namespace {
@@ -78,8 +79,12 @@ void paintSheetArtwork(QPainter &painter, const Project &p, const Shot &shot, co
     // that a camera pan brings into view.
     const auto visible = g.paper.adjusted(0, g.header.height(), 0, 0).translated(-g.output.topLeft());
     const auto sourceBounds = camera.inverted().mapRect(visible).adjusted(-2, -2, 2, 2);
-    paintLayers(painter, evaluateLayers(p, shot, frame, false, sourceBounds), true, preview,
-        smoothDisplay, sceneReferences ? QSize(p.width,p.height) : QSize());
+    auto layers=evaluateLayers(p,shot,frame,false,sourceBounds);
+    const bool nativeReferences=std::any_of(layers.cbegin(),layers.cend(),[](const auto &layer){return layer.reference3d.has_value();});
+    // The legacy sceneReferences switch excludes only the retired scene view.
+    // Native editable references are ordinary artwork layers in exports too.
+    if(!sceneReferences&&nativeReferences)for(auto &layer:layers)if(layer.scene3d)layer.visible=false;
+    paintLayers(painter,layers,true,preview,smoothDisplay,(sceneReferences||nativeReferences)?QSize(p.width,p.height):QSize());
     painter.restore();
     if (guides && shot.sheet.showGuides) {
         painter.setPen(QPen(QColor("#bdc8d6"), 1, Qt::DashLine));
@@ -131,12 +136,13 @@ QImage renderMovieFrame(const Project &p, int frame, int shotIndex) {
     const auto &shot=p.shots[shotIndex]; QString error;
     const auto camera = shotCameraTransform(shot, frame, QSizeF(p.width, p.height));
     const auto sourceBounds = camera.inverted().mapRect(QRectF(0, 0, p.width, p.height)).adjusted(-2, -2, 2, 2);
-    const auto layers=evaluateLayers(p,shot,frame,false,sourceBounds,&error);
+    auto layers=evaluateLayers(p,shot,frame,false,sourceBounds,&error);
     if(!error.isEmpty())return {};
+    for(auto &layer:layers)if(layer.scene3d)layer.visible=false;
     // Animated fractional transforms need filtered sampling in final artwork,
     // independently of the editor's canvas display preference.
     painter.setWorldTransform(camera, true);
-    paintLayers(painter, layers, false, nullptr, !shot.layerAnimations.isEmpty() || !camera.isIdentity());
+    paintLayers(painter,layers,false,nullptr,!shot.layerAnimations.isEmpty()||!camera.isIdentity(),{p.width,p.height});
     if (!keyframeRenderError().isEmpty()) return {};
     return image;
 }

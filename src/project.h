@@ -19,7 +19,7 @@
 
 namespace toon {
 
-inline constexpr int latestProjectFormatVersion = 39;
+inline constexpr int latestProjectFormatVersion = 43;
 inline constexpr int maxProjectSymbols = 128;
 inline constexpr int maxSymbolNestingDepth = 4;
 inline constexpr int maxProjectShots = 10000;
@@ -162,6 +162,7 @@ private:
     bool m_sceneResourcesLoaded = true;
     bool m_audioResourcesLoaded = true;
     bool m_maskResourcesLoaded = true;
+    bool m_puppetResourcesLoaded = true;
     friend std::optional<Project> loadProject(const QString &path, QString *error);
 };
 

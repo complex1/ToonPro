@@ -1,4 +1,5 @@
 #include "camera_panel.h"
+#include "feature_flags.h"
 #include "camera_animation.h"
 #include "canvas.h"
 #include "document.h"
@@ -79,7 +80,9 @@ CameraPanel::CameraPanel(TimelineController *controller, QWidget *parent) : QWid
     m_mode = new QTabBar; m_mode->setObjectName("cameraMode"); m_mode->setExpanding(true); m_mode->setDrawBase(false);
     m_mode->setProperty("compactDrawingTabs",true); m_mode->setIconSize({ui::metrics::tabIcon,ui::metrics::tabIcon}); m_mode->setFocusPolicy(Qt::StrongFocus);
     m_mode->setAccessibleName("Camera type");
-    m_mode->addTab(appIcon("rectangle-horizontal"),"2D"); m_mode->addTab(appIcon("box"),"3D");
+    m_mode->addTab(appIcon("rectangle-horizontal"),"2D");
+    if (features::legacy3DEditor) m_mode->addTab(appIcon("box"),"3D");
+    m_mode->setVisible(features::legacy3DEditor);
     m_mode->setTabToolTip(0,"Shot camera: pan, zoom and rotate the artwork frame"); m_mode->setTabToolTip(1,"Animate a 3D reference camera");
     m_mode->setAccessibleTabName(0,"2D shot camera"); m_mode->setAccessibleTabName(1,"3D reference camera"); layout->addWidget(m_mode);
     m_context = new CameraContext; m_context->setObjectName("cameraTargetName"); m_context->setMinimumHeight(24); m_context->setSizePolicy(QSizePolicy::Ignored,QSizePolicy::Fixed); layout->addWidget(m_context);
@@ -143,6 +146,7 @@ CameraPanel::CameraPanel(TimelineController *controller, QWidget *parent) : QWid
 }
 
 QString CameraPanel::preferredScene() const {
+    if (!features::legacy3DEditor) return {};
     const auto *shot = currentShot(m_controller); if (!shot) return {};
     for (const auto &id : {m_controller->selectedCameraLayerId(),m_controller->selectedPropertyLayerId(),m_controller->canvas()->scene3D()->layerId(),m_layerId})
         if (sceneLayer(shot,id)) return id;
@@ -157,7 +161,7 @@ bool CameraPanel::selectTarget() {
 }
 void CameraPanel::activate() { selectTarget(); refresh(); }
 void CameraPanel::changeMode(int mode) {
-    if (m_refreshing) return;
+    if (m_refreshing || (!features::legacy3DEditor && mode != 0)) return;
     {const QSignalBlocker block(m_mode);m_mode->setCurrentIndex(m_displayedMode);}
     commitEditors();
     {const QSignalBlocker block(m_mode);m_mode->setCurrentIndex(mode);}m_displayedMode=mode;
@@ -173,7 +177,8 @@ QVector<int> CameraPanel::keyFrames() const {
 void CameraPanel::refresh() {
     if (m_refreshing) return; const QScopedValueRollback<bool> guard(m_refreshing,true);
     const auto *shot = currentShot(m_controller);
-    if (m_controller->cameraSelected()) {
+    if (!features::legacy3DEditor) { m_layerId.clear(); m_mode->setCurrentIndex(0); }
+    else if (m_controller->cameraSelected()) {
         m_layerId = m_controller->selectedCameraLayerId(); m_mode->setCurrentIndex(m_layerId.isEmpty()?0:1);
     } else if (m_mode->currentIndex() == 1 && !sceneLayer(shot,m_layerId)) m_layerId = preferredScene();
     m_displayedMode=m_mode->currentIndex();

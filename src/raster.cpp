@@ -1,4 +1,5 @@
 #include "scene3d_cache.h"
+#include "reference3d_render.h"
 #include "raster.h"
 #include "advanced_transform.h"
 #include "effect_render.h"
@@ -255,6 +256,10 @@ public:
             m_children[layer.parentId].append(i);
             if(layer.scene3d && layer.scene3d->visible && !sceneFrameSize.isEmpty())
                 m_sceneImages.insert(layer.id,scene3DLayerPreview(layer.id,*layer.scene3d,sceneFrameSize));
+            if(layer.reference3d && layer.visible && !sceneFrameSize.isEmpty()){
+                QString error;m_sceneImages.insert(layer.id,referenceLayerPreview(layer.id,*layer.reference3d,sceneFrameSize,&error));
+                reportLayerRenderError(error);
+            }
             signature << layer.id << layer.parentId << layer.group << layer.visible << layer.annotation
                       << layer.clipped << double(layer.opacity) << qint32(layer.blendMode)
                       << m_sceneImages.value(layer.id).cacheKey() << sceneFrameSize
@@ -312,15 +317,15 @@ public:
     }
 private:
     QImage sourceTile(const RasterLayer &layer,const TileKey &key) const {
-        if(!layer.scene3d)return layer.tiles.value(key);
+        if(!layer.scene3d&&!layer.reference3d)return layer.tiles.value(key);
         const auto source=m_sceneImages.value(layer.id);if(source.isNull())return {};
         const QRect area(key.first*tileSize,key.second*tileSize,tileSize,tileSize);
         if(!area.intersects(QRect(QPoint(),m_sceneFrameSize)))return {};
         QByteArray signature("scene-source-tile-v1");QDataStream data(&signature,QIODevice::Append);
-        data<<source.cacheKey()<<m_sceneFrameSize<<key.first<<key.second<<double(layer.scene3d->opacity);
+        data<<source.cacheKey()<<m_sceneFrameSize<<key.first<<key.second<<double(layer.scene3d?layer.scene3d->opacity:1);
         auto &cache=compositeCache();if(auto *found=cache.object(signature))return *found;
         QImage tile(tileSize,tileSize,QImage::Format_ARGB32_Premultiplied);tile.fill(Qt::transparent);
-        {QPainter painter(&tile);painter.translate(-area.topLeft());painter.setOpacity(layer.scene3d->opacity);
+        {QPainter painter(&tile);painter.translate(-area.topLeft());painter.setOpacity(layer.scene3d?layer.scene3d->opacity:1);
          painter.setRenderHint(QPainter::SmoothPixmapTransform,true);
          painter.drawImage(QRectF(QPointF(),QSizeF(m_sceneFrameSize)),source);}
         cache.insert(signature,new QImage(tile),int(tile.sizeInBytes()+signature.size()+128));return tile;
@@ -400,8 +405,11 @@ private:
             const auto sampledArea = m_smoothDisplay ? area.adjusted(-1, -1, 1, 1) : area;
             if (artworkToDevice.mapRect(sampledArea).intersects(m_viewport)) visible.append(tile.key());
         }
-        const auto sceneImage = layer.scene3d && layer.scene3d->visible && !m_sceneFrameSize.isEmpty()
-            ? scene3DLayerPreview(layer.id,*layer.scene3d,m_sceneFrameSize) : QImage();
+        QString referenceError;
+        const auto sceneImage = layer.reference3d&&!m_sceneFrameSize.isEmpty()
+            ?referenceLayerPreview(layer.id,*layer.reference3d,m_sceneFrameSize,&referenceError)
+            :layer.scene3d&&layer.scene3d->visible&&!m_sceneFrameSize.isEmpty()?scene3DLayerPreview(layer.id,*layer.scene3d,m_sceneFrameSize):QImage();
+        reportLayerRenderError(referenceError);
         if (visible.isEmpty() && sceneImage.isNull()) return;
         if (image.isNull()) image = blank();
         QPainter painter(&image);
@@ -412,7 +420,7 @@ private:
         if (m_hasClip) painter.setClipPath(m_clip);
         painter.setTransform(transform, true);
         if (!sceneImage.isNull()) {
-            painter.setOpacity(layer.scene3d->opacity);
+            painter.setOpacity(layer.scene3d?layer.scene3d->opacity:1);
             painter.setRenderHint(QPainter::SmoothPixmapTransform,m_smoothDisplay);
             painter.drawImage(QRectF(QPointF(),QSizeF(m_sceneFrameSize)),sceneImage);
         } else if(m_smoothDisplay&&m_preciseTranslation) {
@@ -463,6 +471,14 @@ QImage renderLayerThumbnail(const RasterLayer &layer, QRectF artworkBounds, QSiz
     if (layer.group || size.isEmpty() || size.width() > 512 || size.height() > 512 || artworkBounds.isEmpty()
         || !std::isfinite(artworkBounds.x()) || !std::isfinite(artworkBounds.y())
         || !std::isfinite(artworkBounds.width()) || !std::isfinite(artworkBounds.height())) return {};
+    if(layer.reference3d){
+        auto sample=artworkBounds.size().toSize();if(sample.width()>256||sample.height()>256)sample.scale({256,256},Qt::KeepAspectRatio);
+        const auto source=renderReferenceLayer(*layer.reference3d,sample.expandedTo({1,1}));
+        if(source.isNull())return {};
+        QImage result(size,QImage::Format_ARGB32_Premultiplied);result.fill(Qt::transparent);
+        const auto fitted=source.scaled(size,Qt::KeepAspectRatio,Qt::SmoothTransformation);
+        QPainter painter(&result);painter.drawImage(QPoint((size.width()-fitted.width())/2,(size.height()-fitted.height())/2),fitted);return result;
+    }
     thread_local QCache<QByteArray, QImage> thumbnails(8 * 1024 * 1024);
     thread_local QCache<qint64, QRect> tileExtents(2048);
     QByteArray key; QDataStream stream(&key, QIODevice::WriteOnly);
@@ -534,6 +550,7 @@ void paintLayers(QPainter &p, const QVector<RasterLayer> &layers, bool annotatio
         const auto unchanged = [](const RasterLayerPreview &candidate) {
             if (!candidate.sourceUnchangedAtIdentity || !candidate.transform.isIdentity()) return false;
             if (candidate.warpNodes.isEmpty()) return true;
+            if (!candidate.warpSourceNodes.isEmpty()) return candidate.warpNodes == candidate.warpSourceNodes;
             if (candidate.warpNodes.size() != 9) return false;
             for (int y = 0; y < 3; ++y) for (int x = 0; x < 3; ++x)
                 if (candidate.warpNodes[y * 3 + x] != candidate.warpBounds.topLeft()
@@ -589,7 +606,7 @@ void paintLayers(QPainter &p, const QVector<RasterLayer> &layers, bool annotatio
     for (const auto &layer : layers) {
         if (layer.group || !layer.visible || (!annotations && layer.annotation)) continue;
         for (auto tile = layer.tiles.cbegin(); tile != layer.tiles.cend(); ++tile) keys.insert(tile.key());
-        if(layer.scene3d && layer.scene3d->visible && !sceneFrameSize.isEmpty())
+        if(((layer.scene3d&&layer.scene3d->visible)||layer.reference3d)&&!sceneFrameSize.isEmpty())
             for(int y=0;y<(sceneFrameSize.height()+tileSize-1)/tileSize;++y)
                 for(int x=0;x<(sceneFrameSize.width()+tileSize-1)/tileSize;++x)keys.insert({x,y});
     }

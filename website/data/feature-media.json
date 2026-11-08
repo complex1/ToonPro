@@ -1,0 +1,208 @@
+{
+  "schemaVersion": 1,
+  "scope": "Fresh screenshots of the local Toon Pro 0.76 build. A chapter image is shared by its feature entries; context images do not claim to show every feature's individual controls.",
+  "chapters": {
+    "product-and-status": {
+      "slug": "drawing-workspace",
+      "label": "Workspace context: the native drawing editor with a synthetic sample drawing."
+    },
+    "local-setup": {
+      "slug": "projects-home",
+      "label": "Startup context: Projects after launching the app. The cover illustration is imported sample artwork."
+    },
+    "first-drawing": {
+      "slug": "drawing-setup",
+      "label": "Canvas setup: size presets, exact dimensions, background and live preview before creating a drawing."
+    },
+    "projects-and-assets": {
+      "slug": "assets-gallery",
+      "label": "Project Assets: folders, tags and an image inspector. The illustration was imported, not created in Toon Pro."
+    },
+    "workspace-and-navigation": {
+      "slug": "editor-tabs",
+      "label": "Workspace context: independent document tabs and a rotated working view in a synthetic fixture."
+    },
+    "brush-basics": {
+      "slug": "drawing-workspace",
+      "label": "Workspace context: brush previews and quick Size, Opacity, Flow, Hardness and Smoothing controls."
+    },
+    "brush-dynamics": {
+      "slug": "brush-dynamics",
+      "label": "Related brush controls: Shape dynamics with a pen-pressure response graph and curve presets."
+    },
+    "brush-library": {
+      "slug": "drawing-workspace",
+      "label": "Workspace context: Tools lists named brush presets and proportional previews beside the canvas."
+    },
+    "stamp-brushes": {
+      "slug": "brush-settings",
+      "label": "Related brush controls: General settings. Stamp-specific creation and placement steps are described in the guide."
+    },
+    "connected-brushes-and-tones": {
+      "slug": "brush-settings",
+      "label": "Related brush controls: the advanced settings dialog. Connected modes and surface patterns use their own categories."
+    },
+    "stabilization-and-shapes": {
+      "slug": "drawing-workspace",
+      "label": "Workspace context: direct Smooth/Strong tabs, Smoothing strength and the hold-to-shape action in Properties."
+    },
+    "colors-and-gradients": {
+      "slug": "drawing-workspace",
+      "label": "Workspace context: the inline Colors picker and saved swatches are visible at the upper right."
+    },
+    "vector-drawing": {
+      "slug": "vector",
+      "label": "Related vector controls: Path Edit with a source path selected and width, opacity and color settings."
+    },
+    "fills-and-reference-layers": {
+      "slug": "fill-reference",
+      "label": "Fill controls: marked reference boundaries, Point/Enclose modes, tolerance, gap closing and expansion."
+    },
+    "selections-and-clipboard": {
+      "slug": "selection",
+      "label": "Related selection controls: selection modes and inspector settings used by constrained artwork edits."
+    },
+    "transforms": {
+      "slug": "puppet-warp",
+      "label": "Related transform example: the pin-based Puppet Warp preview. Other transform modes are documented in the guide."
+    },
+    "puppet-warp": {
+      "slug": "puppet-warp",
+      "label": "Puppet Warp: a synthetic raster fixture with a visible mesh, editable pins, density and Apply/Cancel."
+    },
+    "layers-and-compositing": {
+      "slug": "layers",
+      "label": "Related layer controls: blend mode, opacity, locks, visibility, folders and layer actions."
+    },
+    "masks-and-effects": {
+      "slug": "layer-outline",
+      "label": "Related Effects controls: the live Outline category. Mask, Blur, Shadow, Glow and Color have separate tabs."
+    },
+    "perspective-guides": {
+      "slug": "guides",
+      "label": "Guide inspector: multiple assistants with independent visibility, handle locks, snapping and density."
+    },
+    "perspective-detection": {
+      "slug": "perspective-detection",
+      "label": "Perspective detection: review a synthetic one-point source, detected directions and an editable guide proposal."
+    },
+    "line-and-tone-conversion": {
+      "slug": "line-conversion",
+      "label": "Line conversion: raster cel-shading preview from an imported illustration. The source artwork was not created in Toon Pro."
+    },
+    "references-and-model-sheets": {
+      "slug": "drawing-workspace",
+      "label": "Workspace context: References is available beside Colors and Navigator; model-sheet workflows are described in the guide."
+    },
+    "character-color-models": {
+      "slug": "drawing-workspace",
+      "label": "Workspace context for character reference work. The visible global Colors picker is separate from character-role palettes."
+    },
+    "cel-paint-and-shading": {
+      "slug": "drawing-workspace",
+      "label": "Workspace context: separate ink and color layers in a synthetic drawing used to explain paint and shading workflows."
+    },
+    "light-table": {
+      "slug": "drawing-workspace",
+      "label": "Workspace context for tracing and reference work. Light Table snapshot controls are documented in the guide."
+    },
+    "reference-3d": {
+      "slug": "reference-3d",
+      "label": "Native 3D reference layer: Seed-san and a dog in the drawing canvas, with the model library and Draw above action."
+    },
+    "save-recovery-and-backup": {
+      "slug": "editor-tabs",
+      "label": "Document context: independent editor tabs, whose artwork saves and recovery revisions are managed separately."
+    },
+    "history-and-auto-actions": {
+      "slug": "editor-tabs",
+      "label": "Workspace context: independent drawing tabs. History and Auto Actions are separate optional docks."
+    },
+    "frame-by-frame-animation": {
+      "slug": "animation-workspace",
+      "label": "Animation context: a single-shot document with its drawing track, timeline and current drawing layer."
+    },
+    "keyframes-and-cameras": {
+      "slug": "animation-workspace",
+      "label": "Timeline context for shot animation. Property, effect and camera controls are explained in the guide."
+    },
+    "symbols-and-lip-sync": {
+      "slug": "animation-workspace",
+      "label": "Timeline context for reusable drawings and timed poses. The screenshot shows a basic drawing track."
+    },
+    "audio-and-export": {
+      "slug": "animation-workspace",
+      "label": "Shot-editor context for sound and output workflows. Audio and export dialogs are described in the guide."
+    },
+    "inbetweens": {
+      "slug": "animation-workspace",
+      "label": "Timeline context: the in-betweens action belongs to drawing-cel workflows and requires an optional local runtime."
+    },
+    "shortcuts-and-troubleshooting": {
+      "slug": "drawing-workspace",
+      "label": "Workspace context: tools, property controls and the status bar used to diagnose canvas restrictions."
+    }
+  },
+  "gallery": [
+    {
+      "slug": "drawing-workspace",
+      "title": "A workspace built around the drawing",
+      "description": "Tools, brush properties, Colors and Layers stay near a real canvas. The drawing is a synthetic UI fixture.",
+      "category": "Drawing"
+    },
+    {
+      "slug": "brush-dynamics",
+      "title": "Put pressure on your own terms",
+      "description": "Actual Shape dynamics controls with a pen-pressure response graph. This related panel illustrates native brush tuning.",
+      "category": "Drawing"
+    },
+    {
+      "slug": "vector",
+      "title": "Keep the line editable",
+      "description": "Path Edit shows a selected vector source with width, color and opacity controls. This is an inspector capture.",
+      "category": "Drawing"
+    },
+    {
+      "slug": "puppet-warp",
+      "title": "Pin it. Bend it. Keep the source.",
+      "description": "A raster test fixture deformed by editable Puppet Warp pins, with mesh density and explicit Apply/Cancel.",
+      "category": "Drawing"
+    },
+    {
+      "slug": "reference-3d",
+      "title": "Find another angle",
+      "description": "Editable Seed-san and dog models in a native 3D reference layer, ready for the Draw above workflow.",
+      "category": "References"
+    },
+    {
+      "slug": "perspective-detection",
+      "title": "Review the vanishing point",
+      "description": "A synthetic source supplies straight-edge evidence for a local, editable perspective proposal before Add guides.",
+      "category": "Drawing"
+    },
+    {
+      "slug": "fill-reference",
+      "title": "Let the ink set the boundaries",
+      "description": "The real Fill inspector shows marked reference sampling, Point/Enclose, gap closing and signed expansion.",
+      "category": "Drawing"
+    },
+    {
+      "slug": "line-conversion",
+      "title": "An image, a different line of thought",
+      "description": "Line and cel-shading conversion preview from imported sample artwork. The source illustration was not created in Toon Pro.",
+      "category": "Drawing"
+    },
+    {
+      "slug": "assets-gallery",
+      "title": "Keep your materials together",
+      "description": "The project-owned Assets view with filters, tags and an image inspector. The illustrated reference was imported.",
+      "category": "Start here"
+    },
+    {
+      "slug": "animation-workspace",
+      "title": "When a drawing needs a little time",
+      "description": "An independent single-shot animation document with an existing drawing track and timeline; sample state from a real UI test.",
+      "category": "Animation"
+    }
+  ]
+}

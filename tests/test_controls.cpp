@@ -161,14 +161,20 @@ private slots:
         auto *control = new ValueSlider("Opacity", 0, 100, 50); rows->addWidget(control); rows->addStretch();
         body->setMinimumHeight(800); scroll->setWidget(body);
         host.resize(300, 240); host.show(); QVERIFY(QTest::qWaitForWindowExposed(&host));
-        host.activateWindow(); search->setFocus(); QTRY_VERIFY(search->hasFocus());
+        host.activateWindow(); QApplication::setActiveWindow(&host); search->setFocus(); QTRY_VERIFY(search->hasFocus());
         auto *track = control->findChild<QSlider *>(); auto *number = control->findChild<QDoubleSpinBox *>();
         auto *editor = number->findChild<QLineEdit *>();
         QSignalSpy changed(control, &ValueSlider::valueChanged), started(control, &ValueSlider::editingStarted);
         QSignalSpy finished(control, &ValueSlider::editingFinished);
         const auto wheel = [](QWidget *target) {
-            QTest::wheelEvent(target->window()->windowHandle(),
-                target->mapTo(target->window(), target->rect().center()), {0, -120});
+            // Exercise window hit testing and wheel propagation in logical coordinates. Qt 6.10's
+            // QWindow test hook interprets its position as native pixels at 2x,
+            // which otherwise sends this event to the search field above it.
+            const QPoint position = target->rect().center();
+            QWheelEvent event(target->mapTo(target->window(), position), target->mapToGlobal(position), {}, {0, -120},
+                              Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+            QSpontaneKeyEvent::setSpontaneous(&event);
+            qApp->notify(target->window()->windowHandle(), &event);
         };
         for (QWidget *target : {static_cast<QWidget *>(track), static_cast<QWidget *>(number)}) {
             scroll->verticalScrollBar()->setValue(0); wheel(target);

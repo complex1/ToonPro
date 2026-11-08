@@ -1,4 +1,5 @@
 #include "scene3d_controller.h"
+#include "feature_flags.h"
 #include "scene3d_renderer.h"
 #include "scene3d_cache.h"
 #include "camera_animation.h"
@@ -81,9 +82,12 @@ const ModelInstance3D *Scene3DController::selectedObject()const{
     const auto *s=scene();if(s)for(const auto &o:s->objects)if(o.id==m_selected)return &o;return nullptr;
 }
 bool Scene3DController::canEdit()const{
+    if (!features::legacy3DEditor) return false;
     const int i=sceneLayerIndex();return i>=0&&layerCanEdit(m_canvas->shot().layers,i)&&!layerPositionLocked(m_canvas->shot().layers,i);
 }
 void Scene3DController::refresh(){
+    // Existing projects keep their reference image even while editing is
+    // quarantined. The feature flag gates mutations rather than file display.
     if(m_before&&!m_canvas->document()->externalEditActive()&&!m_mutating){m_before.reset();m_dragging=false;}
     if(m_cameraEditing&&!m_canvas->document()->cameraEditActive()){m_cameraEditing=false;m_dragging=false;}
     const int i=sceneLayerIndex();
@@ -148,6 +152,7 @@ void Scene3DController::requestRenders(){
 }
 quint64 Scene3DController::renderCount()const{return m_renderer->renderCount();}
 bool Scene3DController::createScene(){
+    if (!features::legacy3DEditor) { emit warning("Legacy 3D editing is retired."); return false; }
     if(!m_canvas->hasProject())return false;
     if(!m_canvas->resolvePendingTransform())return false;
     m_canvas->finishStroke();endEdit();
@@ -177,6 +182,7 @@ bool Scene3DController::addModel(Model3DPtr model,const QString &name){
     if(ok){m_selected=id;selectTool(false);emit changed();}return ok;
 }
 void Scene3DController::selectObject(const QString &id){
+    if (!features::legacy3DEditor) return;
     endEdit();
     if(m_selected!=id){m_selectedJoint.clear();m_skinPreviewRotation={};}
     m_selected=id; if(!selectedObject())m_selected.clear();
@@ -228,6 +234,7 @@ void Scene3DController::cancelEdit(){
     m_dragging=false;m_poseDrag=PoseDrag::None;if(!m_before)return;auto *doc=m_canvas->document();const auto before=std::move(*m_before);m_before.reset();doc->m_externalEditActive=false;doc->apply(before,m_layerId);emit changed();
 }
 bool Scene3DController::mutate(const QString &label,const std::function<void(Scene3D&)> &edit){
+    if (!features::legacy3DEditor) return false;
     if(m_cameraEditing)endEdit();
     const bool own=!editing();if(own&&!beginEdit(label))return false;
     auto *doc=m_canvas->document();const int i=sceneLayerIndex();if(i<0)return false;
@@ -281,6 +288,7 @@ void Scene3DController::updateObject(const ModelInstance3D &value){const auto *o
     mutate("Change 3D object",[&](Scene3D&s){for(auto&o:s.objects)if(o.id==value.id){o=value;break;}});
 }
 void Scene3DController::updateCamera(const Camera3D &camera){if(!scene())return;
+    if (!features::legacy3DEditor) return;
     if(scene()->camera.locked){auto unlocked=scene()->camera;unlocked.locked=camera.locked;if(unlocked!=camera)return;}
     auto *doc=m_canvas->document();
     if(m_cameraEditing)doc->previewSceneCamera(camera);
@@ -326,6 +334,7 @@ void Scene3DController::pointerMove(QPointF point,Qt::KeyboardModifiers modifier
 }
 void Scene3DController::pointerRelease(){if(m_dragging)endEdit();}
 void Scene3DController::paintHandles(QPainter &p)const{
+    if (!features::legacy3DEditor) return;
     if(m_canvas->tool()==Canvas::Tool::SceneRig){paintRig(p);if(m_rigEditMode==RigEditMode::Pose)paintPose(p);return;}
     if(m_canvas->tool()!=Canvas::Tool::SceneObject||!selectedObject()||!selectedObject()->visible)return;
     if(!scene()->visible)return;

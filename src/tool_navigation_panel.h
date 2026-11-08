@@ -71,6 +71,8 @@ signals:
     void viewOptionsChanged();
 public slots:
     void openAddDialog();
+private slots:
+    void movePlacement(const QString &id, int index);
 private:
     void refresh();
     void showContextMenu(const QPoint &position);

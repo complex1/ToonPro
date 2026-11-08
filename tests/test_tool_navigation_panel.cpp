@@ -1,5 +1,6 @@
 #include "tool_navigation_panel.h"
 #include "tool_catalog.h"
+#include "feature_flags.h"
 #include "icon_column.h"
 #include "ui_theme.h"
 #include "ui_metrics.h"
@@ -212,6 +213,66 @@ private slots:
         catalog.selectEntry(standalone); groups->setCurrentItem(findItem(groups, group));
         QCOMPARE(catalog.selectedEntryId(), group); QCOMPARE(list->count(), 1);
         QVERIFY(undo->shortcut().isEmpty()); // MainWindow owns focus-aware keyboard routing.
+    }
+
+    void mixedGroupReorderingPreservesQuarantinedToolsAndUndo()
+    {
+        if (features::legacy3DEditor) QSKIP("This regression exercises omitted 3D placements.");
+        QTemporaryDir dir; ToolCatalog catalog(nullptr, dir.filePath("tools.json")); QVERIFY(catalog.load());
+        const QStringList original{"line", "scene-object", "rectangle", "scene-camera", "ellipse"};
+        const auto group = catalog.addGroup("Mixed tools", "folder-open", original); QVERIFY(!group.isEmpty());
+        ToolNavigationPanel panel(&catalog, false);
+        auto *list = panel.findChild<QListWidget *>("toolEntries"); QVERIFY(list); QCOMPARE(list->count(), 3);
+        const int history = catalog.history()->count();
+        QVERIFY(QMetaObject::invokeMethod(&panel, "movePlacement", Qt::DirectConnection,
+                                          Q_ARG(QString, QString("line")), Q_ARG(int, 0)));
+        QCOMPARE(catalog.entry(group)->tools, original); QCOMPARE(catalog.history()->count(), history);
+        QVERIFY(QMetaObject::invokeMethod(&panel, "movePlacement", Qt::DirectConnection,
+                                          Q_ARG(QString, QString("line")), Q_ARG(int, 2)));
+        QCOMPARE(catalog.visibleToolIds(), (QStringList{"rectangle", "ellipse", "line"}));
+        QCOMPARE(catalog.entry(group)->tools, (QStringList{"scene-object", "rectangle", "scene-camera", "ellipse", "line"}));
+        QCOMPARE(catalog.history()->count(), history + 1);
+        QCOMPARE(list->item(2)->data(Qt::UserRole).toString(), QString("line"));
+        catalog.history()->undo(); QCOMPARE(catalog.entry(group)->tools, original);
+        QCOMPARE(catalog.visibleToolIds(), (QStringList{"line", "rectangle", "ellipse"}));
+        QVERIFY(QMetaObject::invokeMethod(&panel, "movePlacement", Qt::DirectConnection,
+                                          Q_ARG(QString, QString("ellipse")), Q_ARG(int, 0)));
+        QCOMPARE(catalog.visibleToolIds(), (QStringList{"ellipse", "line", "rectangle"}));
+        QCOMPARE(catalog.entry(group)->tools, (QStringList{"ellipse", "line", "scene-object", "rectangle", "scene-camera"}));
+        catalog.history()->undo(); QCOMPARE(catalog.entry(group)->tools, original);
+    }
+
+    void toolboxReorderingUsesVisibleRowsAndPreservesHiddenGroup()
+    {
+        if (features::legacy3DEditor) QSKIP("This regression exercises omitted 3D placements.");
+        QTemporaryDir dir; ToolCatalog catalog(nullptr, dir.filePath("tools.json")); QVERIFY(catalog.load());
+        QVERIFY(catalog.selectEntry("group/drawing"));
+        QVERIFY(catalog.renameEntry("group/scene3d", "My reference room", "video"));
+        QVERIFY(catalog.moveEntry("group/scene3d", 1));
+        const auto hidden = *catalog.entry("group/scene3d");
+        QStringList stored, visible;
+        for (const auto &entry : catalog.entries()) stored.append(entry.id);
+        for (const auto &entry : catalog.availableEntries()) visible.append(entry.id);
+        QVERIFY(visible.size() >= 3); QCOMPARE(visible.first(), QString("group/drawing"));
+        ToolNavigationPanel panel(&catalog, true);
+        auto *list = panel.findChild<QListWidget *>("toolboxEntries"); QVERIFY(list);
+        QVERIFY(!findItem(list, hidden.id));
+        auto expectedStored = stored; expectedStored.move(0, stored.indexOf(visible[2]));
+        auto expectedVisible = visible; expectedVisible.move(0, 2);
+        const int history = catalog.history()->count();
+        QVERIFY(QMetaObject::invokeMethod(&panel, "movePlacement", Qt::DirectConnection,
+                                          Q_ARG(QString, visible.first()), Q_ARG(int, 2)));
+        QStringList actualStored, actualVisible;
+        for (const auto &entry : catalog.entries()) actualStored.append(entry.id);
+        for (const auto &entry : catalog.availableEntries()) actualVisible.append(entry.id);
+        QCOMPARE(actualStored, expectedStored); QCOMPARE(actualVisible, expectedVisible);
+        QCOMPARE(catalog.history()->count(), history + 1);
+        QCOMPARE(catalog.entry(hidden.id)->name, hidden.name); QCOMPARE(catalog.entry(hidden.id)->icon, hidden.icon);
+        QCOMPARE(catalog.entry(hidden.id)->tools, hidden.tools); QCOMPARE(catalog.entry(hidden.id)->lastToolId, hidden.lastToolId);
+        QCOMPARE(list->item(2)->data(Qt::UserRole).toString(), visible.first());
+        catalog.history()->undo(); actualStored.clear();
+        for (const auto &entry : catalog.entries()) actualStored.append(entry.id);
+        QCOMPARE(actualStored, stored); QVERIFY(!findItem(list, hidden.id));
     }
 
     void emptyGroupAndSearchAreClearAndNarrowPanelsFit()

@@ -1,3 +1,4 @@
+#include "feature_flags.h"
 #include "canvas.h"
 #include "camera_tool.h"
 #include "timeline_controller.h"
@@ -52,6 +53,7 @@ private slots:
         QVERIFY(!canvas.cameraTool()->enabled()); QVERIFY(!timeline.canPasteKeys());
     }
     void sceneSelectionKeepsArtworkUntilExplicitCameraTool() {
+        if (!features::legacy3DEditor) QSKIP("Legacy 3D authoring is retired; compatibility coverage remains enabled.");
         Canvas canvas; canvas.setProject(Project::create()); auto *scene = canvas.scene3D();
         QVERIFY(scene->addModel(builtInModels3D().first()));
         const auto sceneId = scene->layerId(); QVERIFY(!sceneId.isEmpty());

@@ -1,8 +1,10 @@
 #include "vector_edit_geometry.h"
 #include "brush_engine.h"
 #include <QLineF>
+#include <QDebug>
 #include <algorithm>
 #include <cmath>
+#include <functional>
 
 namespace toon {
 namespace {
@@ -183,6 +185,75 @@ bool brushVectorWidths(EditableObject &o,QPointF from,QPointF to,qreal radius,qr
         changed|=qAbs(value-widths[i])>1e-9;widths[i]=value;
     }
     if(changed)o.widthFactors=widths;return changed;
+}
+std::optional<EditableObject> nudgedVectorPath(const EditableObject &source,QPointF center,
+        QPointF displacement,qreal radius,qreal strength,const QTransform &layerTransform,QString *error) {
+    const auto fail=[&](const QString &reason)->std::optional<EditableObject>{if(error)*error=reason;return {};};
+    const auto finite=[](QPointF p){return std::isfinite(p.x())&&std::isfinite(p.y());};
+    if(!finite(center)||!finite(displacement)||!std::isfinite(radius)||radius<=0||!std::isfinite(strength)||strength<0||strength>1)
+        return fail("The nudge brush has invalid settings.");
+    if(source.kind!=ObjectKind::Path||source.nodes.size()<2||!strength||QLineF({},displacement).length()<1e-9)return source;
+    auto result=source;auto world=source;world.transform*=layerTransform;
+    QPainterPath region;region.addEllipse(center,radius,radius);
+    if(!vectorCorrectionIntersects(world,region))return source;
+    if(!world.transform.isInvertible())return fail("Restore a nonzero layer and path scale before nudging strokes.");
+    // Split exact cubics only near the brush. Without this, a long two-node
+    // stroke has no local anchors and dragging its middle moves the whole line.
+    const qreal spacing=qMax(.25,radius/6);bool exhausted=false;
+    std::function<int(int,int)> refine=[&](int index,int depth){
+        const auto &a=result.nodes[index],&b=result.nodes[(index+1)%result.nodes.size()];
+        QPainterPath segment(a.anchor);segment.cubicTo(a.outControl,b.inControl,b.anchor);
+        auto mapped=result;mapped.transform=world.transform;bool touches=false;qreal length=0;
+        for(const auto &copy:correctionPaths(mapped,segment)){touches|=copy.intersects(region)||region.contains(copy.pointAtPercent(0));length=qMax(length,copy.length());}
+        if(!touches||length<=spacing)return index+1;
+        if(depth>=18||result.nodes.size()>=16384){exhausted=true;return index+1;}
+        split(result,index,.5);const int right=refine(index,depth+1);return exhausted?right:refine(right,depth+1);
+    };
+    for(int index=0;index<result.nodes.size()-(result.closed?0:1)&&!exhausted;)index=refine(index,0);
+    if(exhausted)return fail("This nudge needs too many path nodes. Use a larger radius or simplify the stroke first.");
+    const auto mapCopy=[&](QPointF point,int copy){
+        if(!source.brushStroke)return world.transform.map(point);
+        const auto &stroke=*source.brushStroke;const auto instances=brushSymmetryInstances(stroke.settings.symmetry,point,stroke.canvasSize);
+        return copy<instances.size()?world.transform.map(instances[copy].point):world.transform.map(point);
+    };
+    bool singular=false;
+    const auto pushed=[&](QPointF point){
+        const auto copies=correctionPoints(world,point);int nearest=-1;qreal distance=radius;
+        for(int copy=0;copy<copies.size();++copy){const auto d=QLineF(center,copies[copy]).length();if(d<distance){distance=d;nearest=copy;}}
+        if(nearest<0)return point;
+        const qreal falloff=std::pow(1-std::pow(distance/radius,2),2);
+        const auto target=copies[nearest]+displacement*(strength*falloff);
+        // A single inverse tangent is sufficient for affine symmetry, but a
+        // curved mirror can turn substantially during a push. Solve its actual
+        // captured mapping, with bounded Newton steps and residual line search.
+        // This keeps the touched copy under the artist's drag, not merely close
+        // to the first tangent's extrapolation.
+        constexpr qreal epsilon=.01;auto guess=point;qreal trustRadius=0;
+        for(int iteration=0;iteration<12;++iteration){
+            const auto residual=target-mapCopy(guess,nearest);const qreal error=QPointF::dotProduct(residual,residual);
+            if(error<1e-10)return guess;
+            const auto dx=(mapCopy(guess+QPointF(epsilon,0),nearest)-mapCopy(guess-QPointF(epsilon,0),nearest))/(2*epsilon);
+            const auto dy=(mapCopy(guess+QPointF(0,epsilon),nearest)-mapCopy(guess-QPointF(0,epsilon),nearest))/(2*epsilon);
+            QTransform jacobian(dx.x(),dx.y(),dy.x(),dy.y(),0,0);bool invertible=false;const auto inverse=jacobian.inverted(&invertible);
+            if(!invertible)break;
+            const auto step=inverse.map(residual);if(!iteration)trustRadius=qMax(.01,2*QLineF({},step).length());bool accepted=false;
+            for(qreal fraction=1;fraction>=1./128;fraction*=.5){const auto candidate=guess+step*fraction;if(!finite(candidate)||QLineF(point,candidate).length()>trustRadius)continue;const auto next=target-mapCopy(candidate,nearest);if(QPointF::dotProduct(next,next)<error){guess=candidate;accepted=true;break;}}
+            if(!accepted)break;
+        }
+        const auto remaining=target-mapCopy(guess,nearest);
+        if(QPointF::dotProduct(remaining,remaining)<1e-8)return guess;
+        if(qEnvironmentVariableIsSet("TOON_NUDGE_DIAGNOSTICS")){
+            const auto dx=(mapCopy(guess+QPointF(epsilon,0),nearest)-mapCopy(guess-QPointF(epsilon,0),nearest))/(2*epsilon);
+            const auto dy=(mapCopy(guess+QPointF(0,epsilon),nearest)-mapCopy(guess-QPointF(0,epsilon),nearest))/(2*epsilon);
+            qInfo()<<"Nudge copy inverse refused"<<"copy"<<nearest<<"source"<<point<<"target"<<target<<"candidate"<<guess<<"remaining"<<remaining<<"Jacobian"<<QTransform(dx.x(),dx.y(),dy.x(),dy.y(),0,0);
+        }
+        singular=true;return point;
+    };
+    for(auto &node:result.nodes){node.anchor=pushed(node.anchor);node.inControl=pushed(node.inControl);node.outControl=pushed(node.outControl);}
+    if(singular)return fail("This curved symmetry copy cannot follow the push reliably here. Try a shorter drag or a different part of the stroke.");
+    if(source.widthFactors.isEmpty())result.widthFactors.clear();
+    if(const auto reason=validateEditableObject(result);!reason.isEmpty())return fail(reason);
+    return result;
 }
 QVector<QPointF> vectorTransformHandles(const EditableObject &o) {
     const auto r=localBounds(o);return {o.transform.map(r.topLeft()),o.transform.map(QPointF(r.center().x(),r.top())),o.transform.map(r.topRight()),o.transform.map(QPointF(r.right(),r.center().y())),o.transform.map(r.bottomRight()),o.transform.map(QPointF(r.center().x(),r.bottom())),o.transform.map(r.bottomLeft()),o.transform.map(QPointF(r.left(),r.center().y()))};

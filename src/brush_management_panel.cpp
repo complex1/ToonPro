@@ -367,7 +367,7 @@ void BrushManagementPanel::setError(const QString &message) {
 void BrushManagementPanel::refresh() {
     if(m_refreshing)return; QScopedValueRollback guard(m_refreshing,true); const QSignalBlocker listBlock(m_list);
     QSet<QString> ids;QStringList tags,categories;
-    for(const auto &tool:m_catalog->tools())if(tool.engine==Canvas::Tool::Brush){
+    for(const auto &tool:m_catalog->availableTools())if(tool.engine==Canvas::Tool::Brush){
         ids.insert(tool.id);tags+=tool.tags;if(!tool.category.isEmpty())categories+=tool.category;
         auto *row=findRow(m_list,tool.id);if(!row){row=new QListWidgetItem(m_list);row->setData(Qt::UserRole,tool.id);}
         row->setSizeHint({0,qMax(ui::metrics::toolRow,m_list->fontMetrics().height()+ui::metrics::sectionGap)});
@@ -380,7 +380,7 @@ void BrushManagementPanel::refresh() {
     for(auto it=m_previews.begin();it!=m_previews.end();)if(!ids.contains(it.key()))it=m_previews.erase(it);else++it;
     choices(m_tags,"All tags",tags);choices(m_categories,"All categories",categories);
     const auto currentGroup=m_group->currentData().toString();const QSignalBlocker groupBlock(m_group);m_group->clear();
-    for(const auto &entry:m_catalog->entries())if(entry.group)m_group->addItem(entry.name,entry.id);
+    for(const auto &entry:m_catalog->availableEntries())if(entry.group)m_group->addItem(entry.name,entry.id);
     int group=m_group->findData(currentGroup.isEmpty()?m_catalog->selectedEntryId():currentGroup);
     if(group<0)group=m_group->findData("group/drawing");m_group->setCurrentIndex(qMax(0,group));
     m_add->setEnabled(m_catalog->writable());m_import->setEnabled(m_catalog->writable()&&m_library->writable());
@@ -420,7 +420,7 @@ void BrushManagementPanel::refreshDetails() {
     allTags.removeDuplicates();allTags.sort(Qt::CaseInsensitive);m_tagSummary->setText(allTags.isEmpty()?"No tags":allTags.join(" · "));
     m_tagSummary->setToolTip(m_tagSummary->text()); m_tagSummary->setAccessibleName("Brush tags: "+m_tagSummary->text());
     if(targetChanged||(!m_category->hasFocus()&&!m_category->lineEdit()->hasFocus())) {
-        QStringList categories;for(const auto &tool:m_catalog->tools())if(!tool.category.isEmpty())categories.append(tool.category);
+        QStringList categories;for(const auto &tool:m_catalog->availableTools())if(!tool.category.isEmpty())categories.append(tool.category);
         categories.removeDuplicates();categories.sort(Qt::CaseInsensitive);const QSignalBlocker blocker(m_category);
         m_category->clear();m_category->addItems(categories);m_category->setEditText(mixed?QString():category);
         m_category->lineEdit()->setPlaceholderText(mixed?"Mixed categories":"Category");
@@ -565,7 +565,7 @@ void BrushManagementPanel::createDialog(const QString &imagePath) {
     auto *category=field("newBrushCategory","Category");category->setMaxLength(80);addPropertyRow(layout,"Category",category);
     auto *tags=field("newBrushTags","Tags, separated by commas");addPropertyRow(layout,"Tags",tags);
     auto *destination=combo("newBrushGroup","Add to tool group");destination->addItem("No group",QString());
-    for(const auto &entry:m_catalog->entries())if(entry.group)destination->addItem(entry.name,entry.id);
+    for(const auto &entry:m_catalog->availableEntries())if(entry.group)destination->addItem(entry.name,entry.id);
     destination->setCurrentIndex(qMax(0,destination->findData(m_group->currentData())));addPropertyRow(layout,"Group",destination);
     auto *tipRow=new QHBoxLayout;tipRow->setSpacing(4);auto *choose=button("newBrushImage","image","Choose stamp image");
     auto *preview=label("Choose a stamp image");preview->setObjectName("newBrushImagePreview");preview->setMinimumHeight(64);tipRow->addWidget(choose);tipRow->addWidget(preview,1);layout->addLayout(tipRow);

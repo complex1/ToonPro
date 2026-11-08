@@ -1436,6 +1436,7 @@ bool ProjectWorkspaceWindow::closeSession(QWidget *widget) {
     for (auto it = m_sessions.begin(); it != m_sessions.end(); ++it)
         if (it->editor == editor)
             id = it.key();
+    bool discardDrawingRecovery = false;
     if (editor->managedDirty()) {
         const auto answer = QMessageBox::warning(
             this, "Unsaved drawing", "Save changes before closing this tab?",
@@ -1445,9 +1446,14 @@ bool ProjectWorkspaceWindow::closeSession(QWidget *widget) {
         if (answer == QMessageBox::Save && !editor->saveManaged())
             return false;
         if (answer == QMessageBox::Discard) {
-            QString e;
-            m_store->discardRecovery(id, &e);
+            discardDrawingRecovery = true;
         }
+    }
+    if (!editor->closeReferenceWorkspace())
+        return false;
+    if (discardDrawingRecovery) {
+        QString e;
+        m_store->discardRecovery(id, &e);
     }
     const int index = m_tabs->indexOf(editor);
     m_sessions.remove(id);

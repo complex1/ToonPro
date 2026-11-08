@@ -7,6 +7,7 @@
 #include "document.h"
 #include "object_tools.h"
 #include "tool_catalog.h"
+#include "tool_catalog_legacy_fixture.h"
 #include "value_slider.h"
 #include "vector_brush_storage.h"
 #include "ui_theme.h"
@@ -51,8 +52,8 @@ private slots:
     BrushLibrary restored(library.path());QVERIFY2(restored.load(&error),qPrintable(error));QCOMPARE(restored.presets().last().brush,b);
     json["version"]=6;QVERIFY(write(library.path(),json));QVERIFY(!restored.load(&error));QCOMPARE(restored.presets().last().brush,b);
     ToolCatalog catalog(nullptr,dir.filePath("tools.json"));QVERIFY(catalog.load());const auto id=catalog.createBrush("Surface",BrushType::Custom,{b,0,{}});QVERIFY(!id.isEmpty());QVERIFY2(catalog.save(&error),qPrintable(error));
-    json=read(catalog.path());QCOMPARE(json["version"].toInt(),12);ToolCatalog loaded(nullptr,catalog.path());QVERIFY2(loaded.load(&error),qPrintable(error));QCOMPARE(loaded.tool(id)->state.brush,b);
-    json["version"]=11;QVERIFY(write(catalog.path(),json));QVERIFY(!loaded.load(&error));QCOMPARE(loaded.tool(id)->state.brush,b);
+    json=read(catalog.path());QCOMPARE(json["version"].toInt(),14);ToolCatalog loaded(nullptr,catalog.path());QVERIFY2(loaded.load(&error),qPrintable(error));QCOMPARE(loaded.tool(id)->state.brush,b);
+    json=test_fixture::toolCatalogBefore14(json,11);QVERIFY(write(catalog.path(),json));QVERIFY(!loaded.load(&error));QCOMPARE(loaded.tool(id)->state.brush,b);
     json=read(library.path());json["version"]=7;auto presets=json["presets"].toArray();auto row=presets[0].toObject();row.remove("surfaceImage");presets[0]=row;json["presets"]=presets;QVERIFY(write(library.path(),json));QVERIFY(!restored.load(&error));QVERIFY(error.contains("missing"));
  }
  void projectImageResourcesAndSpeedReplay(){

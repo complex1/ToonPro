@@ -17,6 +17,8 @@ class GuidePanel final : public QWidget {
     Q_OBJECT
 public:
     explicit GuidePanel(Canvas *canvas, QWidget *parent = nullptr);
+signals:
+    void detectPerspectiveRequested();
 private:
     void refresh();
     void refreshEnabled();
@@ -36,6 +38,7 @@ private:
     QToolButton *m_remove;
     QToolButton *m_load;
     QToolButton *m_save;
+    QToolButton *m_detect;
     QTabWidget *m_properties;
     QWidget *m_selected;
     QLineEdit *m_name;

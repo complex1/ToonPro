@@ -5,6 +5,7 @@
 #include "drawing_aids.h"
 #include "value_slider.h"
 #include <QComboBox>
+#include <QFocusEvent>
 #include <QDoubleSpinBox>
 #include <QLineEdit>
 #include <QToolButton>
@@ -152,6 +153,26 @@ private slots:
         QCOMPARE(metadata.count(),0);QVERIFY(canvas.project().drawingAids.shadingDrafts.isEmpty());QVERIFY(!panel.finishPersistence());
         mouse(canvas,QEvent::MouseButtonRelease,{56,25});QCOMPARE(metadata.count(),1);QCOMPARE(canvas.project().drawingAids.shadingDrafts.size(),1);
         QCOMPARE(canvas.document()->history()->count(),0);
+    }
+    void mirrorWaitsForBoundaryContactAndClearsOnReleaseOrCancel_data(){
+        QTest::addColumn<int>("exit");
+        QTest::newRow("release")<<0;QTest::newRow("escape")<<1;QTest::newRow("lost-mouse-release")<<2;
+        QTest::newRow("hide")<<3;QTest::newRow("destroy-owner")<<4;QTest::newRow("cancel")<<5;QTest::newRow("focus-loss")<<6;
+    }
+    void mirrorWaitsForBoundaryContactAndClearsOnReleaseOrCancel(){
+        QFETCH(int,exit);Canvas canvas;canvas.setProject(drawing());canvas.resize(600,500);canvas.show();canvas.fitSheet();
+        auto *panel=new CelShadingPanel(&canvas);panel->show();panel->setActive(true);QVERIFY(panel->active());
+        mouse(canvas,QEvent::MouseButtonPress,{8,25});mouse(canvas,QEvent::MouseMove,{32,25});
+        QVERIFY(!canvas.document()->strokeActive());canvas.setCanvasMirrored(true);QVERIFY(!canvas.canvasMirrored());
+        if(exit==0)mouse(canvas,QEvent::MouseButtonRelease,{56,25});
+        else if(exit==1)QTest::keyClick(&canvas,Qt::Key_Escape);
+        else if(exit==2){const auto position=view(canvas,{40,25});QMouseEvent event(QEvent::MouseMove,position,canvas.mapToGlobal(position),Qt::NoButton,Qt::NoButton,Qt::NoModifier);QApplication::sendEvent(&canvas,&event);}
+        else if(exit==3)panel->hide();
+        else if(exit==4){delete panel;panel=nullptr;}
+        else if(exit==5)panel->cancelEditing();
+        else{QFocusEvent event(QEvent::FocusOut);QApplication::sendEvent(&canvas,&event);}
+        canvas.setCanvasMirrored(true);QVERIFY(canvas.canvasMirrored());
+        QCOMPARE(canvas.document()->history()->count(),0);delete panel;
     }
     void otherDrawingAidChangesPreserveLiveGuideAndWidthAdjustment(){
         Canvas canvas;canvas.setProject(drawing());canvas.resize(600,500);canvas.show();canvas.fitSheet();CelShadingPanel panel(&canvas);panel.show();panel.setActive(true);

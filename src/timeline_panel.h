@@ -23,6 +23,8 @@ class TimelinePanel final : public QWidget {
 public:
     explicit TimelinePanel(TimelineController *controller,QWidget *parent=nullptr,DrawingTemplateLibrary *templates=nullptr);
     ~TimelinePanel() override;
+signals:
+    void inbetweensRequested();
 protected:
     void resizeEvent(QResizeEvent *event) override;
     void changeEvent(QEvent *event) override;

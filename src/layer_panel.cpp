@@ -1,5 +1,9 @@
+#include "reference3d_layer_serialization.h"
+#include <QJsonDocument>
+#include "feature_flags.h"
 #include "scene3d_cache.h"
 #include "layer_panel.h"
+#include "line_art_document.h"
 #include "symbols.h"
 #include "animation.h"
 #include "document.h"
@@ -45,7 +49,7 @@ public:
         return layout() ? layout()->minimumHeightForWidth(width) : QWidget::heightForWidth(width);
     }
 };
-enum RowRole { Id = Qt::UserRole, Group, Visible, Locked, Annotation, Clipped, AlphaLocked, PositionLocked, RowColor, Thumbnail, Kind, Effects, EffectsEnabled, Mask, MaskEnabled, Adjustment };
+enum RowRole { Id = Qt::UserRole, Group, Visible, Locked, Annotation, Clipped, AlphaLocked, PositionLocked, RowColor, Thumbnail, Kind, Effects, EffectsEnabled, Mask, MaskEnabled, Adjustment, FillReference };
 QString idOf(const QTreeWidgetItem *item) { return item ? item->data(0, Id).toString() : QString(); }
 class LayerDelegate final : public QStyledItemDelegate {
 public:
@@ -83,8 +87,9 @@ public:
             if (info.data(Clipped).toBool()) { p->setPen(QPen(QColor(ui::accent),2)); p->drawLine(thumb.left()-2,thumb.top()+5,thumb.left()-2,thumb.bottom()-5); }
             int x = thumb.right()+7;
             const auto kind = LayerKind(info.data(Kind).toInt());
-            if (kind != LayerKind::Raster) { appIcon(kind == LayerKind::Symbol ? "toon-symbol" : kind == LayerKind::Scene3D ? "box" : kind == LayerKind::Vector ? "pen-tool" : "type").paint(p,QRect(x,o.rect.center().y()-7,14,14)); x+=18; }
+            if (kind != LayerKind::Raster) { appIcon(kind == LayerKind::Symbol ? "toon-symbol" : (kind == LayerKind::Scene3D || kind == LayerKind::Reference3D) ? "box" : kind == LayerKind::Vector ? "pen-tool" : "type").paint(p,QRect(x,o.rect.center().y()-7,14,14)); x+=18; }
             if (info.data(Annotation).toBool()) { appIcon("sticky-note").paint(p,QRect(x,o.rect.center().y()-7,14,14)); x+=18; }
+            if (info.data(FillReference).toBool()) { featureIcon(FeatureIcon::FillReference).paint(p,QRect(x,o.rect.center().y()-7,14,14)); x+=18; }
             p->setPen(QColor(info.data(Visible).toBool() ? ui::text : ui::muted));
             const auto nameRect=QRect(x,o.rect.top(),qMax(0,o.rect.right()-x-3),o.rect.height());
             p->drawText(nameRect,Qt::AlignVCenter|Qt::AlignLeft,o.fontMetrics.elidedText(index.data().toString(),Qt::ElideRight,nameRect.width()));
@@ -104,6 +109,7 @@ public:
     void updateEditorGeometry(QWidget *editor,const QStyleOptionViewItem &o,const QModelIndex &index) const override {
         int offset=layerThumbnailExtent+9;
         if (index.siblingAtColumn(0).data(Annotation).toBool()) offset += 18;
+        if (index.siblingAtColumn(0).data(FillReference).toBool()) offset += 18;
         if (LayerKind(index.siblingAtColumn(0).data(Kind).toInt()) != LayerKind::Raster) offset += 18;
         editor->setGeometry(o.rect.adjusted(offset,2,-1,-2));
     }
@@ -256,6 +262,9 @@ LayerPanel::LayerPanel(Document *document,QWidget *parent) : QScrollArea(parent)
     m_clipped=button(flags,"layerClipped","link-2","Clip to the layer below",true);
     m_clipped->setIcon(featureIcon(FeatureIcon::Clipping));
     m_annotation=button(flags,"layerAnnotation","sticky-note","Notes layer — exclude from movie exports",true);
+    // Share the flexible blend row: adding an eighth fixed flag would overflow
+    // a 220 px Layers dock and reduce the canvas's usable width.
+    m_fillReference=button(header,"layerFillReference","toon-fill-reference","Mark selected layers as fill references",true);
     m_merge=button(flags,"mergeLayerDown","combine","Merge down"); flags->addStretch();
     m_more=button(flags,"layerMore","ellipsis","More layer actions"); layout->addLayout(flags);
     m_tree=new LayerTree; m_tree->setObjectName("layerTree"); m_tree->setAccessibleName("Layers and folders");
@@ -275,6 +284,10 @@ LayerPanel::LayerPanel(Document *document,QWidget *parent) : QScrollArea(parent)
     m_importImage->setEnabled(false);
     auto *vector=button(footer,"addVectorLayer","pen-tool","New vector layer");
     connect(vector,&QToolButton::clicked,this,[this]{ObjectTools::addLayer(m_document,LayerKind::Vector);});
+    // Keep the seven existing footer actions at their direct 28 px targets.
+    // The creation shortcut shares the flexible blend row, so a compact dock
+    // does not gain a horizontal overflow or lose a row of visible artwork.
+    if(features::experimental3D){auto *reference=button(header,"addReference3DLayer","box","New 3D reference layer");connect(reference,&QToolButton::clicked,this,[this]{emit reference3DLayerRequested(true);});}
     m_notes=button(footer,"addNotesLayer","sticky-note","New notes layer");
     m_duplicate=button(footer,"duplicateLayer","layers","Duplicate selected layers"); footer->addStretch();
     m_remove=button(footer,"removeLayer","trash","Delete selected layers · undo to restore"); layout->addLayout(footer); setWidget(m_content);
@@ -318,6 +331,7 @@ LayerPanel::LayerPanel(Document *document,QWidget *parent) : QScrollArea(parent)
     connect(m_alphaLocked,&QToolButton::clicked,document,&Document::setLayerAlphaLocked);
     connect(m_clipped,&QToolButton::clicked,document,&Document::setLayerClipped);
     connect(m_annotation,&QToolButton::clicked,this,[this](bool value){const auto l=m_document->activeShot().layers[m_document->activeLayer()]; m_document->changeLayer(l.name,l.visible,l.locked,value,l.opacity);});
+    connect(m_fillReference,&QToolButton::clicked,this,[this](bool value){m_document->setFillReferences(selectedLayerIds(),value);refresh();});
     connect(m_add,&QToolButton::clicked,this,[this]{m_document->addLayer();});
     connect(m_notes,&QToolButton::clicked,this,[this]{m_document->addLayer(true);});
     connect(m_group,&QToolButton::clicked,this,[this]{m_document->groupLayers(selectedLayerIds());});
@@ -364,6 +378,10 @@ void LayerPanel::refreshEnabled() {
     m_blend->setEnabled(single&&!locked&&!drawingContainer); m_opacity->setEnabled(single&&!locked&&!drawingContainer);
     m_positionLocked->setEnabled(single&&!locked); m_clipped->setEnabled(single&&!locked&&!active.group&&!active.adjustment); m_alphaLocked->setEnabled(single&&!locked&&!active.group&&!active.adjustment&&active.kind==LayerKind::Raster);
     m_annotation->setEnabled(single&&!locked&&!animated&&!active.adjustment); m_locked->setEnabled(!ids.isEmpty());
+    bool allReferences=!ids.isEmpty();for(const auto &id:ids){const int at=m_layerIndices.value(id,-1);allReferences&=at>=0&&layers[at].fillReference;}
+    m_fillReference->setEnabled(!ids.isEmpty()&&!m_document->layerPropertyEditActive());m_fillReference->setChecked(allReferences);
+    m_fillReference->setToolTip(allReferences?"Unmark selected fill references":"Mark selected layers as fill references");
+    m_fillReference->setAccessibleName(m_fillReference->toolTip());
     const int capacity=shot.animationTracks.isEmpty()?maxDrawingLayers:maxAnimationLayers;
     const bool room=layers.size()<capacity&&m_scopeNodes.value(m_scopes.value(active.id))<maxDrawingLayers;
     const bool trackContainer=m_containers.contains(active.id)&&!drawingContainer;
@@ -426,9 +444,10 @@ void LayerPanel::refresh() {
         if(!present){item->setSelected(false);continue;}
         item->setText(1,layer.name);item->setData(0,Kind,int(layer.kind));item->setData(0,Group,layer.group);item->setData(0,Visible,layer.visible);item->setData(0,Locked,layer.locked);
         item->setData(0,Annotation,layer.annotation);item->setData(0,Clipped,layer.clipped);item->setData(0,AlphaLocked,layer.alphaLocked);item->setData(0,PositionLocked,layer.positionLocked);item->setData(0,RowColor,layer.rowColor);
+        item->setData(0,FillReference,layer.fillReference);
         const bool effects=layer.effects.blurEnabled||layer.effects.shadowEnabled||layer.effects.glowEnabled||layer.effects.colorEnabled;
         item->setData(0,Effects,effects);item->setData(0,EffectsEnabled,layer.effects.enabled);item->setData(0,Mask,layer.mask.has_value());item->setData(0,MaskEnabled,layer.mask&&layer.mask->enabled);item->setData(0,Adjustment,layer.adjustment);
-        QStringList details;if(layer.mask)details.append(layer.mask->enabled?"Mask":"Mask off");if(effects)details.append(layer.effects.enabled?"Effects":"Effects off");
+        QStringList details;if(layer.fillReference)details.append("Fill reference");if(layer.mask)details.append(layer.mask->enabled?"Mask":"Mask off");if(effects)details.append(layer.effects.enabled?"Effects":"Effects off");
         const QString detail=details.isEmpty()?QString():" · "+details.join(" · ");
         item->setToolTip(1,QString("%1 · %2 · %3 · %4%%5\nDouble-click to rename").arg(layer.name,layer.adjustment?"Color adjustment":layer.group?"Folder":layerKindKey(layer.kind),layerBlendModeName(layer.blendMode)).arg(qRound(layer.opacity*100)).arg(detail));
         item->setData(1,Qt::AccessibleTextRole,layer.name+detail+(layer.adjustment?" · Color adjustment":""));item->setData(0,Qt::AccessibleTextRole,layer.visible?"Visible":"Hidden");item->setData(2,Qt::AccessibleTextRole,layer.locked?"Locked":"Unlocked");
@@ -456,12 +475,16 @@ void LayerPanel::refreshThumbnails(){
     if(!m_document||!m_document->isOpen())return;
     // A timeout scheduled before pen-down may still arrive during the stroke.
     // Its terminal changed notification schedules the completed preview.
-    if(m_document->strokeActive())return;
+    if(m_document->strokeActive()||m_document->reference3DEditActive())return;
     const auto &layers=m_document->activeShot().layers;
     for(const int index:m_presentIndices){if(index>=layers.size())continue;const auto &layer=layers[index];auto *item=itemForId(layer.id);if(!item||layer.group||!m_presentLayers.contains(layer.id))continue;
         const auto &project=m_document->project();const auto &sheet=m_document->activeShot().sheet;const qreal extra=sheet.overscan;
         QRectF bounds(-extra,-extra,project.width+2*extra,project.height+2*extra);
         if(m_annotationLayers.contains(layer.id))bounds.adjust(-sheet.left,-sheet.top,sheet.right,sheet.bottom);
+        if(layer.reference3d){
+            const quint64 key=qHash(QJsonDocument(referenceLayerSceneToJson(*layer.reference3d)).toJson(QJsonDocument::Compact))^qHashMulti(project.width,project.height,bounds.x(),bounds.y(),bounds.width(),bounds.height());
+            if(m_thumbnailKeys.value(layer.id)!=key||item->data(0,Thumbnail).value<QImage>().isNull()){m_thumbnailKeys[layer.id]=key;item->setData(0,Thumbnail,renderLayerThumbnail(layer,bounds,QSize(64,64)));}continue;
+        }
         if(layer.scene3d){
             const auto image=scene3DPreview(*layer.scene3d,{project.width,project.height});
             if(!image.isNull()&&m_thumbnailKeys.value(layer.id)!=quint64(image.cacheKey())){
@@ -494,6 +517,15 @@ void LayerPanel::showContextMenu(const QPoint &position){
     auto action=[&](const QString &name,const char *icon,const std::function<void()> &fn,bool enabled=true){auto *a=menu.addAction(appIcon(icon),name);a->setEnabled(enabled);connect(a,&QAction::triggered,this,fn);return a;};
     action("Rename","pen-tool",[this]{m_tree->editItem(m_tree->currentItem(),1);},ids.size()==1&&!active.locked);
     action("Duplicate","layers",[this,ids]{m_document->duplicateLayers(ids);},m_duplicate->isEnabled());
+    bool allReferences=!ids.isEmpty();for(const auto &id:ids){const int at=m_layerIndices.value(id,-1);allReferences&=at>=0&&m_document->activeShot().layers[at].fillReference;}
+    auto *fillReference=action(allReferences?"Unmark fill references":"Mark as fill reference","toon-fill-reference",[this,ids,allReferences]{m_document->setFillReferences(ids,!allReferences);refresh();},m_fillReference->isEnabled());
+    fillReference->setObjectName("markFillReferenceAction");fillReference->setCheckable(true);fillReference->setChecked(allReferences);
+    action("Detect perspective…","focus",[this]{emit detectPerspectiveRequested();},ids.size()==1);
+    if(ids.size()==1&&active.puppetWarp){
+        action("Edit Puppet Warp…","pin",[this]{emit editPuppetWarpRequested();},layerCanEdit(m_document->activeShot().layers,m_document->activeLayer()));
+        action("Bake Puppet Warp","check",[this]{m_document->bakePuppetWarp();},layerCanEdit(m_document->activeShot().layers,m_document->activeLayer())&&!layerPositionLocked(m_document->activeShot().layers,m_document->activeLayer()));
+    }
+    if(property("lineArtEnabled").toBool())action("Convert to line art…","pen-tool",[this]{emit convertToLineArtRequested();},ids.size()==1&&lineArtSourceReason(m_document->project(),m_document->activeShotIndex(),active.id,m_document->currentFrame()).isEmpty());
     action("New folder from selection","folder-open",[this,ids]{m_document->groupLayers(ids);},m_group->isEnabled());
     if(property("symbolsEnabled").toBool())action("Convert to symbol…","toon-symbol",[this,ids]{emit convertToSymbolRequested(ids);},!ids.isEmpty());
     if(property("symbolsEnabled").toBool()&&ids.size()==1&&active.symbol){
@@ -514,6 +546,7 @@ void LayerPanel::showContextMenu(const QPoint &position){
     action("Move down","arrow-down",[this]{m_document->moveLayer(-1);},ids.size()==1&&!m_containers.contains(active.id));
     action("Move to top level","arrow-left-right",[this,ids]{m_document->moveLayers(ids,{},{});},!active.parentId.isEmpty()&&!m_animationLayers.contains(active.id));
     action("New text layer","type",[this]{ObjectTools::addLayer(m_document,LayerKind::Text);},m_add->isEnabled()&&!m_animationLayers.contains(active.id));
+    if(features::experimental3D){action("New 3D reference layer","box",[this]{emit reference3DLayerRequested(true);},m_add->isEnabled());if(active.kind==LayerKind::Reference3D)action("Edit 3D reference","box",[this]{emit reference3DLayerRequested(false);},true);}
     action("New notes layer","sticky-note",[this]{m_document->addLayer(true);},m_notes->isEnabled());
     menu.addSeparator();action("Delete","trash",[this,ids]{m_document->deleteLayers(ids);},m_remove->isEnabled());
     menu.exec(position.x()<0?m_more->mapToGlobal(QPoint(0,m_more->height())):m_tree->viewport()->mapToGlobal(position));

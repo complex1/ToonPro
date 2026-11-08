@@ -26,6 +26,7 @@ DrawingGuide fixture(GuideType type = GuideType::Perspective) {
     case GuideType::ParallelRuler: guide.points = {{-400, -200}, {800, 600}}; break;
     case GuideType::ThreePoint: guide.points = {{-1200, 100}, {2600, 100}, {400, -2400}, {400, 800}}; break;
     case GuideType::Fisheye: guide.points = {{-200, 200}, {600, 200}, {200, 500}}; break;
+    case GuideType::Ellipse: guide.points = {{50, 100}, {450, 300}, {210, 280}}; break;
     }
     return guide;
 }
@@ -70,7 +71,7 @@ private slots:
         auto project = Project::create();
         auto &shot = project.shots[0];
         for (auto type : {GuideType::Perspective, GuideType::VanishingPoint, GuideType::TwoPoint, GuideType::ParallelRuler,
-                          GuideType::ThreePoint, GuideType::Fisheye})
+                          GuideType::ThreePoint, GuideType::Fisheye, GuideType::Ellipse})
             shot.guides.append(fixture(type));
         auto &guide = shot.guides[0];
         guide.name = QString::fromUtf8("街 / roof");
@@ -101,7 +102,7 @@ private slots:
     void standaloneGuideSetRoundTripAndAtomicFailure() {
         QTemporaryDir temporary; QString error;
         const auto path = temporary.filePath("city.toonguides");
-        QVector<DrawingGuide> guides{fixture(), fixture(GuideType::TwoPoint), fixture(GuideType::ThreePoint), fixture(GuideType::Fisheye)};
+        QVector<DrawingGuide> guides{fixture(), fixture(GuideType::TwoPoint), fixture(GuideType::ThreePoint), fixture(GuideType::Fisheye), fixture(GuideType::Ellipse)};
         GuideSettings settings{true, true, false, QColor("#6995fe"), .7};
         QVERIFY2(saveGuideSet(guides, settings, path, &error), qPrintable(error));
         const auto bytes = readFile(path);
@@ -184,14 +185,17 @@ private slots:
         QVERIFY(!error.isEmpty()); QVERIFY(destination == before); QVERIFY(settings == beforeSettings);
     }
     void newGuideTypeKeysAndPointCountsAreStable() {
-        const auto json = guidesToJson({fixture(GuideType::ThreePoint), fixture(GuideType::Fisheye)}, {});
+        const auto json = guidesToJson({fixture(GuideType::ThreePoint), fixture(GuideType::Fisheye), fixture(GuideType::Ellipse)}, {});
         const auto entries = json.value("guides").toArray();
         QCOMPARE(entries[0].toObject().value("type").toString(), QString("three-point"));
         QCOMPARE(entries[1].toObject().value("type").toString(), QString("fisheye"));
+        QCOMPARE(entries[2].toObject().value("type").toString(), QString("ellipse"));
         QCOMPARE(guidePointCount(GuideType::ThreePoint), 4);
         QCOMPARE(guidePointCount(GuideType::Fisheye), 3);
+        QCOMPARE(guidePointCount(GuideType::Ellipse), 3);
         QCOMPARE(guideTypeName(GuideType::ThreePoint), QString("Three-point perspective"));
         QCOMPARE(guideTypeName(GuideType::Fisheye), QString("Fisheye perspective"));
+        QCOMPARE(guideTypeName(GuideType::Ellipse), QString("Ellipse ruler"));
         QCOMPARE(guidePointCount(static_cast<GuideType>(99)), 0);
     }
     void unknownGuideTypesRejectProjectAndStandaloneSet() {
@@ -216,6 +220,25 @@ private slots:
         QVERIFY(!loadGuideSet(setPath, &guides, &settings, &error));
         QVERIFY(error.contains("Unsupported drawing guide type"));
         QVERIFY(guides == before); QVERIFY(settings == beforeSettings);
+    }
+    void ellipseGuideRetainsFlagsAndRejectsDegenerateSaveAtomically() {
+        auto ellipse = fixture(GuideType::Ellipse); ellipse.visible = false; ellipse.locked = true;
+        ellipse.snapping = false; ellipse.customColor = true; ellipse.color = QColor(80, 190, 140, 170);
+        ellipse.opacity = .4; ellipse.limited = true; ellipse.area = {10, 20, 600, 500};
+        auto project = Project::create(); project.shots[0].guides = {ellipse};
+        const auto manifest = project.toJson(); QCOMPARE(manifest["version"].toInt(), 19);
+        QTemporaryDir directory; QString error; const auto file = directory.filePath("ellipse.toonproj");
+        QVERIFY2(saveProject(project, file, &error), qPrintable(error)); const auto original = readFile(file);
+        const auto loaded = loadProject(file, &error); QVERIFY2(loaded.has_value(), qPrintable(error));
+        QCOMPARE(loaded->shots[0].guides, project.shots[0].guides);
+        const auto set = directory.filePath("ellipse.toonguides");
+        QVERIFY2(saveGuideSet({ellipse}, {}, set, &error), qPrintable(error));
+        const auto savedSet = readFile(set); QVector<DrawingGuide> restored; GuideSettings settings;
+        QVERIFY2(loadGuideSet(set, &restored, &settings, &error), qPrintable(error)); QCOMPARE(restored, QVector<DrawingGuide>{ellipse});
+        project.shots[0].guides[0].points[1] = project.shots[0].guides[0].points[0];
+        QVERIFY(!saveProject(project, file, &error)); QCOMPARE(readFile(file), original);
+        auto invalid = ellipse; invalid.points[2] = (invalid.points[0] + invalid.points[1]) / 2;
+        QVERIFY(!saveGuideSet({invalid}, {}, set, &error)); QCOMPARE(readFile(set), savedSet);
     }
     void budgetsAndIdentifiersSpanWholeProject() {
         auto project = Project::create();
@@ -311,7 +334,7 @@ private slots:
         const auto sheet = renderSheet(project, project.shots[0]);
         const auto frame = renderMovieFrame(project);
         for (auto type : {GuideType::Perspective, GuideType::VanishingPoint, GuideType::TwoPoint, GuideType::ParallelRuler,
-                          GuideType::ThreePoint, GuideType::Fisheye}) {
+                          GuideType::ThreePoint, GuideType::Fisheye, GuideType::Ellipse}) {
             auto guide = fixture(type); guide.color = Qt::red; guide.customColor = true; guide.opacity = 1;
             project.shots[0].guides.append(guide);
         }

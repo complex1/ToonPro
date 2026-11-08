@@ -1,11 +1,13 @@
 #include "document.h"
 #include "object_tools.h"
 #include "sheet.h"
+#include "vector_brush.h"
 #include <QFile>
 #include <QJsonArray>
 #include <QTemporaryDir>
 #include <QUuid>
 #include <QtTest>
+#include <algorithm>
 using namespace toon;
 namespace {
 Project project() { auto p = Project::create(); p.width = 512; p.height = 384; p.transparent = true; return p; }
@@ -153,6 +155,135 @@ private slots:
         QVERIFY(ObjectTools::eraseAt(&doc,{60,30},4,true)); QCOMPARE(active(doc).objects.size(),1);
         const auto &object = active(doc).objects.first(); QVERIFY(!object.closed); QVERIFY(!object.fill.isValid()); QCOMPARE(object.nodes.size(),4);
         QCOMPARE(pixel(active(doc),60,30).alpha(),0); QVERIFY(pixel(active(doc),60,100).alpha()>0);
+    }
+    void intersectionEraserTrimsAtCrossingsInsteadOfExistingNodesAndUndoesOnce() {
+        Document doc;doc.load(project());QVERIFY(ObjectTools::addLayer(&doc,LayerKind::Vector));
+        const auto ink=ObjectTools::addPath(&doc,{BezierNode::corner({20,120}),BezierNode::corner({60,120}),
+            BezierNode::corner({110,120}),BezierNode::corner({180,120}),BezierNode::corner({260,120}),
+            BezierNode::corner({340,120})},false,QColor("#204080"),6);
+        const auto crossing=ObjectTools::addPath(&doc,{BezierNode::corner({220,60}),BezierNode::corner({220,180})},false,Qt::black,4);
+        const auto before=doc.project().toJson();const auto barrier=*ObjectTools::object(active(doc),crossing);
+        const int history=doc.history()->count();
+        QVERIFY(ObjectTools::eraseAt(&doc,{320,120},3,VectorEraseMode::Intersection));
+        QCOMPARE(doc.history()->count(),history+1);QCOMPARE(active(doc).objects.size(),2);
+        const auto &fragment=active(doc).objects.first();QVERIFY(fragment.id!=ink);
+        QCOMPARE(fragment.nodes.size(),5);QVERIFY(QLineF(fragment.nodes.last().anchor,{220,120}).length()<.002);
+        QCOMPARE(fragment.nodes[2].anchor,QPointF(110,120));QCOMPARE(active(doc).objects.last(),barrier);
+        QCOMPARE(pixel(active(doc),320,120).alpha(),0);QVERIFY(pixel(active(doc),200,120).alpha()>0);
+        const auto after=doc.project().toJson();doc.history()->undo();QCOMPARE(doc.project().toJson(),before);
+        doc.history()->redo();QCOMPARE(doc.project().toJson(),after);
+    }
+    void intersectionEraserRetainsBothSidesOfAnInteriorInterval() {
+        Document doc;doc.load(project());QVERIFY(ObjectTools::addLayer(&doc,LayerKind::Vector));
+        QVERIFY(!ObjectTools::addPath(&doc,{BezierNode::corner({20,150}),BezierNode::corner({380,150})},false,Qt::blue,6).isEmpty());
+        for(qreal x:{120.,280.})QVERIFY(!ObjectTools::addPath(&doc,
+            {BezierNode::corner({x,60}),BezierNode::corner({x,220})},false,Qt::black,4).isEmpty());
+        QVERIFY(ObjectTools::eraseAt(&doc,{200,150},3,VectorEraseMode::Intersection));
+        QCOMPARE(active(doc).objects.size(),4);
+        const auto &left=active(doc).objects[0],&right=active(doc).objects[1];
+        QVERIFY(QLineF(left.nodes.last().anchor,{120,150}).length()<.002);
+        QVERIFY(QLineF(right.nodes.first().anchor,{280,150}).length()<.002);
+        QCOMPARE(pixel(active(doc),200,150).alpha(),0);
+        QVERIFY(pixel(active(doc),60,150).alpha()>0);QVERIFY(pixel(active(doc),340,150).alpha()>0);
+    }
+    void intersectionEraserSplitsTransformedCubicWithoutFlatteningItsShapeOrStyle() {
+        Document doc;doc.load(project());QVERIFY(ObjectTools::addLayer(&doc,LayerKind::Vector));
+        const auto id=ObjectTools::addPath(&doc,{{{40,170},{40,170},{40,10}},{{280,170},{280,10},{280,170}}},
+            false,QColor("#6940a0"),8);
+        auto original=*ObjectTools::object(active(doc),id);original.opacity=.65;original.widthFactors={.5,1.5};
+        original.transform.translate(10,20);original.transform.scale(1.2,.8);QVERIFY(ObjectTools::updateObject(&doc,original));
+        const qreal x=original.transform.map(QPointF(160,50)).x();
+        const auto barrierId=ObjectTools::addPath(&doc,{BezierNode::corner({x,10}),BezierNode::corner({x,220})},false,Qt::black,3);
+        const auto barrier=*ObjectTools::object(active(doc),barrierId);
+        const qreal t=.85,u=1-t;
+        const auto point=QPointF(40,170)*(u*u*u)+QPointF(40,10)*(3*u*u*t)
+            +QPointF(280,10)*(3*u*t*t)+QPointF(280,170)*(t*t*t);
+        QVERIFY(ObjectTools::eraseAt(&doc,original.transform.map(point),3,VectorEraseMode::Intersection));
+        QCOMPARE(active(doc).objects.size(),2);const auto &fragment=active(doc).objects.first();
+        QCOMPARE(fragment.transform,original.transform);QCOMPARE(fragment.stroke,original.stroke);
+        QCOMPARE(fragment.opacity,original.opacity);QCOMPARE(fragment.strokeWidth,original.strokeWidth);
+        QCOMPARE(fragment.nodes.size(),2);
+        QVERIFY(QLineF(fragment.nodes[0].anchor,{40,170}).length()<.002);
+        QVERIFY(QLineF(fragment.nodes[0].outControl,{40,90}).length()<.002);
+        QVERIFY(QLineF(fragment.nodes[1].inControl,{100,50}).length()<.002);
+        QVERIFY(QLineF(fragment.nodes[1].anchor,{160,50}).length()<.002);
+        QCOMPARE(fragment.widthFactors.first(),.5);QVERIFY(qAbs(fragment.widthFactors.last()-1)<.002);
+        QCOMPARE(active(doc).objects.last(),barrier);QVERIFY(validateEditableObject(fragment).isEmpty());
+    }
+    void intersectionEraserHandlesClosedWrapAndNoCrossingFallback() {
+        Document doc;doc.load(project());QVERIFY(ObjectTools::addLayer(&doc,LayerKind::Vector));
+        const QVector<BezierNode> square{BezierNode::corner({30,30}),BezierNode::corner({250,30}),
+            BezierNode::corner({250,250}),BezierNode::corner({30,250})};
+        const auto id=ObjectTools::addPath(&doc,square,true,Qt::black,5,Qt::red);
+        const auto barrierId=ObjectTools::addPath(&doc,{BezierNode::corner({140,5}),BezierNode::corner({140,280})},false,Qt::blue,4);
+        QVERIFY(ObjectTools::eraseAt(&doc,{30,140},3,VectorEraseMode::Intersection));
+        QCOMPARE(active(doc).objects.size(),2);const auto &fragment=active(doc).objects.first();
+        QVERIFY(!fragment.closed);QVERIFY(!fragment.fill.isValid());QCOMPARE(fragment.nodes.size(),4);
+        QVERIFY(QLineF(fragment.nodes.first().anchor,{140,30}).length()<.002);
+        QVERIFY(QLineF(fragment.nodes.last().anchor,{140,250}).length()<.002);
+        QCOMPARE(pixel(active(doc),30,140).alpha(),0);QVERIFY(pixel(active(doc),250,140).alpha()>0);
+        doc.history()->undo();QVERIFY(ObjectTools::removeObject(&doc,barrierId));
+        QVERIFY(ObjectTools::eraseAt(&doc,{30,140},3,VectorEraseMode::Intersection));QVERIFY(active(doc).objects.isEmpty());
+        doc.history()->undo();QCOMPARE(active(doc).objects.first().id,id);QVERIFY(active(doc).objects.first().closed);
+    }
+    void intersectionEraserRetainsRecordedPressureAndBrushSource() {
+        Document doc;doc.load(project());QVERIFY(ObjectTools::addLayer(&doc,LayerKind::Vector));
+        BrushSettings brush;brush.size=8;brush.spacing=.1;brush.pressureSize=true;
+        QVERIFY(doc.beginStroke({20,180},.2,brush,false));
+        for(int i=1;i<=36;++i)doc.continueStroke({20.+10*i,180},.2+.8*i/36);
+        doc.endStroke();QCOMPARE(active(doc).objects.size(),1);const auto original=active(doc).objects.first();
+        QVERIFY(original.brushStroke.has_value());QVERIFY(original.brushStroke->samples.size()>20);
+        const auto barrier=ObjectTools::addPath(&doc,{BezierNode::corner({220,100}),BezierNode::corner({220,260})},false,Qt::black,3);
+        QVERIFY(!barrier.isEmpty());QVERIFY(ObjectTools::eraseAt(&doc,{320,180},3,VectorEraseMode::Intersection));
+        QCOMPARE(active(doc).objects.size(),2);const auto &fragment=active(doc).objects.first();
+        QVERIFY(fragment.brushStroke.has_value());QVERIFY(QLineF(fragment.nodes.last().anchor,{220,180}).length()<.002);
+        QCOMPARE(fragment.brushStroke->settings,original.brushStroke->settings);
+        QCOMPARE(fragment.brushStroke->seed,original.brushStroke->seed);
+        QCOMPARE(fragment.brushStroke->canvasSize,original.brushStroke->canvasSize);
+        QVERIFY(fragment.brushStroke->samples.size()<original.brushStroke->samples.size());
+        for(const auto &sample:fragment.brushStroke->samples) {
+            const auto found=std::find_if(original.brushStroke->samples.cbegin(),original.brushStroke->samples.cend(),
+                [&](const VectorBrushSample &value){return value.dabIndex==sample.dabIndex;});
+            QVERIFY(found!=original.brushStroke->samples.cend());QCOMPARE(sample.input,found->input);
+            QCOMPARE(sample.point,found->point);QVERIFY(sample.position>=0&&sample.position<=1);
+        }
+        QCOMPARE(pixel(active(doc),320,180).alpha(),0);QVERIFY(pixel(active(doc),100,180).alpha()>0);
+        QVERIFY(validateEditableObject(fragment).isEmpty());
+    }
+    void intersectionEraserDoesNotUseTangenciesOrCoincidentSpansAsCuts() {
+        Document doc;doc.load(project());QVERIFY(ObjectTools::addLayer(&doc,LayerKind::Vector));
+        const auto id=ObjectTools::addPath(&doc,{BezierNode::corner({20,100}),BezierNode::corner({380,100})},false,Qt::blue,4);
+        QVERIFY(!ObjectTools::addPath(&doc,{BezierNode::corner({80,100}),BezierNode::corner({180,100})},false,Qt::black,2).isEmpty());
+        // The arch touches y=100 at its horizontal tangent, without crossing.
+        QVERIFY(!ObjectTools::addPath(&doc,{{{100,160},{100,160},{140,80}},{{220,160},{180,80},{220,160}}},false,Qt::black,2).isEmpty());
+        QVERIFY(ObjectTools::eraseAt(&doc,{350,100},2,VectorEraseMode::Intersection));
+        QCOMPARE(active(doc).objects.size(),2);QVERIFY(!ObjectTools::object(active(doc),id));
+    }
+    void intersectionEraserRecognizesNonAdjacentSelfCrossings() {
+        Document doc;doc.load(project());QVERIFY(ObjectTools::addLayer(&doc,LayerKind::Vector));
+        QVERIFY(!ObjectTools::addPath(&doc,{BezierNode::corner({20,50}),BezierNode::corner({300,250}),
+            BezierNode::corner({20,250}),BezierNode::corner({300,50})},false,Qt::black,4).isEmpty());
+        QVERIFY(ObjectTools::eraseAt(&doc,{265,75},2,VectorEraseMode::Intersection));
+        QCOMPARE(active(doc).objects.size(),2);
+        for(const auto &fragment:active(doc).objects) {
+            QVERIFY(QLineF(fragment.nodes.last().anchor,{160,150}).length()<.002);
+            QVERIFY(validateEditableObject(fragment).isEmpty());
+        }
+        QCOMPARE(pixel(active(doc),265,75).alpha(),0);QVERIFY(pixel(active(doc),60,250).alpha()>0);
+    }
+    void intersectionEraserRespectsLocksAndAnimatedPathProtection() {
+        Document doc;doc.load(project());QVERIFY(ObjectTools::addLayer(&doc,LayerKind::Vector));
+        const auto id=ObjectTools::addPath(&doc,{BezierNode::corner({20,150}),BezierNode::corner({380,150})},false,Qt::black,5);
+        QVERIFY(!ObjectTools::addPath(&doc,{BezierNode::corner({220,60}),BezierNode::corner({220,240})},false,Qt::blue,4).isEmpty());
+        const auto layerId=active(doc).id;doc.setLayersLocked({layerId},true);
+        QSignalSpy warnings(&doc,&Document::warning);const auto locked=doc.project().toJson();const int history=doc.history()->count();
+        QVERIFY(!ObjectTools::eraseAt(&doc,{320,150},3,VectorEraseMode::Intersection));
+        QCOMPARE(doc.project().toJson(),locked);QCOMPARE(doc.history()->count(),history);QCOMPARE(warnings.size(),1);
+        doc.setLayersLocked({layerId},false);QVERIFY(doc.enablePathAnimation(layerId,id));
+        const auto animated=doc.project().toJson();const int keyedHistory=doc.history()->count();warnings.clear();
+        QVERIFY(!ObjectTools::eraseAt(&doc,{320,150},3,VectorEraseMode::Intersection));
+        QCOMPARE(doc.project().toJson(),animated);QCOMPARE(doc.history()->count(),keyedHistory);
+        QCOMPARE(warnings.size(),1);QVERIFY(warnings.first().first().toString().contains("path animation"));
     }
     void textIsEditableAndWraps() {
         Document doc; doc.load(project()); ObjectTools::addLayer(&doc,LayerKind::Text);

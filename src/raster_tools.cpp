@@ -7,6 +7,7 @@
 #include <QUuid>
 #include <QHash>
 #include <QLineF>
+#include <QSet>
 #include <algorithm>
 #include <cmath>
 #include <deque>
@@ -17,6 +18,8 @@ namespace toon {
 namespace {
 using Coverage = RasterSelectionTile::Coverage;
 constexpr qint64 maxSamplePixels = 32 * 1024 * 1024;
+constexpr qint64 maxEnclosePixels = 16 * 1024 * 1024;
+constexpr int maxEnclosePathElements = 8192;
 constexpr int maxSelectionElements = 262144;
 int tileCoordinate(int value) { return int(std::floor(value / qreal(tileSize))); }
 bool finite(QPointF point) { return std::isfinite(point.x()) && std::isfinite(point.y()) && std::abs(point.x()) <= 1000000 && std::abs(point.y()) <= 1000000; }
@@ -52,6 +55,11 @@ bool hasPixels(const QImage &image) {
 }
 QImage renderSource(Document *document, const QRect &area, RasterSampleSource source, const QString &referenceId,
                     bool samplePixel = false, const Shot *displayShot = nullptr) {
+    if (int(source) < int(RasterSampleSource::ActiveLayer) || int(source) > int(RasterSampleSource::MarkedReferences)) return {};
+    if (source == RasterSampleSource::MarkedReferences) {
+        const auto reason = RasterTools::referenceSourceReason(document);
+        if (!reason.isEmpty()) { emit document->warning(reason); return {}; }
+    }
     if (area.isEmpty() || qint64(area.width()) * area.height() > maxSamplePixels) {
         emit document->warning("The sampling region exceeds the 32-million-pixel working limit."); return {};
     }
@@ -64,13 +72,58 @@ QImage renderSource(Document *document, const QRect &area, RasterSampleSource so
     // off-sheet path can cast a shadow into a fill/sampling region.
     auto displayedShot=displayShot && source==RasterSampleSource::AllLayers ? *displayShot : shot;
     if(document->keyframeSourceEditing())displayedShot.layerAnimations.clear();
+    if (source != RasterSampleSource::AllLayers) {
+        const auto present = activeLayerIds(shot, document->currentFrame());
+        QSet<QString> targets;
+        if (source == RasterSampleSource::MarkedReferences) {
+            for (const auto &layer : shot.layers) if (layer.fillReference && present.contains(layer.id)) targets.insert(layer.id);
+            const auto markedTargets = targets;
+            for (int i = 0; i < shot.layers.size(); ++i) if (targets.contains(shot.layers[i].id)) {
+                for (const auto &root : markedTargets) if (root != shot.layers[i].id && layerIsDescendant(shot.layers, i, root)) {
+                    targets.remove(shot.layers[i].id); break;
+                }
+            }
+        } else targets.insert(source == RasterSampleSource::ReferenceLayer ? referenceId : shot.layers[document->activeLayer()].id);
+        // Editable objects are rebuilt during evaluation. Normalize root eyes
+        // before that stage so hidden or faded references have current geometry,
+        // even when an unmarked ancestor moves them. Folder children retain
+        // their own visibility unless they are needed ancestors of a root.
+        for (const auto &target : targets) {
+            QString next = target; QSet<QString> visited;
+            while (!next.isEmpty() && !visited.contains(next)) {
+                visited.insert(next); bool found = false;
+                for (auto &layer : displayedShot.layers) if (layer.id == next) {
+                    layer.visible = true; layer.opacity = 1; next = layer.parentId; found = true; break;
+                }
+                if (!found) break;
+            }
+        }
+    }
     QString evaluationError;
     const auto layers=evaluateLayers(document->project(),displayedShot,document->currentFrame(),false,
         samplePixel?QRectF(area):document->drawingBounds(),&evaluationError);
     if(!evaluationError.isEmpty()){emit document->warning(evaluationError);return {};}
     QPainter painter(&image); painter.translate(-area.topLeft());
     const bool animatedSampling = !document->keyframeSourceEditing() && !shot.layerAnimations.isEmpty();
-    if (source == RasterSampleSource::AllLayers) paintLayers(painter, layers, true, nullptr, animatedSampling);
+    if (source == RasterSampleSource::MarkedReferences) {
+        QSet<QString> roots;
+        for (const auto &layer : layers) if (layer.fillReference) roots.insert(layer.id);
+        QVector<RasterLayer> isolated;
+        for (int index = 0; index < layers.size(); ++index) {
+            const auto &original = layers[index];
+            bool inMarkedFolder = false;
+            for (const auto &root : roots) if (root != original.id && layerIsDescendant(layers, index, root)) { inMarkedFolder = true; break; }
+            if (inMarkedFolder) { isolated.append(original); continue; }
+            if (!roots.contains(original.id) || original.adjustment) continue;
+            auto layer = original;
+            if (!document->keyframeSourceEditing()) layer.renderTransform = worldLayerTransform(shot, layer.id, document->currentFrame());
+            layer.parentId.clear(); layer.visible = true; layer.opacity = 1;
+            layer.clipped = false; layer.blendMode = LayerBlendMode::Normal;
+            isolated.append(std::move(layer));
+        }
+        paintLayers(painter, isolated, true, nullptr, animatedSampling, {document->project().width, document->project().height});
+    }
+    else if (source == RasterSampleSource::AllLayers) paintLayers(painter, layers, true, nullptr, animatedSampling, {document->project().width, document->project().height});
     else {
         const QString selectedId=source==RasterSampleSource::ReferenceLayer?referenceId:shot.layers[document->activeLayer()].id;
         if(source==RasterSampleSource::ReferenceLayer&&std::none_of(shot.layers.cbegin(),shot.layers.cend(),
@@ -89,14 +142,28 @@ QImage renderSource(Document *document, const QRect &area, RasterSampleSource so
             QVector<RasterLayer> isolated;
             layer.parentId.clear(); layer.visible = true; layer.opacity = 1; isolated.append(layer);
             for (int i = 0; i < layers.size(); ++i) if (layerIsDescendant(layers, i, layer.id)) isolated.append(layers[i]);
-            paintLayers(painter, isolated, true, nullptr, animatedSampling);
+            paintLayers(painter, isolated, true, nullptr, animatedSampling, {document->project().width, document->project().height});
         } else {
             layer.visible = true; layer.parentId.clear(); layer.clipped = false; layer.opacity = 1; layer.blendMode = LayerBlendMode::Normal;
-            paintLayers(painter, {layer}, true, nullptr, animatedSampling);
+            paintLayers(painter, {layer}, true, nullptr, animatedSampling, {document->project().width, document->project().height});
         }
     }
     painter.end();
     if(const auto error=keyframeRenderError();!error.isEmpty()){emit document->warning(error);return {};}
+    if (source == RasterSampleSource::MarkedReferences && !samplePixel && !hasPixels(image)) {
+        // A selection can lie inside a closed shape while excluding all of its
+        // ink. Verify the whole source, within the shared pixel budget, only
+        // for an empty crop so that valid
+        // interior fills work without letting truly empty references fill it.
+        const auto whole = document->drawingBounds().toAlignedRect();
+        if (area == whole) {
+            emit document->warning("The marked reference layers contain no visible reference pixels."); return {};
+        }
+        if (qint64(area.width()) * area.height() + qint64(whole.width()) * whole.height() > maxSamplePixels) {
+            emit document->warning("Checking empty reference boundaries exceeds the 32-million-pixel sampling budget. Reduce the drawing or selection size."); return {};
+        }
+        if (renderSource(document, whole, source, referenceId, false, displayShot).isNull()) return {};
+    }
     return image;
 }
 int colorDistance(QRgb first, QRgb second) {
@@ -104,13 +171,13 @@ int colorDistance(QRgb first, QRgb second) {
     return std::max({std::abs(qRed(first) - qRed(second)), std::abs(qGreen(first) - qGreen(second)),
                      std::abs(qBlue(first) - qBlue(second)), std::abs(qAlpha(first) - qAlpha(second))});
 }
-QImage morphology(const QImage &source, int radius, bool maximum) {
+QImage morphology(const QImage &source, int radius, bool maximum, bool zeroOutside = false) {
     QImage horizontal(source.size(), QImage::Format_Grayscale8), result(source.size(), QImage::Format_Grayscale8);
     if (horizontal.isNull() || result.isNull()) return {};
-    const auto run = [radius, maximum](int count, auto value, auto assign) {
+    const auto run = [radius, maximum, zeroOutside](int count, auto value, auto assign) {
         std::deque<QPair<int, int>> queue;
         for (int i = -radius; i < count + radius; ++i) {
-            const int v = value(qBound(0, i, count - 1));
+            const int v = zeroOutside && (i < 0 || i >= count) ? 0 : value(qBound(0, i, count - 1));
             while (!queue.empty() && (maximum ? queue.back().second <= v : queue.back().second >= v)) queue.pop_back();
             queue.emplace_back(i, v);
             while (queue.front().first < i - 2 * radius) queue.pop_front();
@@ -235,6 +302,156 @@ QRgb layerPixel(const RasterLayer &layer, QPoint point) {
     return tile == layer.tiles.cend() ? 0 : tile->pixel(point.x() - key.first * tileSize, point.y() - key.second * tileSize);
 }
 
+bool ownsSampledPixel(const RasterFillSettings &settings, const RasterLayer &layer,
+                     QRgb sampled, QPoint point, bool conservative = false) {
+    if (settings.source == RasterSampleSource::ActiveLayer ||
+        (settings.source == RasterSampleSource::ReferenceLayer && settings.referenceLayerId == layer.id)) return true;
+    if (settings.source != RasterSampleSource::AllLayers && settings.source != RasterSampleSource::MarkedReferences) return false;
+    const QRgb original = layerPixel(layer, point);
+    // Composite opacity, blending, masks or effects can change a layer's ink
+    // before sampling. A nonwhite raw ink pixel cannot safely be assumed to belong
+    // exclusively to another reference merely because its rendered value differs.
+    const bool originalInk = qAlpha(original) > std::min({qRed(original), qGreen(original), qBlue(original)});
+    return conservative ? originalInk : qAlpha(sampled) && original == sampled;
+}
+
+QImage adjustBucketMask(const QImage &mask, const QImage &source, const QImage &edges,
+                        QPoint origin, QRgb target, int tolerance, int expansion,
+                        const RasterFillSettings &settings, const RasterLayer &layer) {
+    if (!expansion) return mask;
+    auto result = morphology(mask, std::abs(expansion), expansion > 0, expansion < 0);
+    if (result.isNull() || expansion < 0) return result;
+    for (int y = 0; y < result.height(); ++y) {
+        auto row = result.scanLine(y); const auto original = mask.constScanLine(y);
+        const auto sampled = reinterpret_cast<const QRgb *>(source.constScanLine(y));
+        const auto edge = edges.isNull() ? nullptr : edges.constScanLine(y);
+        for (int x = 0; x < result.width(); ++x) if (row[x] && !original[x]) {
+            // Grow beneath a separate reference, but never bridge into another
+            // disconnected background region. Solid source ink stays unchanged
+            // when painting on the sampled layer itself.
+            if (colorDistance(sampled[x], target) <= tolerance ||
+                (ownsSampledPixel(settings, layer, sampled[x], origin + QPoint(x, y), true) && (!edge || !edge[x]))) row[x] = 0;
+        }
+    }
+    return result;
+}
+
+QImage gestureCoverage(const QPainterPath &path, const QRect &area) {
+    QImage result(area.size(), QImage::Format_Grayscale8);
+    if (result.isNull()) return {};
+    result.fill(0); RasterSelectionCache cache(&path, 0);
+    for (int ty = tileCoordinate(area.top()); ty <= tileCoordinate(area.bottom()); ++ty)
+        for (int tx = tileCoordinate(area.left()); tx <= tileCoordinate(area.right()); ++tx) {
+            const auto tile = cache.tile({tx, ty});
+            if (tile.coverage == Coverage::Invalid) return {};
+            if (tile.coverage == Coverage::Empty) continue;
+            const QPoint origin(tx * tileSize, ty * tileSize);
+            const QRect part = area.intersected(QRect(origin, QSize(tileSize, tileSize)));
+            for (int y = part.top(); y <= part.bottom(); ++y) {
+                auto row = result.scanLine(y - area.top());
+                const auto selected = tile.mask.isNull() ? nullptr : tile.mask.constScanLine(y - origin.y());
+                for (int x = part.left(); x <= part.right(); ++x)
+                    row[x - area.left()] = selected ? selected[x - origin.x()] : 255;
+            }
+        }
+    return result;
+}
+
+// Transparent/white paper has zero ink strength; opaque black or saturated
+// line cores have full strength. This intentionally targets flat line art,
+// rather than guessing semantic regions in painted or textured references.
+int lineInkStrength(QRgb pixel) {
+    return qAlpha(pixel) - std::min({qRed(pixel), qGreen(pixel), qBlue(pixel)});
+}
+
+QImage lineEdgeWeights(const QImage &source, const QImage &strength, int tolerance) {
+    QImage result(source.size(), QImage::Format_Grayscale8);
+    if (result.isNull()) return {};
+    result.fill(0);
+    const auto overWhite = [](QRgb pixel, auto channel) { return channel(pixel) + 255 - qAlpha(pixel); };
+    for (int y = 0; y < source.height(); ++y) {
+        const auto pixels = reinterpret_cast<const QRgb *>(source.constScanLine(y));
+        const auto ink = strength.constScanLine(y); auto weights = result.scanLine(y);
+        for (int x = 0; x < source.width(); ++x) {
+            if (!ink[x] || ink[x] == 255) continue;
+            int peak = ink[x];
+            for (int ny = std::max(0, y - 2); ny <= std::min(source.height() - 1, y + 2); ++ny) {
+                const auto neighbor = reinterpret_cast<const QRgb *>(source.constScanLine(ny));
+                const auto neighborInk = strength.constScanLine(ny);
+                for (int nx = std::max(0, x - 2); nx <= std::min(source.width() - 1, x + 2); ++nx) {
+                    if (neighborInk[nx] <= peak || neighborInk[nx] < std::max(32, tolerance + 8)) continue;
+                    const qreal fraction = qreal(ink[x]) / neighborInk[nx];
+                    const auto aligned = [&](auto channel) {
+                        return std::abs(overWhite(pixels[x], channel) - 255 - (overWhite(neighbor[nx], channel) - 255) * fraction) <= 2;
+                    };
+                    if (aligned([](QRgb p) { return qRed(p); }) && aligned([](QRgb p) { return qGreen(p); }) &&
+                        aligned([](QRgb p) { return qBlue(p); })) peak = neighborInk[nx];
+                }
+            }
+            // An isolated gray/colored line is still a core. Only a ramp with
+            // a stronger aligned ink sample is treated as antialias coverage.
+            if (peak > ink[x]) weights[x] = uchar(qBound(1, qRound(255.0 * (1.0 - qreal(ink[x]) / peak)), 254));
+        }
+    }
+    return result;
+}
+
+QImage enclosedRegions(const QImage &source, const QImage &gesture, int tolerance, int gaps,
+                       QImage *strength, bool *tooComplex) {
+    *tooComplex = false;
+    *strength = QImage(source.size(), QImage::Format_Grayscale8);
+    QImage blocked(source.size(), QImage::Format_Grayscale8);
+    if (strength->isNull() || blocked.isNull()) return {};
+    for (int y = 0; y < source.height(); ++y) {
+        const auto pixels = reinterpret_cast<const QRgb *>(source.constScanLine(y));
+        auto ink = strength->scanLine(y), barrier = blocked.scanLine(y);
+        for (int x = 0; x < source.width(); ++x) {
+            ink[x] = uchar(lineInkStrength(pixels[x])); barrier[x] = ink[x] > tolerance ? 255 : 0;
+        }
+    }
+    if (gaps) {
+        const auto grown = morphology(blocked, gaps, true);
+        if (grown.isNull()) return {};
+        blocked = morphology(grown, gaps, false);
+        if (blocked.isNull()) return {};
+    }
+    QImage visited(source.size(), QImage::Format_Grayscale8), result(source.size(), QImage::Format_Grayscale8);
+    if (visited.isNull() || result.isNull()) return {};
+    visited.fill(0); result.fill(0);
+    struct Span { int y, left, right; };
+    QVector<QPoint> pending; QVector<Span> spans; int work = 0;
+    for (int startY = 0; startY < source.height(); ++startY)
+        for (int startX = 0; startX < source.width(); ++startX) {
+            if (blocked.constScanLine(startY)[startX] || visited.constScanLine(startY)[startX]) continue;
+            pending.append({startX, startY}); spans.clear(); bool enclosed = true;
+            while (!pending.isEmpty()) {
+                if (++work > maxSelectionElements || pending.size() > maxSelectionElements) { *tooComplex = true; return {}; }
+                const auto point = pending.takeLast(); const int y = point.y();
+                const auto barrier = blocked.constScanLine(y); auto seen = visited.scanLine(y);
+                if (barrier[point.x()] || seen[point.x()]) continue;
+                int left = point.x(), right = point.x();
+                while (left > 0 && !barrier[left - 1] && !seen[left - 1]) --left;
+                while (right + 1 < source.width() && !barrier[right + 1] && !seen[right + 1]) ++right;
+                std::fill(seen + left, seen + right + 1, uchar(255)); spans.append({y, left, right});
+                if (!left || right == source.width() - 1 || !y || y == source.height() - 1) enclosed = false;
+                const auto inside = gesture.constScanLine(y);
+                for (int x = left; enclosed && x <= right; ++x) if (!inside[x]) enclosed = false;
+                for (int nextY : {y - 1, y + 1}) if (nextY >= 0 && nextY < source.height()) {
+                    const auto nextBarrier = blocked.constScanLine(nextY), nextSeen = visited.constScanLine(nextY);
+                    bool inSpan = false;
+                    for (int x = left; x <= right; ++x) {
+                        const bool available = !nextBarrier[x] && !nextSeen[x];
+                        if (available && !inSpan) pending.append({x, nextY});
+                        inSpan = available;
+                    }
+                }
+            }
+            if (enclosed) for (const auto span : spans)
+                std::fill(result.scanLine(span.y) + span.left, result.scanLine(span.y) + span.right + 1, uchar(255));
+        }
+    return result;
+}
+
 bool paintOperation(Document *document, QRectF extent, const std::function<void(QPainter &)> &draw,
                     const QString &label, const QImage &mask = {}, QPoint maskOrigin = {},
                     const std::function<QRgb(QRgb, QRgb, QRgb, QPoint)> &correctEdge = {},
@@ -299,6 +516,19 @@ bool paintOperation(Document *document, QRectF extent, const std::function<void(
 }
 }
 
+QString RasterTools::referenceSourceReason(Document *document) {
+    if (!document || !document->isOpen()) return "Open a drawing first.";
+    const auto &shot = document->activeShot();
+    const auto present = activeLayerIds(shot, document->currentFrame());
+    bool marked = false;
+    for (const auto &layer : shot.layers) if (layer.fillReference) {
+        marked = true;
+        if (!layer.adjustment && present.contains(layer.id)) return {};
+    }
+    return marked ? "No marked reference artwork is exposed at this frame. Mark an artwork layer or folder."
+                  : "Mark a layer as a fill reference in Layers before sampling.";
+}
+
 QColor RasterTools::sample(Document *document, QPointF point, RasterSampleSource source, const QString &id,
                           const Shot *displayShot) {
     if (!document || !document->isOpen() || !finite(point)) return {};
@@ -311,10 +541,12 @@ QColor RasterTools::sample(Document *document, QPointF point, RasterSampleSource
 }
 bool RasterTools::bucket(Document *document, QPointF point, const QColor &color, const RasterFillSettings &settings) {
     if (!ready(document) || !finite(point) || !color.isValid() || !document->drawingBounds().contains(point)) return false;
-    if (int(settings.source) < int(RasterSampleSource::ActiveLayer) || int(settings.source) > int(RasterSampleSource::ReferenceLayer)) return false;
+    if (int(settings.source) < int(RasterSampleSource::ActiveLayer) || int(settings.source) > int(RasterSampleSource::MarkedReferences)) return false;
+    if (settings.expansion < -20 || settings.expansion > 20) { emit document->warning("Fill expansion must be between -20 and 20 pixels."); return false; }
     QJsonObject parameters{{"x", point.x()}, {"y", point.y()}, {"color", color.name(QColor::HexArgb)},
         {"source", int(settings.source)}, {"tolerance", qBound(0, settings.tolerance, 255)},
         {"gapClosing", qBound(0, settings.gapClosing, 20)}};
+    if (settings.expansion) parameters.insert("expansion", settings.expansion);
     if (settings.source == RasterSampleSource::ReferenceLayer) {
         int referenceIndex = -1;
         const auto &layers = document->activeShot().layers;
@@ -329,18 +561,29 @@ bool RasterTools::bucket(Document *document, QPointF point, const QColor &color,
         if (selection.active) area = area.intersected(selection.path.boundingRect().adjusted(-selection.featherRadius, -selection.featherRadius, selection.featherRadius, selection.featherRadius).toAlignedRect());
         if (!area.contains(QPoint(int(std::floor(point.x())), int(std::floor(point.y()))))) return true;
         const auto source = renderSource(document, area, settings.source, settings.referenceLayerId);
+        if (source.isNull()) return false;
         const QPoint seed(int(std::floor(point.x())), int(std::floor(point.y())));
         const int tolerance = qBound(0, settings.tolerance, 255);
         auto mask = colorMask(source, seed - area.topLeft(), tolerance, qBound(0, settings.gapClosing, 20), true);
         if (mask.isNull()) return false;
         const auto &layer = document->activeShot().layers[document->activeLayer()];
         const QRgb target = source.pixel(seed - area.topLeft());
-        // Alpha lock cannot add the missing background beneath transparent ink.
-        if ((layer.alphaLocked && qAlpha(target) < 255) || tolerance == 255)
+        if (settings.expansion < 0) {
+            mask = adjustBucketMask(mask, source, {}, area.topLeft(), target, tolerance, settings.expansion, settings, layer);
+            if (mask.isNull()) return false;
             return paintOperation(document, area, [=](QPainter &painter) { painter.fillRect(area, color); }, "Bucket fill", mask, area.topLeft(), {}, action);
+        }
+        // Alpha lock cannot add the missing background beneath transparent ink.
+        if ((layer.alphaLocked && qAlpha(target) < 255) || tolerance == 255) {
+            mask = adjustBucketMask(mask, source, {}, area.topLeft(), target, tolerance, settings.expansion, settings, layer);
+            if (mask.isNull()) return false;
+            return paintOperation(document, area, [=](QPainter &painter) { painter.fillRect(area, color); }, "Bucket fill", mask, area.topLeft(), {}, action);
+        }
         bool hasEdges = false;
         const auto edges = bucketEdgeCoverage(source, seed - area.topLeft(), tolerance, &mask, &hasEdges);
         if (edges.isNull()) return false;
+        mask = adjustBucketMask(mask, source, edges, area.topLeft(), target, tolerance, settings.expansion, settings, layer);
+        if (mask.isNull()) return false;
         if (!hasEdges) return paintOperation(document, area, [=](QPainter &painter) { painter.fillRect(area, color); }, "Bucket fill", mask, area.topLeft(), {}, action);
         const QRgb activeTarget = layerPixel(layer, seed);
         const bool ownSource = settings.source == RasterSampleSource::ActiveLayer ||
@@ -355,7 +598,7 @@ bool RasterTools::bucket(Document *document, QPointF point, const QColor &color,
             // A separate flat color layer fills all the way under the reference
             // edge. On the ink layer, replace only its background contribution.
             if (!ownSource) {
-                if (settings.source != RasterSampleSource::AllLayers) return painted;
+                if (settings.source != RasterSampleSource::AllLayers && settings.source != RasterSampleSource::MarkedReferences) return painted;
                 if (!qAlpha(activeTarget) && qAlpha(original) > 0 && qAlpha(original) < 255) {
                     background = (255 - qAlpha(original)) / 255.0; backgroundColor = activeTarget;
                 } else if (original != source.pixel(position) || activeTarget != target) return painted;
@@ -369,6 +612,106 @@ bool RasterTools::bucket(Document *document, QPointF point, const QColor &color,
         };
         return paintOperation(document, area, [=](QPainter &painter) { painter.fillRect(area, color); }, "Bucket fill", mask, area.topLeft(), correctEdge, action);
     } catch (const std::bad_alloc &) { emit document->warning("There is not enough memory to fill the artwork."); return false; }
+}
+bool RasterTools::encloseFill(Document *document, const QPainterPath &path, const QColor &color, const RasterFillSettings &settings) {
+    if (!ready(document) || !color.isValid() || path.isEmpty()) return false;
+    if (int(settings.source) < int(RasterSampleSource::ActiveLayer) || int(settings.source) > int(RasterSampleSource::MarkedReferences)) return false;
+    if (settings.expansion < -20 || settings.expansion > 20) { emit document->warning("Fill expansion must be between -20 and 20 pixels."); return false; }
+    if (path.elementCount() > maxEnclosePathElements) { emit document->warning("The enclosing gesture is too detailed. Draw a simpler outline."); return false; }
+    for (int i = 0; i < path.elementCount(); ++i) {
+        const auto element = path.elementAt(i); if (!finite({element.x, element.y})) return false;
+    }
+    try {
+        const int gaps = qBound(0, settings.gapClosing, 20);
+        // Sample beyond the gesture, so the lasso itself never acts as a line
+        // barrier or falsely closes a region it merely intersects.
+        const int halo = 3 + gaps + std::max(0, settings.expansion);
+        const QRect area = path.boundingRect().adjusted(-halo, -halo, halo, halo)
+            .intersected(document->drawingBounds()).toAlignedRect();
+        if (area.isEmpty()) return true;
+        if (qint64(area.width()) * area.height() > maxEnclosePixels) {
+            emit document->warning("Enclose fill exceeds the 16-million-pixel working limit. Enclose a smaller area."); return false;
+        }
+        const auto source = renderSource(document, area, settings.source, settings.referenceLayerId);
+        if (source.isNull()) return false;
+        const auto gesture = gestureCoverage(path, area);
+        if (gesture.isNull()) { emit document->warning("There is not enough memory for the enclosing gesture."); return false; }
+        QImage strength; bool tooComplex = false;
+        auto mask = enclosedRegions(source, gesture, qBound(0, settings.tolerance, 255), gaps, &strength, &tooComplex);
+        if (mask.isNull()) {
+            emit document->warning(tooComplex ? "The enclosed line art is too fragmented. Enclose a smaller or simpler area."
+                                             : "There is not enough memory for enclose fill."); return false;
+        }
+        bool anyRegion = false;
+        for (int y = 0; !anyRegion && y < mask.height(); ++y) {
+            const auto row = mask.constScanLine(y);
+            anyRegion = std::any_of(row, row + mask.width(), [](uchar value) { return value != 0; });
+        }
+        if (!anyRegion) return true;
+        const auto &layer = document->activeShot().layers[document->activeLayer()];
+        QImage edges(source.size(), QImage::Format_Grayscale8);
+        if (edges.isNull()) return false;
+        edges.fill(0);
+        if (settings.expansion < 0) {
+            mask = morphology(mask, -settings.expansion, false, true);
+            if (mask.isNull()) return false;
+        } else {
+            // Add ordinary AA edges without crossing an opaque core. Positive
+            // expansion additionally paints beneath a separate reference's
+            // core, never into another unselected background component.
+            const auto softWeights = lineEdgeWeights(source, strength, qBound(0, settings.tolerance, 255));
+            if (softWeights.isNull()) return false;
+            auto edgeReach = mask;
+            for (int pass = 0; pass < 2; ++pass) {
+                auto grown = morphology(edgeReach, 1, true);
+                if (grown.isNull()) return false;
+                for (int y = 0; y < grown.height(); ++y) {
+                    auto row = grown.scanLine(y); const auto previous = edgeReach.constScanLine(y);
+                    const auto soft = softWeights.constScanLine(y), inside = gesture.constScanLine(y);
+                    for (int x = 0; x < grown.width(); ++x)
+                        if (row[x] && !previous[x] && (!inside[x] || !soft[x])) row[x] = 0;
+                }
+                edgeReach = std::move(grown);
+            }
+            auto expanded = settings.expansion ? morphology(edgeReach, settings.expansion, true) : edgeReach;
+            if (expanded.isNull()) return false;
+            for (int y = 0; y < mask.height(); ++y) {
+                auto row = mask.scanLine(y), weights = edges.scanLine(y);
+                const auto candidate = expanded.constScanLine(y), soft = edgeReach.constScanLine(y);
+                const auto ink = strength.constScanLine(y), inside = gesture.constScanLine(y);
+                const auto edgeWeight = softWeights.constScanLine(y);
+                const auto pixels = reinterpret_cast<const QRgb *>(source.constScanLine(y));
+                for (int x = 0; x < mask.width(); ++x) if (!row[x] && candidate[x] && inside[x]) {
+                    const QPoint canvasPoint = area.topLeft() + QPoint(x, y);
+                    const bool owned = ownsSampledPixel(settings, layer, pixels[x], canvasPoint, true);
+                    const QRgb original = layerPixel(layer, canvasPoint);
+                    const bool unchangedInk = !qAlpha(original) || original == pixels[x];
+                    if (soft[x] && (!owned || (!layer.alphaLocked && unchangedInk))) {
+                        row[x] = 255; weights[x] = edgeWeight[x];
+                    } else if (settings.expansion && ink[x] > qBound(0, settings.tolerance, 255) && !edgeWeight[x] && !owned) row[x] = 255;
+                }
+            }
+        }
+        const auto correctEdge = [=](QRgb original, QRgb painted, QRgb overlay, QPoint canvasPoint) {
+            if (layer.alphaLocked) return painted;
+            const QPoint point = canvasPoint - area.topLeft();
+            const int weight = edges.constScanLine(point.y())[point.x()];
+            if (!weight || !ownsSampledPixel(settings, layer, source.pixel(point), canvasPoint)) return painted;
+            const bool transparent = qAlpha(source.pixel(point)) < 255;
+            const int background = transparent ? 255 - qAlpha(source.pixel(point)) : weight;
+            const QRgb backgroundColor = transparent ? 0 : qRgb(255, 255, 255);
+            const qreal alpha = qAlpha(overlay) / 255.0;
+            const auto channel = [=](int old, int paint, int base) {
+                return qBound(0, qRound(old + background / 255.0 * (paint - base * alpha)), 255);
+            };
+            const int a = channel(qAlpha(original), qAlpha(overlay), qAlpha(backgroundColor));
+            return qRgba(std::min(a, channel(qRed(original), qRed(overlay), qRed(backgroundColor))),
+                         std::min(a, channel(qGreen(original), qGreen(overlay), qGreen(backgroundColor))),
+                         std::min(a, channel(qBlue(original), qBlue(overlay), qBlue(backgroundColor))), a);
+        };
+        return paintOperation(document, area, [=](QPainter &painter) { painter.fillRect(area, color); },
+                              "Enclose fill", mask, area.topLeft(), correctEdge);
+    } catch (const std::bad_alloc &) { emit document->warning("There is not enough memory for enclose fill."); return false; }
 }
 bool RasterTools::selectColor(Document *document, QPointF point, const RasterFillSettings &settings, bool contiguous, SelectionCombine mode) {
     if (!ready(document, false) || !finite(point) || !document->drawingBounds().contains(point)) return false;

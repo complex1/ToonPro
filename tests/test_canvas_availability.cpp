@@ -263,7 +263,7 @@ private slots:
     void physicalEraserEditsVectorPathsAndPenEndResumesBrushDrawing() {
         Canvas canvas; setup(canvas); auto *doc=canvas.document();
         QVERIFY(ObjectTools::addLayer(doc,LayerKind::Vector)); const auto id=path(canvas); QVERIFY(!id.isEmpty());
-        canvas.setTool(Tool::Brush); canvas.setBrushSize(20); canvas.drawingTools()->eraseSegments=false;
+        canvas.setTool(Tool::Brush); canvas.setBrushSize(20); canvas.drawingTools()->vectorEraseMode=VectorEraseMode::WholeStroke;
         const auto before=canvas.project().toJson(); const auto frame=renderMovieFrame(canvas.project());
         const int history=doc->history()->count(); QSignalSpy blocked(&canvas,&Canvas::actionBlocked);
         QPointingDevice eraser("Vector eraser end",45,QInputDevice::DeviceType::Stylus,QPointingDevice::PointerType::Eraser,

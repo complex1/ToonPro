@@ -425,7 +425,7 @@ void AddToolsDialog::refreshChoices()
     const QSignalBlocker blocker(m_choices); m_choices->clear();
     m_previews->prune();
     const auto *destination = m_context == Context::GroupTools ? m_catalog->entry(m_destinationId) : nullptr;
-    for (const auto &tool : m_catalog->tools()) {
+    for (const auto &tool : m_catalog->availableTools()) {
         if (destination && destination->tools.contains(tool.id)) continue;
         auto *item = new QListWidgetItem(m_previews->previewFor(tool), tool.name, m_choices);
         item->setData(idRole, tool.id); item->setToolTip(tool.name); item->setSizeHint({0, namedRowHeight});
@@ -604,16 +604,44 @@ ToolNavigationPanel::ToolNavigationPanel(ToolCatalog *catalog, bool toolbox, QWi
     });
     connect(m_list, &QListWidget::customContextMenuRequested, this, &ToolNavigationPanel::showContextMenu);
     list->moved = [this](const QString &id, int index) {
-        if (m_toolbox) m_catalog->moveEntry(id, index);
-        else if (m_tagFilter.isEmpty() && m_search->text().trimmed().isEmpty() && !m_iconsOnly)
-            m_catalog->moveTool(m_catalog->selectedEntryId(), id, index);
-        else refresh();
+        movePlacement(id, index);
     };
     connect(m_catalog, &ToolCatalog::changed, this, &ToolNavigationPanel::refresh);
     applyViewMode(); refresh();
 }
 
 void ToolNavigationPanel::setPreviewDocument(Document *document) { m_previews->setDocument(document); }
+
+void ToolNavigationPanel::movePlacement(const QString &id, int index)
+{
+    if (!m_toolbox && (!m_tagFilter.isEmpty() || !m_search->text().trimmed().isEmpty() || m_iconsOnly)) {
+        refresh(); return;
+    }
+    const auto entryId = m_catalog->selectedEntryId();
+    QStringList stored, visible;
+    if (m_toolbox) {
+        for (const auto &entry : m_catalog->entries()) stored.append(entry.id);
+        for (const auto &entry : m_catalog->availableEntries()) visible.append(entry.id);
+    } else if (const auto *entry = m_catalog->entry(entryId)) {
+        stored = entry->tools; visible = m_catalog->visibleToolIds();
+    }
+    const int source = stored.indexOf(id), visibleSource = visible.indexOf(id);
+    if (source < 0 || visibleSource < 0) { refresh(); return; }
+    if (index == visibleSource) { refresh(); return; }
+    visible.removeAt(visibleSource);
+    if (index < 0 || index > visible.size()) { refresh(); return; }
+    // The list omits quarantined placements. Locate the visible neighbor in
+    // stored order, accounting for removal of the dragged item before insertion.
+    int destination = source;
+    if (!visible.isEmpty()) {
+        const bool before = index < visible.size();
+        const int anchor = stored.indexOf(before ? visible[index] : visible.last());
+        destination = anchor + (before ? 0 : 1) - (source < anchor ? 1 : 0);
+    }
+    if (m_toolbox) m_catalog->moveEntry(id, destination);
+    else m_catalog->moveTool(entryId, id, destination);
+    refresh();
+}
 
 QString ToolNavigationPanel::currentId() const
 {
@@ -715,7 +743,7 @@ void ToolNavigationPanel::refresh()
     const QSignalBlocker blocker(m_list);
     m_previews->prune();
     QStringList ids;
-    if (m_toolbox) { for (const auto &entry : m_catalog->entries()) ids.append(entry.id); }
+    if (m_toolbox) { for (const auto &entry : m_catalog->availableEntries()) ids.append(entry.id); }
     else ids = m_catalog->visibleToolIds();
     bool rebuild = ids.size() != m_list->count();
     if (!rebuild) for (int i = 0; i < ids.size(); ++i)
@@ -735,7 +763,7 @@ void ToolNavigationPanel::refresh()
         if (current) m_list->setCurrentItem(item);
     };
     if (m_toolbox) {
-        for (const auto &entry : m_catalog->entries()) {
+        for (const auto &entry : m_catalog->availableEntries()) {
             const auto *tool = !entry.group && !entry.tools.isEmpty() ? m_catalog->tool(entry.tools.first()) : nullptr;
             QString tip = entry.group ? QString("%1 · %2 tools").arg(entry.name).arg(entry.tools.size()) : entry.name;
             const auto tags = tool ? tool->tags : entry.tags;
@@ -827,9 +855,9 @@ void ToolNavigationPanel::showContextMenu(const QPoint &position)
     QStringList available, assigned;
     if (group) assigned = entry->tags;
     else if (const auto *tool = m_catalog->tool(toolId)) assigned = tool->tags;
-    for (const auto &tool : m_catalog->tools()) for (const auto &tag : tool.tags)
+    for (const auto &tool : m_catalog->availableTools()) for (const auto &tag : tool.tags)
         if (!available.contains(tag, Qt::CaseInsensitive)) available.append(tag);
-    for (const auto &placement : m_catalog->entries()) for (const auto &tag : placement.tags)
+    for (const auto &placement : m_catalog->availableEntries()) for (const auto &tag : placement.tags)
         if (!available.contains(tag, Qt::CaseInsensitive)) available.append(tag);
     available.sort(Qt::CaseInsensitive);
     for (const auto &tag : available) {

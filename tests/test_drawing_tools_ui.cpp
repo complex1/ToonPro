@@ -1,15 +1,18 @@
 #include "canvas.h"
 #include "drawing_tool_controller.h"
+#include "drawing_tool_panel.h"
 #include "object_tools.h"
 #include "layer_panel.h"
 #include "ui_theme.h"
 #include "vector_edit_geometry.h"
 #include <QApplication>
 #include <QDir>
+#include <QFocusEvent>
 #include <QMouseEvent>
 #include <QPointingDevice>
 #include <QPainter>
 #include <QTabletEvent>
+#include <QTabBar>
 #include <QTemporaryDir>
 #include <QToolButton>
 #include <QTreeWidget>
@@ -31,6 +34,44 @@ class DrawingToolsUiTest : public QObject {
     Q_OBJECT
 private slots:
     void initTestCase(){applyTheme();}
+    void encloseFillCommitsOnReleaseAndCancelsInterruptedLoops_data(){
+        QTest::addColumn<bool>("pen");QTest::addColumn<int>("end");QTest::addColumn<bool>("mirrored");
+        for(bool pen:{false,true})for(int end:{0,1,2,3})QTest::newRow(qPrintable(QString("%1-%2").arg(pen?"pen":"mouse").arg(end)))<<pen<<end<<(!pen&&end==0);
+    }
+    void encloseFillCommitsOnReleaseAndCancelsInterruptedLoops(){
+        QFETCH(bool,pen);QFETCH(int,end);QFETCH(bool,mirrored);
+        auto p=project();p.width=320;p.height=240;p.shots[0].layers[0].fillReference=true;
+        QImage lines(tileSize,tileSize,QImage::Format_ARGB32_Premultiplied);lines.fill(Qt::transparent);
+        {QPainter painter(&lines);painter.setPen(QPen(Qt::black,3));painter.drawRect(QRectF(70,70,40,40));painter.drawRect(QRectF(150,70,40,40));}
+        p.shots[0].layers[0].tiles.insert({0,0},lines);p.shots[0].layers.append(RasterLayer::create("Flats"));
+        Canvas canvas;canvas.resize(800,600);canvas.setProject(p);canvas.document()->selectLayer(1);canvas.show();canvas.setZoom(1);canvas.setRotation(13);canvas.setCanvasMirrored(mirrored);QApplication::processEvents();
+        auto*c=canvas.drawingTools();canvas.setTool(Canvas::Tool::Bucket);c->encloseFillMode=true;c->fillSettings.source=RasterSampleSource::MarkedReferences;canvas.setBrushColor(Qt::red);
+        const auto before=renderMovieFrame(canvas.project());const auto reference=canvas.shot().layers[0].tiles;
+        QPointingDevice device("Enclose pen",232,QInputDevice::DeviceType::Stylus,QPointingDevice::PointerType::Pen,QInputDevice::Capability::Position|QInputDevice::Capability::Pressure,1,3);
+        const auto send=[&](QEvent::Type type,QPointF point){if(!pen){mouse(canvas,type,point);return;}const auto pos=view(canvas,point);const bool release=type==QEvent::MouseButtonRelease;const bool press=type==QEvent::MouseButtonPress;QTabletEvent event(release?QEvent::TabletRelease:press?QEvent::TabletPress:QEvent::TabletMove,&device,pos,canvas.mapToGlobal(pos),release?0:.8,0,0,0,0,0,Qt::NoModifier,press||release?Qt::LeftButton:Qt::NoButton,release?Qt::NoButton:Qt::LeftButton);QApplication::sendEvent(&canvas,&event);};
+        send(QEvent::MouseButtonPress,{50,50});for(const QPointF point:{QPointF(210,50),QPointF(210,130),QPointF(50,130),QPointF(50,50)})send(QEvent::MouseMove,point);
+        QVERIFY(c->dragging());QCOMPARE(renderMovieFrame(canvas.project()),before);QCOMPARE(canvas.document()->history()->count(),0);
+        if(end==1)QTest::keyClick(&canvas,Qt::Key_Escape);
+        else if(end==2){QFocusEvent event(QEvent::FocusOut,Qt::OtherFocusReason);QApplication::sendEvent(&canvas,&event);}
+        else if(end==3){
+            if(pen){const auto pos=view(canvas,{50,50});QTabletEvent event(QEvent::TabletMove,&device,pos,canvas.mapToGlobal(pos),0,0,0,0,0,0,Qt::NoModifier,Qt::NoButton,Qt::NoButton);QApplication::sendEvent(&canvas,&event);}
+            else mouse(canvas,QEvent::MouseMove,{50,50},Qt::NoModifier,Qt::NoButton);
+        }
+        send(QEvent::MouseButtonRelease,{50,50});QVERIFY(!c->active());QCOMPARE(canvas.shot().layers[0].tiles,reference);
+        if(end){QCOMPARE(renderMovieFrame(canvas.project()),before);QCOMPARE(canvas.document()->history()->count(),0);return;}
+        QCOMPARE(canvas.document()->history()->count(),1);const auto after=renderMovieFrame(canvas.project());QCOMPARE(after.pixelColor(90,90),QColor(Qt::red));QCOMPARE(after.pixelColor(170,90),QColor(Qt::red));QCOMPARE(after.pixelColor(30,90).alpha(),0);
+        canvas.document()->history()->undo();QCOMPARE(renderMovieFrame(canvas.project()),before);canvas.document()->history()->redo();QCOMPARE(renderMovieFrame(canvas.project()),after);
+    }
+    void vectorIntersectionModeErasesOnlyTheTouchedInterval(){
+        Canvas canvas;setup(canvas);auto*doc=canvas.document();QVERIFY(ObjectTools::addLayer(doc,LayerKind::Vector));
+        const auto line=ObjectTools::addPath(doc,{BezierNode::corner({50,100}),BezierNode::corner({250,100})},false,Qt::black,3);QVERIFY(!line.isEmpty());
+        const auto first=ObjectTools::addPath(doc,{BezierNode::corner({100,50}),BezierNode::corner({100,150})},false,Qt::black,3);QVERIFY(!first.isEmpty());
+        const auto second=ObjectTools::addPath(doc,{BezierNode::corner({200,50}),BezierNode::corner({200,150})},false,Qt::black,3);QVERIFY(!second.isEmpty());
+        const auto before=active(canvas).objects;const auto count=doc->history()->count();DrawingToolPanel panel(&canvas);canvas.setTool(Canvas::Tool::VectorEraser);
+        panel.findChild<QTabBar*>("vectorEraseMode")->setCurrentIndex(2);canvas.drawingTools()->retouchSettings.size=6;
+        drag(canvas,{145,100},{155,100});QCOMPARE(active(canvas).objects.size(),4);QVERIFY(ObjectTools::object(active(canvas),first));QVERIFY(ObjectTools::object(active(canvas),second));QCOMPARE(doc->history()->count(),count+1);
+        doc->history()->undo();QCOMPARE(active(canvas).objects,before);doc->history()->redo();QCOMPARE(active(canvas).objects.size(),4);
+    }
     void retouchPixelsPersistAfterContact_data(){
         QTest::addColumn<int>("mode");QTest::addColumn<int>("input");
         const QStringList inputs={"mouse","pen-release","pen-hover-before-release","mouse-missing-release","pen-barrel-release"};

@@ -1,6 +1,8 @@
 #include "effect_render.h"
 #include "advanced_transform.h"
+#include "layer_outline.h"
 #include "scene3d_cache.h"
+#include "reference3d_render.h"
 #include <QCache>
 #include <QCryptographicHash>
 #include <QDataStream>
@@ -22,7 +24,7 @@ thread_local const std::atomic_bool *renderCancellation = nullptr;
 constexpr qint64 maxRegionPixels = 8 * 1024 * 1024;
 constexpr qint64 maxWorkingBytes = 256 * 1024 * 1024;
 QCache<QByteArray,QImage> &effectCache() { static thread_local QCache<QByteArray,QImage> cache(64*1024*1024); return cache; }
-bool supported(const RasterLayer &layer) { return !layer.annotation && !layer.scene3d; }
+bool supported(const RasterLayer &layer) { return !layer.annotation && !layer.scene3d && !layer.reference3d; }
 bool colorActive(const LayerEffects &fx) {
     return fx.enabled && fx.colorEnabled && (fx.exposure!=0 || fx.contrast!=0 || fx.saturation!=0 || fx.hue!=0);
 }
@@ -35,14 +37,14 @@ bool affected(const RasterLayer &layer) {
     if(layer.adjustment)return colorActive(layer.effects);
     const auto &fx=layer.effects;
     const bool active=fx.enabled&&((fx.blurEnabled&&fx.blurRadius>0)
-        ||(fx.shadowEnabled&&fx.shadowOpacity>0)||(fx.glowEnabled&&fx.glowOpacity>0)||colorActive(fx));
+        ||(fx.shadowEnabled&&fx.shadowOpacity>0)||(fx.glowEnabled&&fx.glowOpacity>0)||(fx.outlineEnabled&&fx.outlineWidth>0)||colorActive(fx));
     return active || maskActive(layer.mask);
 }
 int radius(qreal value) { return qBound(0,int(std::ceil(value)),128); }
 int blurRadius(const LayerEffects &fx) { return fx.enabled && fx.blurEnabled ? radius(fx.blurRadius) : 0; }
 QRectF expandedOutput(QRectF bounds,const RasterLayer &layer) {
     if(bounds.isEmpty() || !supported(layer) || !layer.effects.enabled)return bounds;
-    const auto &fx=layer.effects; const int blur=blurRadius(fx);
+    const auto &fx=layer.effects; const int blur=blurRadius(fx)+(fx.outlineEnabled?radius(fx.outlineWidth):0);
     bounds.adjust(-blur,-blur,blur,blur);
     auto result=bounds;
     if(fx.glowEnabled && fx.glowOpacity>0) {
@@ -63,7 +65,7 @@ QRectF requiredInput(QRectF output,const RasterLayer &layer) {
         const int r=radius(fx.shadowRadius);
         result|=output.translated(-fx.shadowOffset).adjusted(-r-1,-r-1,r+1,r+1);
     }
-    const int blur=blurRadius(fx);return result.adjusted(-blur,-blur,blur,blur);
+    const int blur=blurRadius(fx)+(fx.outlineEnabled&&fx.outlineWidth>0?radius(fx.outlineWidth)+1:0);return result.adjusted(-blur,-blur,blur,blur);
 }
 bool bounded(const QRectF &rect) {
     return std::isfinite(rect.left()) && std::isfinite(rect.top()) && std::isfinite(rect.right())
@@ -381,6 +383,7 @@ bool layerStackHasEffects(const QVector<RasterLayer> &layers) {
 }
 QString effectRenderError(){return renderError;}
 void clearEffectRenderError(){renderError.clear();}
+void reportLayerRenderError(const QString &error){if(!error.isEmpty()&&renderError.isEmpty())renderError=error;}
 QImage layerMaskCoveragePreview(const LayerMask &mask,QRectF layerBounds,QSize size,bool smooth) {
     if(size.isEmpty() || size.width()>1024 || size.height()>1024 || layerBounds.isEmpty() || !bounded(layerBounds))return {};
     // Thumbnail failure must not erase a canvas error or inherit a stale one.
@@ -428,6 +431,7 @@ public:
         for(int i=0;i<layers.size();++i) {
             const auto &layer=layers[i];children[layer.parentId].append(i);
             if(layer.scene3d&&layer.scene3d->visible&&!sceneSize.isEmpty())sceneImages.insert(layer.id,scene3DLayerPreview(layer.id,*layer.scene3d,sceneSize));
+            if(layer.reference3d&&layer.visible&&!sceneSize.isEmpty()){QString error;sceneImages.insert(layer.id,referenceLayerPreview(layer.id,*layer.reference3d,sceneSize,&error));reportLayerRenderError(error);}
             data<<layer.id<<layer.parentId<<layer.group<<layer.visible<<layer.annotation<<layer.clipped<<layer.adjustment
                 <<layer.opacity<<qint32(layer.blendMode)<<layer.renderTransform<<sceneImages.value(layer.id).cacheKey()
                 <<double(layer.scene3d?layer.scene3d->opacity:1)<<QJsonDocument(layerEffectsToJson(layer.effects)).toJson(QJsonDocument::Compact);
@@ -439,7 +443,7 @@ public:
         // Transform previews change every gesture step and use bounded temporary
         // regions; do not retain their transient images in the persistent cache.
         signature=QCryptographicHash::hash(bytes,QCryptographicHash::Sha256);
-        groupTiles=!preview&&std::all_of(layers.cbegin(),layers.cend(),[](const auto &layer){return layer.renderTransform.isIdentity()&&!layer.scene3d;});
+        groupTiles=!preview&&std::all_of(layers.cbegin(),layers.cend(),[](const auto &layer){return layer.renderTransform.isIdentity()&&!layer.scene3d&&!layer.reference3d;});
     }
     bool shown(const RasterLayer &layer)const{return layer.visible&&(annotations||!layer.annotation)&&layer.opacity>0;}
     void fail(const QString &message)const{if(!effectRenderCancelled()&&renderError.isEmpty())renderError=message;}
@@ -463,7 +467,7 @@ public:
     QRectF rawBounds(int index,int depth)const {
         const auto &layer=layers[index];
         if(layer.group)return bounds(layer.id,depth+1);
-        if(layer.scene3d)return sceneImages.value(layer.id).isNull()?QRectF():QRectF(QPointF(),sceneSize);
+        if(layer.scene3d||layer.reference3d)return sceneImages.value(layer.id).isNull()?QRectF():QRectF(QPointF(),sceneSize);
         if(const auto *moving=candidate(layer.id)) {
             auto result=tileBounds(moving->stationary);
             if(moving->warpNodes.isEmpty())result|=moving->transform.mapRect(tileBounds(moving->moving));
@@ -483,8 +487,8 @@ public:
         const auto &layer=layers[index];if(layer.group)return composite(layer.id,area,depth+1);
         auto image=blank(area);if(image.isNull())return {};
         QPainter painter(&image);painter.translate(-area.topLeft());
-        if(layer.scene3d) {
-            painter.setOpacity(layer.scene3d->opacity);painter.setRenderHint(QPainter::SmoothPixmapTransform,smooth);
+        if(layer.scene3d||layer.reference3d) {
+            painter.setOpacity(layer.scene3d?layer.scene3d->opacity:1);painter.setRenderHint(QPainter::SmoothPixmapTransform,smooth);
             painter.drawImage(QRectF(QPointF(),sceneSize),sceneImages.value(layer.id));
         }else if(const auto *moving=candidate(layer.id)) {
             paintRasterLayerPixels(painter,moving->stationary,smooth);
@@ -515,6 +519,10 @@ public:
             correctColor(source,layer.effects);
             if(effectRenderCancelled())return {};
             if(!blur(source,blurRadius(layer.effects))){fail("There is not enough memory to blur the layer.");return {};}
+            if(layer.effects.enabled&&layer.effects.outlineEnabled&&layer.effects.outlineWidth>0
+                &&!applyLayerOutline(source,layer.effects.outlineWidth,layer.effects.outlineColor,[]{return effectRenderCancelled();})){
+                if(!effectRenderCancelled())fail("The outline exceeds the supported working-memory limits.");return {};
+            }
         }
         QImage processed;
         const auto &fx=layer.effects;

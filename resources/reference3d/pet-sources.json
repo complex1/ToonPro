@@ -1,0 +1,236 @@
+{
+  "schemaVersion": 1,
+  "creator": "Quaternius",
+  "sourcePage": "https://opengameart.org/content/animated-animales-low-poly",
+  "sourceArchiveUrl": "https://opengameart.org/sites/default/files/Animal%20Pack%20Vol.2%20by%20%40Quaternius.zip",
+  "sourceArchiveSha256": "6d8f6789d65dbdb352ebad98a4209f26b41b384e87d81bc05e9ca76139db1248",
+  "sourceArchiveBytes": 2069972,
+  "preparationScript": "scripts/prepare_reference3d_pets.py",
+  "blenderExporter": "scripts/reference3d_pets_blender.py",
+  "canonicalTool": "tests/reference3d_prepare_pets.cpp",
+  "blenderVersion": "5.2.0 LTS",
+  "glTFExporter": "Khronos glTF Blender I/O v5.2.39",
+  "runtimeDependencies": "Bundled canonical data only; no Blender, download or animation playback at runtime.",
+  "preparation": [
+    "Retain original low-poly meshes and native weighted animal skeletons.",
+    "Rename deform bones by body region; bake native IK controls into source action samples and omit nondeforming IK control nodes.",
+    "Apply the explicit Blender four-influence conversion and renormalize where needed; per-model counts and maximum discarded normalized weights are recorded below. The runtime importer continues to reject unsupported weights.",
+    "Convert legacy diffuse material colors to core Principled base-color/roughness values.",
+    "Normalize +Z forward and Y-up orientation using a wrapper transform.",
+    "Sample source Idle, Walking and Flying actions with linear vectors and shortest-arc quaternion interpolation; retain 13 named static snapshots.",
+    "Remove animation channel declarations only after snapshot extraction; the normal runtime importer continues to reject unsupported animation arrays.",
+    "Set dog/cat defaults to the first Idle sample and normalize their evaluated height. Set eagle default to Flying .25 (raised wings) and normalize its Flying .0 glide wingspan to 1.2 m. Source Idle snapshots are named Wings lowered; no perched/folded pose is claimed.",
+    "Ground every static snapshot at 2 mm above the drawing grid via the placement wrapper; instance placement remains independent.",
+    "Validate, finalize and serialize all source data through the native importer; record exact canonical content IDs and checksums."
+  ],
+  "poseBank": {
+    "file": "pet-poses-v1.json",
+    "sha256": "d9d4683809d387f78bd10131c32cc52b83a3063a5bf0f94f50a51794e5842653",
+    "poseCount": 13
+  },
+  "models": [
+    {
+      "id": "pet/dog",
+      "name": "Dog",
+      "sourceArchiveFile": "Animal Pack Vol.2 by @Quaternius/Blends/Dog.blend",
+      "sourceFileSha256": "46442b696ea11ad8d4442a1c2d7f529c23bd0e10c2157262600a6fa1535cf2cf",
+      "canonicalFile": "dog-v1.toon3dasset",
+      "canonicalSha256": "97358cfb14e622bb3071f3790324660df44f83c060f9e40c10a909aa0f413dad",
+      "canonicalBytes": 117502,
+      "assetId": "8f140fcb9dde5e3c4608f86999872c871f5fc0a54b19cbd96d831abed7ccf173",
+      "nodes": 23,
+      "joints": 20,
+      "vertices": 1206,
+      "triangles": 602,
+      "defaultHeightMeters": 0.65,
+      "canonicalBounds": {
+        "minimum": [
+          -0.12472745031118393,
+          0.0020000035874545574,
+          -0.4760688841342926
+        ],
+        "maximum": [
+          0.22147060930728912,
+          0.6519997715950012,
+          0.5484704375267029
+        ]
+      },
+      "poseSnapshots": [
+        {
+          "id": "pet/dog/standing",
+          "name": "Standing",
+          "sourceClip": "Idle",
+          "sourceFraction": 0
+        },
+        {
+          "id": "pet/dog/idle-alert",
+          "name": "Idle study",
+          "sourceClip": "Idle",
+          "sourceFraction": 0.5
+        },
+        {
+          "id": "pet/dog/walking-left",
+          "name": "Walking contact A",
+          "sourceClip": "Walking",
+          "sourceFraction": 0.125
+        },
+        {
+          "id": "pet/dog/walking-right",
+          "name": "Walking contact B",
+          "sourceClip": "Walking",
+          "sourceFraction": 0.625
+        }
+      ],
+      "weightPreparation": {
+        "influenceLimit": 4,
+        "maximumSourceDeformInfluences": 5,
+        "verticesReduced": 4,
+        "maximumDiscardedNormalizedWeight": 0.01222799441363935,
+        "method": "Blender glTF exporter keeps four dominant deform weights and renormalizes; runtime importer is unchanged."
+      }
+    },
+    {
+      "id": "pet/cat",
+      "name": "Cat",
+      "sourceArchiveFile": "Animal Pack Vol.2 by @Quaternius/Blends/Cat.blend",
+      "sourceFileSha256": "e9836027dc8591fd2da03e6d8d6575972bc5c7aebaa17a0762b82f7bc37264de",
+      "canonicalFile": "cat-v1.toon3dasset",
+      "canonicalSha256": "61115a07ffdff5e460952daf43d6bbe08fba740cff46e366b9f3158e941877b2",
+      "canonicalBytes": 155630,
+      "assetId": "8154f91001a0c408bed0ddfc900d5380c36b2eac77eedfa4690f63c71c6fcf9e",
+      "nodes": 23,
+      "joints": 20,
+      "vertices": 1609,
+      "triangles": 807,
+      "defaultHeightMeters": 0.38,
+      "canonicalBounds": {
+        "minimum": [
+          -0.061016231775283813,
+          0.00199997890740633,
+          -0.20918098092079163
+        ],
+        "maximum": [
+          0.06101352721452713,
+          0.38199999928474426,
+          0.27713465690612793
+        ]
+      },
+      "poseSnapshots": [
+        {
+          "id": "pet/cat/standing",
+          "name": "Standing",
+          "sourceClip": "Idle",
+          "sourceFraction": 0
+        },
+        {
+          "id": "pet/cat/idle-alert",
+          "name": "Idle study",
+          "sourceClip": "Idle",
+          "sourceFraction": 0.5
+        },
+        {
+          "id": "pet/cat/walking-left",
+          "name": "Walking contact A",
+          "sourceClip": "Walking",
+          "sourceFraction": 0.125
+        },
+        {
+          "id": "pet/cat/walking-right",
+          "name": "Walking contact B",
+          "sourceClip": "Walking",
+          "sourceFraction": 0.625
+        }
+      ],
+      "weightPreparation": {
+        "influenceLimit": 4,
+        "maximumSourceDeformInfluences": 6,
+        "verticesReduced": 1,
+        "maximumDiscardedNormalizedWeight": 0.004008069825219894,
+        "method": "Blender glTF exporter keeps four dominant deform weights and renormalizes; runtime importer is unchanged."
+      }
+    },
+    {
+      "id": "pet/bird",
+      "name": "Eagle",
+      "sourceArchiveFile": "Animal Pack Vol.2 by @Quaternius/Blends/Eagle.blend",
+      "sourceFileSha256": "ca9d09c805d51d0df063bd25ebe3f85bc67b4e2ecc2fef174aa72f29b85e9e93",
+      "canonicalFile": "bird-v1.toon3dasset",
+      "canonicalSha256": "6f0c820433786f045b99e98a68a1fa2ec419dab909063cec707b9a0001ad7edf",
+      "canonicalBytes": 293219,
+      "assetId": "d81f11fb39fcc0b6534165189a29b00b951e8b68a8ac5c155bf23193238daeab",
+      "nodes": 27,
+      "joints": 24,
+      "vertices": 3066,
+      "triangles": 1532,
+      "canonicalBounds": {
+        "minimum": [
+          -0.45754969120025635,
+          0.0020000189542770386,
+          -0.35645222663879395
+        ],
+        "maximum": [
+          0.4585673213005066,
+          0.44469958543777466,
+          0.14057214558124542
+        ]
+      },
+      "poseSnapshots": [
+        {
+          "id": "pet/bird/flying-up",
+          "name": "Wings raised",
+          "sourceClip": "Flying",
+          "sourceFraction": 0.25
+        },
+        {
+          "id": "pet/bird/flying-spread",
+          "name": "Wings spread",
+          "sourceClip": "Flying",
+          "sourceFraction": 0
+        },
+        {
+          "id": "pet/bird/flying-down",
+          "name": "Downstroke",
+          "sourceClip": "Flying",
+          "sourceFraction": 0.75
+        },
+        {
+          "id": "pet/bird/wings-lowered",
+          "name": "Wings lowered",
+          "sourceClip": "Idle",
+          "sourceFraction": 0
+        },
+        {
+          "id": "pet/bird/wings-lowered-study",
+          "name": "Lowered wings study",
+          "sourceClip": "Idle",
+          "sourceFraction": 0.5
+        }
+      ],
+      "weightPreparation": {
+        "influenceLimit": 4,
+        "maximumSourceDeformInfluences": 6,
+        "verticesReduced": 15,
+        "maximumDiscardedNormalizedWeight": 0.11306658517444108,
+        "method": "Blender glTF exporter keeps four dominant deform weights and renormalizes; runtime importer is unchanged."
+      },
+      "defaultPose": {
+        "id": "pet/bird/flying-up",
+        "sourceClip": "Flying",
+        "sourceFraction": 0.25,
+        "description": "Raised-wing flight pose; the source Idle action does not contain folded or perched wings."
+      },
+      "normalization": {
+        "measure": "spread-wing X span",
+        "meters": 1.2,
+        "referencePose": "pet/bird/flying-spread",
+        "defaultHeightMeters": 0.4426995664834976
+      }
+    }
+  ],
+  "reproduction": {
+    "command": "python3 scripts/prepare_reference3d_pets.py --canonical-tool build-3d-review/toon_reference3d_prepare_pets",
+    "outputDirectory": "build/reference3d-pets-reproduced",
+    "canonicalDirectory": "build/reference3d-pets-reproduced/canonical",
+    "verification": "Fresh Blender conversion and native packaging reproduced all three canonical assets and the pose bank byte-for-byte against the bundled resources."
+  }
+}

@@ -94,7 +94,7 @@ private slots:
         QVERIFY(restored.activateTool(stamp));QVERIFY(!canvas.stampPlacementEnabled());
         QVERIFY(restored.activateTool(copy));QVERIFY(canvas.stampPlacementEnabled());
         QVERIFY(restored.activateTool(ink));QVERIFY(canvas.stampPlacementEnabled());
-        QFile file(path);QVERIFY(file.open(QIODevice::ReadOnly));QCOMPARE(QJsonDocument::fromJson(file.readAll()).object()["version"].toInt(),10);
+        QFile file(path);QVERIFY(file.open(QIODevice::ReadOnly));QCOMPARE(QJsonDocument::fromJson(file.readAll()).object()["version"].toInt(),14);
     }
     void brushTipChangesPreserveConfiguredMode(){
         QTemporaryDir dir;ToolCatalog catalog(nullptr,dir.filePath("tools.json"));QVERIFY(catalog.load());

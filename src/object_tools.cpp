@@ -5,6 +5,7 @@
 #include "keyframe_render.h"
 #include "vector_edit_geometry.h"
 #include "vector_brush.h"
+#include "brush_engine.h"
 #include <QPainterPathStroker>
 #include <QSet>
 #include <QUuid>
@@ -69,6 +70,219 @@ QPainterPath strokeArea(const QPainterPath &path, qreal width) {
     QPainterPathStroker stroker; stroker.setWidth(qMax(.01,width));
     stroker.setCapStyle(Qt::RoundCap); stroker.setJoinStyle(Qt::RoundJoin);
     return stroker.createStroke(path);
+}
+
+// Flattening locates crossings only. Retained artwork is reconstructed from
+// exact cubic subcurves, never from the approximation used by the hit query.
+struct EraseCubic { QPointF a, b, c, d; };
+EraseCubic eraseCubic(const EditableObject &object, int segment) {
+    const auto &a=object.nodes[segment], &b=object.nodes[(segment+1)%object.nodes.size()];
+    return {a.anchor,a.outControl,b.inControl,b.anchor};
+}
+QPointF erasePoint(const EraseCubic &c, qreal t) {
+    const qreal u=1-t;
+    return c.a*(u*u*u)+c.b*(3*u*u*t)+c.c*(3*u*t*t)+c.d*(t*t*t);
+}
+std::pair<EraseCubic,EraseCubic> splitEraseCubic(const EraseCubic &c,qreal t) {
+    const auto a=c.a+(c.b-c.a)*t,b=c.b+(c.c-c.b)*t,d=c.c+(c.d-c.c)*t;
+    const auto e=a+(b-a)*t,f=b+(d-b)*t,g=e+(f-e)*t;
+    return {{c.a,a,e,g},{g,f,d,c.d}};
+}
+EraseCubic eraseSubcurve(EraseCubic curve,qreal from,qreal to) {
+    if(to<1)curve=splitEraseCubic(curve,to).first;
+    return from>0?splitEraseCubic(curve,from/to).second:curve;
+}
+qreal eraseLength(const EraseCubic &curve) {
+    QPainterPath path(curve.a);path.cubicTo(curve.b,curve.c,curve.d);return path.length();
+}
+QPointF eraseMappedPoint(const EditableObject &object,int segment,qreal t,int copy) {
+    auto point=erasePoint(eraseCubic(object,segment),t);
+    if(object.brushStroke) {
+        const auto &stroke=*object.brushStroke;
+        const auto copies=brushSymmetryInstances(stroke.settings.symmetry,point,stroke.canvasSize);
+        if(copy<copies.size())point=copies[copy].point;
+    }
+    return object.transform.map(point);
+}
+qreal eraseCross(QPointF a,QPointF b) { return a.x()*b.y()-a.y()*b.x(); }
+qreal eraseDistance(QPointF point,QPointF a,QPointF b) {
+    const auto delta=b-a;const qreal squared=QPointF::dotProduct(delta,delta);
+    const qreal t=squared>1e-18?qBound(0.,QPointF::dotProduct(point-a,delta)/squared,1.):0;
+    return QLineF(point,a+delta*t).length();
+}
+struct EraseEdge { QPointF a,b; int segment=0,copy=0; qreal from=0,to=1; };
+bool flattenEraseCurve(const EditableObject &object,int segment,int copy,qreal from,qreal to,
+                       QPointF a,QPointF b,int depth,QVector<EraseEdge> &edges,int &budget) {
+    qreal error=0;
+    for(qreal fraction:{.25,.5,.75})
+        error=qMax(error,eraseDistance(eraseMappedPoint(object,segment,from+(to-from)*fraction,copy),a,b));
+    if(error<=.025) {
+        if(--budget<0)return false;
+        edges.append({a,b,segment,copy,from,to});return true;
+    }
+    if(depth>=16)return false;
+    const qreal middle=(from+to)/2;const auto point=eraseMappedPoint(object,segment,middle,copy);
+    return flattenEraseCurve(object,segment,copy,from,middle,a,point,depth+1,edges,budget)
+        && flattenEraseCurve(object,segment,copy,middle,to,point,b,depth+1,edges,budget);
+}
+bool flattenEraseObject(const EditableObject &object,QVector<EraseEdge> &edges,int &budget) {
+    int copies=1;
+    if(object.brushStroke){const auto &s=*object.brushStroke;copies=brushSymmetryInstances(s.settings.symmetry,object.nodes.first().anchor,s.canvasSize).size();}
+    const int count=object.nodes.size()-(object.closed?0:1);
+    for(int segment=0;segment<count;++segment)for(int copy=0;copy<copies;++copy)
+        if(!flattenEraseCurve(object,segment,copy,0,1,eraseMappedPoint(object,segment,0,copy),
+            eraseMappedPoint(object,segment,1,copy),0,edges,budget))return false;
+    return true;
+}
+bool eraseCrossing(const EditableObject &first,const EraseEdge &a,
+                   const EditableObject &second,const EraseEdge &b,qreal &parameter) {
+    const auto r=a.b-a.a,s=b.b-b.a;
+    const qreal denominator=eraseCross(r,s),scale=QLineF(a.a,a.b).length()*QLineF(b.a,b.b).length();
+    // Coincident spans and tangent contacts are deliberately not crossing cuts.
+    if(scale<=1e-12||qAbs(denominator)<=scale*1e-8)return false;
+    const qreal x=eraseCross(b.a-a.a,s)/denominator,y=eraseCross(b.a-a.a,r)/denominator;
+    if(x< -1e-8||x>1+1e-8||y< -1e-8||y>1+1e-8)return false;
+    qreal t=a.from+(a.to-a.from)*qBound(0.,x,1.),u=b.from+(b.to-b.from)*qBound(0.,y,1.);
+    auto derivative=[](const EditableObject &o,const EraseEdge &edge,qreal value) {
+        if(o.transform.isAffine()&&(!o.brushStroke||o.brushStroke->settings.symmetry.mode==SymmetryMode::Off)) {
+            const auto c=eraseCubic(o,edge.segment);const qreal inverse=1-value;
+            const auto tangent=(c.b-c.a)*(3*inverse*inverse)+(c.c-c.b)*(6*inverse*value)+(c.d-c.c)*(3*value*value);
+            return o.transform.map(tangent)-o.transform.map(QPointF());
+        }
+        const qreal low=qMax(0.,value-1e-5),high=qMin(1.,value+1e-5);
+        return (eraseMappedPoint(o,edge.segment,high,edge.copy)-eraseMappedPoint(o,edge.segment,low,edge.copy))/(high-low);
+    };
+    for(int iteration=0;iteration<32;++iteration) {
+        const auto difference=eraseMappedPoint(first,a.segment,t,a.copy)-eraseMappedPoint(second,b.segment,u,b.copy);
+        if(QLineF({},difference).length()<1e-12)break;
+        const auto da=derivative(first,a,t),db=derivative(second,b,u);
+        const qreal determinant=eraseCross(da,db);
+        if(qAbs(determinant)<1e-14)return false;
+        t=qBound(0.,t-eraseCross(difference,db)/determinant,1.);
+        u=qBound(0.,u-eraseCross(difference,da)/determinant,1.);
+    }
+    if(QLineF(eraseMappedPoint(first,a.segment,t,a.copy),eraseMappedPoint(second,b.segment,u,b.copy)).length()>.001)return false;
+    const auto da=derivative(first,a,t),db=derivative(second,b,u);
+    if(qAbs(eraseCross(da,db))<=QLineF({},da).length()*QLineF({},db).length()*1e-6)return false;
+    parameter=a.segment+t;
+    if(&first==&second) {
+        qreal distance=qAbs(parameter-b.segment-u);
+        if(first.closed)distance=qMin(distance,qAbs(distance-first.nodes.size()));
+        if(distance<1e-4)return false; // Adjacent edges are not self-crossings.
+    }
+    return true;
+}
+bool eraseStrokeVisible(const EditableObject &object) {
+    return object.kind==ObjectKind::Path&&object.nodes.size()>=2&&object.opacity>0
+        &&object.stroke.isValid()&&object.stroke.alpha()>0&&object.strokeWidth>0;
+}
+QVector<qreal> eraseDistances(const EditableObject &object) {
+    const int count=object.nodes.size()-(object.closed?0:1);QVector<qreal> result(count+1,0);
+    for(int i=0;i<count;++i)result[i+1]=result[i]+eraseLength(eraseCubic(object,i));
+    return result;
+}
+qreal eraseDistanceAt(const EditableObject &object,const QVector<qreal> &distances,qreal parameter) {
+    const int count=distances.size()-1;
+    if(parameter>=count)return distances.last();
+    const int segment=qMax(0,int(std::floor(parameter)));const qreal t=parameter-segment;
+    return distances[segment]+(t>0?eraseLength(eraseSubcurve(eraseCubic(object,segment),0,t)):0);
+}
+EditableObject eraseFragment(const EditableObject &source,qreal from,qreal to,const QVector<qreal> &distances) {
+    auto result=source;result.id=QUuid::createUuid().toString(QUuid::WithoutBraces);
+    result.closed=false;result.fill=QColor();result.nodes.clear();result.widthFactors.clear();
+    const int count=distances.size()-1;
+    for(qreal current=from;current<to-1e-8;) {
+        const int index=int(std::floor(current+1e-9)),segment=index%count;
+        const qreal start=qMax(0.,current-index),end=qMin(1.,to-index);
+        const auto curve=eraseSubcurve(eraseCubic(source,segment),start,end);
+        const auto width=[&](qreal t) {
+            const qreal length=distances[segment+1]-distances[segment];
+            const qreal ratio=t<=0?0:t>=1?1:length>1e-9?eraseLength(eraseSubcurve(eraseCubic(source,segment),0,t))/length:t;
+            return vectorNodeWidthFactor(source,segment)*(1-ratio)
+                +vectorNodeWidthFactor(source,(segment+1)%source.nodes.size())*ratio;
+        };
+        if(result.nodes.isEmpty()) {
+            result.nodes.append({curve.a,curve.a,curve.b});
+            if(!source.widthFactors.isEmpty())result.widthFactors.append(width(start));
+        }else result.nodes.last().outControl=curve.b;
+        result.nodes.append({curve.d,curve.c,curve.d});
+        if(!source.widthFactors.isEmpty())result.widthFactors.append(width(end));
+        current=index+end;
+    }
+    if(result.brushStroke&&distances.last()>0) {
+        const qreal start=eraseDistanceAt(source,distances,from)/distances.last();
+        const qreal end=eraseDistanceAt(source,distances,to>count?to-count:to)/distances.last();
+        sliceVectorBrushStroke(result,start,end,distances.last());
+    }
+    return result;
+}
+bool eraseIntersectionObjects(const QVector<EditableObject> &sources,const QVector<EditableObject> &evaluated,
+                              const QSet<QString> &animated,const QPainterPath &eraser,
+                              QVector<EditableObject> &output,bool &changed,QString &error) {
+    QVector<QVector<EraseEdge>> geometry(sources.size());QVector<bool> prepared(sources.size(),false);
+    int edgeBudget=65536,pairBudget=2000000;
+    auto prepare=[&](int i) {
+        if(prepared[i])return true;prepared[i]=true;
+        return flattenEraseObject(evaluated[i],geometry[i],edgeBudget);
+    };
+    auto exhausted=[&] {error="This crossing trim exceeds the geometry work limit. Split the artwork across vector layers or erase a whole stroke.";return false;};
+    for(int index=0;index<sources.size();++index) {
+        const auto &source=sources[index];
+        if(animated.contains(source.id)||!eraseStrokeVisible(source)){output.append(source);continue;}
+        QVector<qreal> brushHits;
+        if(source.brushStroke)brushHits=vectorBrushIntersectionPositions(source,eraser);
+        const bool touched=source.brushStroke?!brushHits.isEmpty():eraser.intersects(editableStrokeOutline(source));
+        if(!touched){output.append(source);continue;}
+        if(!prepare(index))return exhausted();
+        const int count=source.nodes.size()-(source.closed?0:1);
+        QVector<qreal> cuts;
+        for(int other=0;other<sources.size();++other) {
+            if(!eraseStrokeVisible(evaluated[other]))continue;
+            if(other!=index&&!editableObjectBounds(source).intersects(editableObjectBounds(evaluated[other])))continue;
+            if(!prepare(other))return exhausted();
+            for(int a=0;a<geometry[index].size();++a)for(int b=other==index?a+1:0;b<geometry[other].size();++b) {
+                if(--pairBudget<0)return exhausted();
+                const auto &first=geometry[index][a],&second=geometry[other][b];
+                if(qMax(qMin(first.a.x(),first.b.x()),qMin(second.a.x(),second.b.x()))>qMin(qMax(first.a.x(),first.b.x()),qMax(second.a.x(),second.b.x()))+.001
+                    ||qMax(qMin(first.a.y(),first.b.y()),qMin(second.a.y(),second.b.y()))>qMin(qMax(first.a.y(),first.b.y()),qMax(second.a.y(),second.b.y()))+.001)continue;
+                qreal parameter;
+                if(eraseCrossing(evaluated[index],first,evaluated[other],second,parameter)) {
+                    cuts.append(parameter);
+                    if(other==index) { // Retain both locations of a self-crossing.
+                        if(eraseCrossing(evaluated[other],second,evaluated[index],first,parameter))cuts.append(parameter);
+                    }
+                    if(cuts.size()>8192)return exhausted();
+                }
+            }
+        }
+        if(!source.closed){cuts.append(0);cuts.append(count);}
+        else for(auto &cut:cuts)if(cut>=count-1e-5)cut=0;
+        std::sort(cuts.begin(),cuts.end());
+        cuts.erase(std::unique(cuts.begin(),cuts.end(),[](qreal a,qreal b){return qAbs(a-b)<1e-5;}),cuts.end());
+        if(cuts.isEmpty()||(source.closed&&cuts.size()==1)){changed=true;continue;}
+        if(source.closed)cuts.append(cuts.first()+count);
+        const auto distances=eraseDistances(source);bool erased=false;QVector<EditableObject> fragments;
+        for(int i=1;i<cuts.size();++i) {
+            if(cuts[i]-cuts[i-1]<1e-7)continue;
+            bool hit=false;
+            if(source.brushStroke) {
+                const qreal from=eraseDistanceAt(source,distances,cuts[i-1])/qMax(1e-12,distances.last());
+                const qreal to=eraseDistanceAt(source,distances,cuts[i]>count?cuts[i]-count:cuts[i])/qMax(1e-12,distances.last());
+                const bool wrapped=cuts[i]>count;
+                for(qreal position:brushHits)if(wrapped?(position>=from-1e-7||position<=to+1e-7):(position>=from-1e-7&&position<=to+1e-7)){hit=true;break;}
+            }
+            if(hit){erased=true;continue;}
+            auto fragment=eraseFragment(source,cuts[i-1],cuts[i],distances);
+            if(!source.brushStroke)hit=eraser.intersects(editableStrokeOutline(fragment));
+            if(hit)erased=true;else fragments.append(std::move(fragment));
+            if(fragments.size()+output.size()>1024) {
+                error="Trimming these crossings would exceed the layer's 1024-path limit.";return false;
+            }
+        }
+        if(!erased){output.append(source);continue;}
+        changed=true;output+=fragments;
+    }
+    return true;
 }
 }
 ObjectTools::ObjectTools(Document *document) : m_document(document) {}
@@ -261,10 +475,18 @@ bool ObjectTools::removeObject(Document *doc, const QString &id) {
     doc->commit(doc->m_project,next,"Delete object",layer.id); return true;
 }
 bool ObjectTools::eraseAt(Document *doc, QPointF point, qreal radius, bool segments) {
-    QPainterPath sweep; sweep.moveTo(point); sweep.lineTo(point + QPointF(.001,0)); return erasePath(doc,sweep,radius,segments);
+    return eraseAt(doc,point,radius,segments?VectorEraseMode::Segment:VectorEraseMode::WholeStroke);
 }
 bool ObjectTools::erasePath(Document *doc, const QPainterPath &sweep, qreal radius, bool segments) {
+    return erasePath(doc,sweep,radius,segments?VectorEraseMode::Segment:VectorEraseMode::WholeStroke);
+}
+bool ObjectTools::eraseAt(Document *doc,QPointF point,qreal radius,VectorEraseMode mode) {
+    QPainterPath sweep;sweep.moveTo(point);sweep.lineTo(point+QPointF(.001,0));return erasePath(doc,sweep,radius,mode);
+}
+bool ObjectTools::erasePath(Document *doc,const QPainterPath &sweep,qreal radius,VectorEraseMode mode) {
     if (!ready(doc) || !std::isfinite(radius) || radius <= 0 || radius > 2048 || sweep.isEmpty()) return false;
+    if(mode!=VectorEraseMode::WholeStroke&&mode!=VectorEraseMode::Segment&&mode!=VectorEraseMode::Intersection)return false;
+    const bool segments=mode==VectorEraseMode::Segment;
     auto next = doc->m_project; auto &layer = next.shots[doc->activeShotIndex()].layers[doc->m_active];
     if (layer.kind != LayerKind::Vector) { emit doc->warning("Choose a vector layer to erase paths."); return false; }
     const auto eraser = strokeArea(sweep,2*radius);
@@ -275,6 +497,19 @@ bool ObjectTools::erasePath(Document *doc, const QPainterPath &sweep, qreal radi
             || (evaluated.stroke.isValid()&&eraser.intersects(editableStrokeOutline(evaluated)))
             || (evaluated.fill.isValid()&&eraser.intersects(editableObjectPath(evaluated)));
         if(hit) {emit doc->warning(destructivePathMessage());return false;}
+    }
+    if(mode==VectorEraseMode::Intersection) {
+        QVector<EditableObject> output;bool changed=false;QString error;QSet<QString> animated;
+        const auto &shot=next.shots[doc->activeShotIndex()];
+        for(const auto &entry:layer.objects)if(pathAnimation(shot,layer.id,entry.id))animated.insert(entry.id);
+        if(!eraseIntersectionObjects(layer.objects,editingObjects(shot,layer,doc),animated,eraser,output,changed,error)) {
+            emit doc->warning(error);return false;
+        }
+        if(!changed)return false;
+        if(output.size()>1024){emit doc->warning("Trimming these crossings would exceed the layer's 1024-path limit.");return false;}
+        layer.objects=output;
+        if(!rebuildObjectLayer(layer,doc->drawingBounds(),availableTiles(next,layer.id),&error)){emit doc->warning(error);return false;}
+        doc->commit(doc->m_project,next,"Erase vector crossings",layer.id);return true;
     }
     QVector<EditableObject> output; bool changed = false;
     for (const auto &entry : layer.objects) {

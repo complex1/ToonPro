@@ -104,6 +104,9 @@
         <file alias="repeat.svg">icons/lucide/repeat.svg</file>
     </qresource>
     <qresource prefix="/icons/toon">
+        <file alias="vector-nudge.svg">icons/toon/vector-nudge.svg</file>
+        <file alias="fill-reference.svg">icons/toon/fill-reference.svg</file>
+        <file alias="pet.svg">icons/toon/pet.svg</file>
         <file alias="center-playhead.svg">icons/toon/center-playhead.svg</file>
         <file alias="symbol-pose.svg">icons/toon/symbol-pose.svg</file>
         <file alias="symbol.svg">icons/toon/symbol.svg</file>

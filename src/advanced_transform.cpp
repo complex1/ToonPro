@@ -4,6 +4,7 @@
 #include "editable_object.h"
 #include "selection_geometry.h"
 #include <QSet>
+#include <QBitArray>
 #include <array>
 #include <cmath>
 #include <new>
@@ -31,14 +32,18 @@ bool convex(const QPolygonF &quad) {
     }
     return true;
 }
-QVector<Triangle> triangles(QRectF bounds, const QVector<QPointF> &nodes) {
-    if (nodes.size() != 9) return {};
-    const auto source = grid(bounds); QVector<Triangle> result;
-    for (int y = 0; y < 2; ++y) for (int x = 0; x < 2; ++x) {
-        const int a = y * 3 + x, b = a + 1, c = a + 4, d = a + 3;
-        for (const auto &indices : {std::array<int, 3>{a, b, c}, std::array<int, 3>{a, c, d}}) {
+QVector<Triangle> triangles(QRectF bounds, const QVector<QPointF> &nodes,
+                            QVector<QPointF> source={},QVector<WarpTriangle> topology={}) {
+    if(source.isEmpty()){
+        if(nodes.size()!=9)return {};
+        source=grid(bounds);
+        for(int y=0;y<2;++y)for(int x=0;x<2;++x){const int a=y*3+x,b=a+1,c=a+4,d=a+3;topology.append({a,b,c});topology.append({a,c,d});}
+    }
+    if(source.size()!=nodes.size())return {};
+    QVector<Triangle> result;result.reserve(topology.size());
+    for(const auto &indices:topology){
             Triangle triangle;
-            for (int i : indices) { triangle.source.append(source[i]); triangle.destination.append(nodes[i]); }
+            for (int i : indices) {if(i<0||i>=nodes.size())return {};triangle.source.append(source[i]); triangle.destination.append(nodes[i]); }
             // A triangle is mapped using its parallelogram, so the matrix is affine.
             const auto parallelogram = [](const QPolygonF &p) {
                 return QPolygonF{p[0], p[1], p[1] + p[2] - p[0], p[2]};
@@ -47,17 +52,17 @@ QVector<Triangle> triangles(QRectF bounds, const QVector<QPointF> &nodes) {
             bool invertible; triangle.inverse = triangle.transform.inverted(&invertible);
             if (!invertible) return {};
             result.append(triangle);
-        }
     }
     return result;
 }
+QVector<Triangle> triangles(const RasterLayerPreview &preview){return triangles(preview.warpBounds,preview.warpNodes,preview.warpSourceNodes,preview.warpTriangles);}
 bool inTriangle(QPointF p, const QPolygonF &t) {
     const qreal a = cross(t[1] - t[0], p - t[0]), b = cross(t[2] - t[1], p - t[1]), c = cross(t[0] - t[2], p - t[2]);
     return (a >= -1e-8 && b >= -1e-8 && c >= -1e-8) || (a <= 1e-8 && b <= 1e-8 && c <= 1e-8);
 }
-QPainterPath warpedPath(const QPainterPath &path, QRectF bounds, const QVector<QPointF> &nodes) {
+QPainterPath warpedPath(const QPainterPath &path, QRectF bounds, const QVector<QPointF> &nodes,const PuppetMesh *mesh=nullptr) {
     QPainterPath result;
-    for (const auto &triangle : triangles(bounds, nodes)) {
+    for (const auto &triangle : triangles(bounds,nodes,mesh?mesh->source:QVector<QPointF>{},mesh?mesh->triangles:QVector<WarpTriangle>{})) {
         QPainterPath clip; clip.addPolygon(triangle.source); clip.closeSubpath();
         result = result.united(triangle.transform.map(path.intersected(clip)));
     }
@@ -130,7 +135,8 @@ bool rasterize(const RasterLayerPreview &preview, QRectF sourceBounds, QRectF ex
     const auto fail = [&](const QString &message) { *error = message; return false; };
     auto candidate = preview.stationary;
     const bool warp = !preview.warpNodes.isEmpty();
-    const auto pieces = warp ? triangles(preview.warpBounds, preview.warpNodes) : QVector<Triangle>();
+    const auto pieces = warp ? triangles(preview) : QVector<Triangle>();
+    if(warp&&pieces.isEmpty())return fail("The mesh cannot be rasterized. No artwork was changed.");
     const auto inverse = preview.transform.inverted();
     const QRect output = (warp ? QPolygonF(preview.warpNodes).boundingRect() : preview.transform.mapRect(sourceBounds)).toAlignedRect().intersected(extent.toAlignedRect());
     if (output.isEmpty()) { *result = candidate; return true; }
@@ -142,18 +148,29 @@ bool rasterize(const RasterLayerPreview &preview, QRectF sourceBounds, QRectF ex
         const auto part = output.intersected(QRect(origin,QSize(tileSize,tileSize)));
         QImage tile = candidate.tiles.value(key);
         bool changed = false;
-        for (int y=part.top(); y<=part.bottom(); ++y) for (int x=part.left(); x<=part.right(); ++x) {
-            const QPointF point(x+.5,y+.5); if (!extent.contains(point)) continue;
-            QPointF source;
-            if (warp) {
-                bool found = false;
-                for (const auto &piece : pieces) if (inTriangle(point,piece.destination)) { source = piece.inverse.map(point); found = true; break; }
-                if (!found) continue;
-            } else source = inverse.map(point);
-            if (!sourceBounds.adjusted(-1,-1,1,1).contains(source)) continue;
-            const auto color = sample(preview.moving,source); if (!qAlpha(color)) continue;
-            if (tile.isNull()) { tile=QImage(tileSize,tileSize,QImage::Format_ARGB32_Premultiplied); if(tile.isNull())return fail("There is not enough memory to transform the artwork.");tile.fill(Qt::transparent); }
+        const auto paintPixel=[&](int x,int y,QPointF source){
+            const QPointF point(x+.5,y+.5); if (!extent.contains(point)) return true;
+            if (!sourceBounds.adjusted(-1,-1,1,1).contains(source)) return true;
+            const auto color = sample(preview.moving,source); if (!qAlpha(color)) return true;
+            if (tile.isNull()) { tile=QImage(tileSize,tileSize,QImage::Format_ARGB32_Premultiplied); if(tile.isNull())return false;tile.fill(Qt::transparent); }
             auto row=reinterpret_cast<QRgb *>(tile.scanLine(y-origin.y())); row[x-origin.x()]=over(color,row[x-origin.x()]); changed=true;
+            return true;
+        };
+        if(warp){
+            // Visit triangle bounding boxes rather than testing every triangle
+            // for every pixel. Shared edges are sampled once, preserving alpha.
+            QBitArray covered(tileSize*tileSize);
+            for(const auto &piece:pieces){
+                const auto area=part.intersected(piece.destination.boundingRect().toAlignedRect());
+                for(int y=area.top();y<=area.bottom();++y)for(int x=area.left();x<=area.right();++x){
+                    const int bit=(y-origin.y())*tileSize+x-origin.x();const QPointF point(x+.5,y+.5);
+                    if(covered.testBit(bit)||!inTriangle(point,piece.destination))continue;
+                    covered.setBit(bit);
+                    if(!paintPixel(x,y,piece.inverse.map(point)))return fail("There is not enough memory to transform the artwork.");
+                }
+            }
+        }else for(int y=part.top();y<=part.bottom();++y)for(int x=part.left();x<=part.right();++x){
+            if(!paintPixel(x,y,inverse.map(QPointF(x+.5,y+.5))))return fail("There is not enough memory to transform the artwork.");
         }
         if (changed) {
             if (!candidate.tiles.contains(key) && candidate.tiles.size()>=allowance) return fail("The transform exceeds the 1024-tile project limit. No artwork was changed.");
@@ -171,7 +188,7 @@ void paintAdvancedMovingLayer(QPainter &painter, const RasterLayerPreview &previ
         painter.restore();
     };
     if (preview.warpNodes.isEmpty()) { draw(preview.transform); return; }
-    for (const auto &triangle:triangles(preview.warpBounds,preview.warpNodes)) {
+    for (const auto &triangle:triangles(preview)) {
         painter.save();QPainterPath clip;clip.addPolygon(triangle.destination);clip.closeSubpath();
         painter.setClipPath(clip,Qt::IntersectClip); draw(triangle.transform); painter.restore();
     }
@@ -183,7 +200,7 @@ bool AdvancedTransform::begin(Document *document,const QStringList &layerIds,boo
     if (active()) cancel();
     if (!document || !document->isOpen() || document->editingGestureActive() || document->layerPropertyEditActive()) return false;
     m_document=document;m_before=document->m_project;m_selection=document->m_selection;m_selectionOnly=selectionOnly;
-    m_indices.clear();m_preview={};m_bounds={};m_matrix={};m_nodes.clear();
+    m_indices.clear();m_preview={};m_bounds={};m_matrix={};m_nodes.clear();m_puppet=false;m_puppetMesh={};m_pins.clear();m_reopenedPuppet=false;m_initialPuppetPins.clear();m_puppetPreviewSource={};
     const auto reject=[&](const QString &message){ fail(message);cancel();return false; };
     const auto &layers=m_before.shots[m_document->activeShotIndex()].layers;
     const auto exposed = activeLayerIds(m_before.shots[m_document->activeShotIndex()], document->currentFrame());
@@ -213,8 +230,8 @@ bool AdvancedTransform::begin(Document *document,const QStringList &layerIds,boo
             if (layerHasEditableObjects(layers[i]) && m_selection.active)
                 return reject("Clear the pixel selection or rasterize the vector/text layer before transforming selected pixels.");
             RasterLayerPreview prepared;
-            if(!split(layers[i],m_selection,&prepared))return reject("There is not enough memory to prepare the transform.");
-            const auto area=selectedPixelBounds(prepared.moving);
+            if(!split(layers[i],layers[i].puppetWarp?RasterSelection{}:m_selection,&prepared))return reject("There is not enough memory to prepare the transform.");
+            auto area=selectedPixelBounds(prepared.moving);if(area.isEmpty()&&layers[i].puppetWarp)area=layers[i].puppetWarp->bounds;
             if(area.isEmpty())continue;
             m_indices.append(i);m_bounds|=area;
             if(m_indices.size()==1)m_preview=std::move(prepared);else m_preview.additional.append(std::move(prepared));
@@ -229,12 +246,14 @@ bool AdvancedTransform::begin(Document *document,const QStringList &layerIds,boo
     m_documentConnection=connect(document,&Document::changed,this,[this]{if(m_document && !m_document->committing())cancel();});
     emit changed();return true;
 }
-QPolygonF AdvancedTransform::quad() const { return m_nodes.isEmpty()?m_matrix.map(rectangleQuad(m_bounds)):QPolygonF{m_nodes[0],m_nodes[2],m_nodes[8],m_nodes[6]}; }
+QPolygonF AdvancedTransform::quad() const { if(m_puppet)return rectangleQuad(QPolygonF(m_nodes).boundingRect());return m_nodes.isEmpty()?m_matrix.map(rectangleQuad(m_bounds)):QPolygonF{m_nodes[0],m_nodes[2],m_nodes[8],m_nodes[6]}; }
+bool AdvancedTransform::modified()const{return m_puppet?(m_reopenedPuppet?(m_pins!=m_initialPuppetPins||m_puppetDensity!=m_initialPuppetDensity):!m_pins.isEmpty()):!m_matrix.isIdentity()||(!m_nodes.isEmpty()&&m_nodes!=grid(m_bounds));}
 QVector<QPointF> AdvancedTransform::controlPoints() const { if(!m_nodes.isEmpty())return m_nodes;auto points=grid(m_bounds);for(auto &p:points)p=m_matrix.map(p);return points; }
 const RasterLayerPreview *AdvancedTransform::preview() const { return active() && !m_selectionOnly?&m_preview:nullptr; }
 QPainterPath AdvancedTransform::selectionPath() const {
     if(!active() || !m_selection.active)return {};
-    return m_nodes.isEmpty()?m_matrix.map(m_selection.path):warpedPath(m_selection.path,m_bounds,m_nodes);
+    if(!modified()||m_reopenedPuppet||(m_puppet&&puppetMeshIdentity(m_pins)))return m_selection.path;
+    return m_nodes.isEmpty()?m_matrix.map(m_selection.path):warpedPath(m_selection.path,m_bounds,m_nodes,m_puppet?&m_puppetMesh:nullptr);
 }
 bool AdvancedTransform::validatePlacement(const QTransform &matrix,const QVector<QPointF> &nodes) const {
     const QRectF target=nodes.isEmpty()?matrix.mapRect(m_bounds):QPolygonF(nodes).boundingRect();
@@ -244,11 +263,18 @@ bool AdvancedTransform::validatePlacement(const QTransform &matrix,const QVector
     return true;
 }
 void AdvancedTransform::refreshPreview() {
-    const auto update=[&](RasterLayerPreview &preview){preview.transform=m_matrix;preview.warpBounds=m_bounds;preview.warpNodes=m_nodes;};
+    if(m_reopenedPuppet){
+        m_preview=m_puppetPreviewSource;
+        if(puppetMeshIdentity(m_pins))for(int at=0;at<m_indices.size();++at){
+            auto &preview=at==0?m_preview:m_preview.additional[at-1];preview.stationary.tiles=m_before.shots[m_document->activeShotIndex()].layers[m_indices[at]].puppetWarp->sourceTiles;preview.moving.tiles.clear();
+        }
+    }
+    const auto update=[&](RasterLayerPreview &preview){preview.transform=m_matrix;preview.warpBounds=m_bounds;preview.warpNodes=m_nodes;preview.warpSourceNodes=m_puppet?m_puppetMesh.source:QVector<QPointF>{};preview.warpTriangles=m_puppet?m_puppetMesh.triangles:QVector<WarpTriangle>{};};
     update(m_preview);for(auto &preview:m_preview.additional)update(preview);emit changed();
 }
 bool AdvancedTransform::setMatrix(const QTransform &matrix) {
     if(!active())return false;
+    for(int index:m_indices)if(m_before.shots[m_document->activeShotIndex()].layers[index].puppetWarp)return fail("Edit the retained Puppet Warp, or Bake warp before another pixel transform.");
     for(qreal value:{matrix.m11(),matrix.m12(),matrix.m13(),matrix.m21(),matrix.m22(),matrix.m23(),matrix.m31(),matrix.m32(),matrix.m33()})
         if(!std::isfinite(value))return fail("The transform contains an invalid value.");
     if(!matrix.isInvertible())return fail("The transform must have a nonzero area.");
@@ -258,7 +284,7 @@ bool AdvancedTransform::setMatrix(const QTransform &matrix) {
         if(std::abs(w)<1e-8 || (sign && w*sign<0))return fail("Perspective cannot cross the vanishing horizon inside the artwork.");sign=w;
     }
     if(!convex(matrix.map(rectangleQuad(m_bounds))) || !validatePlacement(matrix,{}))return false;
-    m_matrix=matrix;m_nodes.clear();refreshPreview();return true;
+    m_matrix=matrix;m_nodes.clear();m_puppet=false;m_puppetMesh={};m_pins.clear();refreshPreview();return true;
 }
 bool AdvancedTransform::setQuad(const QPolygonF &corners) {
     if(!active())return false;
@@ -269,6 +295,7 @@ bool AdvancedTransform::setQuad(const QPolygonF &corners) {
 }
 bool AdvancedTransform::setWarp(const QVector<QPointF> &nodes) {
     if(!active())return false;
+    for(int index:m_indices)if(m_before.shots[m_document->activeShotIndex()].layers[index].puppetWarp)return fail("Edit the retained Puppet Warp, or Bake warp before using Grid warp.");
     if(nodes.size()!=9)return fail("Warp requires nine mesh handles.");
     // Warp currently clips and joins the selection against eight mesh triangles.
     // Keep detailed color selections out of that unbounded polygon operation;
@@ -292,7 +319,62 @@ bool AdvancedTransform::setWarp(const QVector<QPointF> &nodes) {
         if (a.intersects(b)==QLineF::BoundedIntersection) return fail("Keep the outer warp edges from crossing.");
     }
     if(!validatePlacement({},nodes))return false;
-    m_matrix={};m_nodes=nodes;refreshPreview();return true;
+    m_matrix={};m_nodes=nodes;m_puppet=false;m_puppetMesh={};m_pins.clear();refreshPreview();return true;
+}
+bool AdvancedTransform::beginPuppet(int density){
+    if(!active())return false;
+    if(m_selectionOnly)return fail("Puppet Warp transforms raster artwork. Choose the layer target first.");
+    if(modified()&&!m_puppet)return fail("Apply or cancel the current transform before placing puppet pins.");
+    const auto &layers=m_before.shots[m_document->activeShotIndex()].layers;
+    bool retained=false;for(int index:m_indices)retained|=layers[index].puppetWarp.has_value();
+    if(!retained&&m_selection.active&&m_selection.path.elementCount()>512)return fail("This selection is too detailed for Puppet Warp. Simplify it or deselect first.");
+    for(int index:m_indices)if(m_before.shots[m_document->activeShotIndex()].layers[index].kind!=LayerKind::Raster)
+        return fail("Puppet Warp needs raster artwork. Rasterize vector or text layers first.");
+    if(retained){
+        const auto &first=layers[m_indices.first()].puppetWarp;if(!first)return fail("Select one retained warp layer, or layers sharing the same mesh.");
+        RasterLayerPreview prepared;
+        for(int at=0;at<m_indices.size();++at){
+            const auto &layer=layers[m_indices[at]];const auto &state=layer.puppetWarp;
+            if(!state||state->bounds!=first->bounds||state->pins!=first->pins||state->density!=first->density||state->selectionActive!=first->selectionActive||state->selectionPath!=first->selectionPath||state->featherRadius!=first->featherRadius)return fail("Select one retained warp layer, or layers sharing the same mesh.");
+            RasterLayer source=layer;source.tiles=state->sourceTiles;source.puppetWarp.reset();RasterSelection selection;selection.active=state->selectionActive;selection.path=state->selectionPath;selection.featherRadius=state->featherRadius;RasterLayerPreview part;
+            if(!split(source,selection,&part))return fail("Could not prepare the retained warp source.");part.sourceUnchangedAtIdentity=false;
+            if(at==0)prepared=std::move(part);else prepared.additional.append(std::move(part));
+        }
+        m_puppetPreviewSource=std::move(prepared);m_bounds=first->bounds;m_reopenedPuppet=true;m_initialPuppetPins=first->pins;m_initialPuppetDensity=first->density;
+        return updatePuppet(first->pins,first->density);
+    }
+    return updatePuppet({},density);
+}
+bool AdvancedTransform::updatePuppet(const QVector<PuppetPin> &pins,int density){
+    PuppetMesh mesh;QString error;
+    if(!buildPuppetMesh(m_bounds,density,pins,&mesh,&error))return fail(error);
+    if(!validatePlacement({},mesh.target))return false;
+    m_puppet=true;m_puppetMesh=std::move(mesh);m_pins=pins;m_puppetDensity=density;m_matrix={};m_nodes=m_puppetMesh.target;refreshPreview();return true;
+}
+bool AdvancedTransform::setPuppetDensity(int density){return active()&&m_puppet&&updatePuppet(m_pins,density);}
+int AdvancedTransform::addPuppetPin(QPointF position){
+    if(!active()||!m_puppet)return -1;
+    if(m_pins.size()>=maxPuppetPins){fail("A puppet mesh supports up to 64 pins.");return -1;}
+    QPointF source;if(!inversePuppetPoint(m_puppetMesh,position,&source)){fail("Place the pin inside the mesh.");return -1;}
+    if(puppetMeshIdentity(m_pins))source=position;
+    auto pins=m_pins;pins.append({source,position});if(!updatePuppet(pins,m_puppetDensity))return -1;return pins.size()-1;
+}
+bool AdvancedTransform::setPuppetTargets(const QVector<QPointF> &targets){
+    if(!active()||!m_puppet||targets.size()!=m_pins.size())return false;
+    auto pins=m_pins;for(int i=0;i<pins.size();++i)pins[i].target=targets[i];return updatePuppet(pins,m_puppetDensity);
+}
+bool AdvancedTransform::removePuppetPin(int index){
+    return removePuppetPins({index});
+}
+bool AdvancedTransform::removePuppetPins(const QVector<int> &indices){
+    if(!active()||!m_puppet||indices.isEmpty())return false;
+    QSet<int> removed;for(int index:indices){if(index<0||index>=m_pins.size())return false;removed.insert(index);}
+    QVector<PuppetPin> pins;for(int i=0;i<m_pins.size();++i)if(!removed.contains(i))pins.append(m_pins[i]);
+    return updatePuppet(pins,m_puppetDensity);
+}
+bool AdvancedTransform::resetPuppet(){
+    if(!active()||!m_puppet)return false;
+    auto pins=m_pins;for(auto &pin:pins)pin.target=pin.source;return updatePuppet(pins,m_puppetDensity);
 }
 bool AdvancedTransform::flip(bool horizontal) {
     if(!active())return false;
@@ -308,10 +390,10 @@ bool AdvancedTransform::skew(qreal horizontal,qreal vertical) {
 }
 bool AdvancedTransform::apply() {
     if(!active())return false;
-    if(m_matrix.isIdentity() && (m_nodes.isEmpty() || m_nodes==grid(m_bounds))){cancel();return true;}
+    if(!modified()&&!(m_puppet&&!m_reopenedPuppet)){cancel();return true;}
     auto after=m_before;auto selected=m_selection;
     try {
-        if(selected.active) {
+        if(selected.active&&!m_reopenedPuppet) {
             auto path=selectionPath();const auto extent=m_document->drawingBounds();
             if(!path.isEmpty() && !extent.contains(path.controlPointRect())) {
                 QPainterPath clip;clip.addRect(extent);
@@ -329,23 +411,31 @@ bool AdvancedTransform::apply() {
             for(int at=0;at<m_indices.size();++at) {
                 const int index=m_indices[at];auto &layer=after.shots[m_document->activeShotIndex()].layers[index];const int previous=int(layer.tiles.size());
                 const auto &preview=at==0?m_preview:m_preview.additional[at-1];QString error;
-                if(layerHasEditableObjects(layer)) {
+                if(m_puppet&&puppetMeshIdentity(m_pins)){
+                    if(layer.puppetWarp)layer.tiles=layer.puppetWarp->sourceTiles;
+                }else if(layerHasEditableObjects(layer)) {
                     if(!transformEditableLayer(layer,m_matrix,layerBounds(after,m_document->activeShotIndex(),index),maxProjectTiles-used+previous,&error))return fail(error);
                 } else {
                     RasterLayer transformed;
                     if(!rasterize(preview,selectedPixelBounds(preview.moving),layerBounds(after,m_document->activeShotIndex(),index),maxProjectTiles-used+previous,&transformed,&error))return fail(error);
                     layer=std::move(transformed);
                 }
+                if(m_puppet){
+                    const auto &original=m_before.shots[m_document->activeShotIndex()].layers[index];PuppetWarpState state;
+                    if(original.puppetWarp)state=*original.puppetWarp;
+                    else{state.bounds=m_bounds;state.sourceTiles=original.tiles;state.selectionActive=m_selection.active;state.selectionPath=m_selection.active?m_selection.path:QPainterPath{};state.featherRadius=m_selection.active?m_selection.featherRadius:0;}
+                    state.pins=m_pins;state.density=m_puppetDensity;layer.puppetWarp=std::move(state);
+                }
                 used+=layer.tiles.size()-previous;
             }
         }
         const auto validation=after.validate();if(!validation.isEmpty())return fail(validation);
-        auto *document=m_document.data();const auto before=m_before;const auto previousSelection=m_selection;const auto selectionOnly=m_selectionOnly;
-        cancel();return document->commit(before,after,selectionOnly?"Transform selection boundary":"Transform layers",{},previousSelection,selected);
+        auto *document=m_document.data();const auto before=m_before;const auto previousSelection=m_selection;const auto selectionOnly=m_selectionOnly;const bool puppet=m_puppet;
+        cancel();return document->commit(before,after,selectionOnly?"Transform selection boundary":puppet?"Puppet Warp":"Transform layers",{},previousSelection,selected);
     } catch(const std::bad_alloc &) { return fail("There is not enough memory to apply the transform. The original artwork is unchanged."); }
 }
 void AdvancedTransform::cancel() {
     if(!active())return;
-    disconnect(m_documentConnection);m_document->m_externalEditActive=false;m_document.clear();m_before={};m_selection={};m_indices.clear();m_preview={};m_bounds={};m_nodes.clear();m_matrix={};emit changed();
+    disconnect(m_documentConnection);m_document->m_externalEditActive=false;m_document.clear();m_before={};m_selection={};m_indices.clear();m_preview={};m_bounds={};m_nodes.clear();m_matrix={};m_puppet=false;m_puppetMesh={};m_pins.clear();m_reopenedPuppet=false;m_initialPuppetPins.clear();m_puppetPreviewSource={};emit changed();
 }
 } // namespace toon

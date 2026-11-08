@@ -14,7 +14,7 @@ enum class FeatureIcon {
     Arc, Bezier, Simplify, Pressure, Tilt, Texture, Tone,
     PerspectiveGrid, VanishingPoint, TwoPointPerspective, ParallelGuide,
     ThreePointPerspective, Fisheye, Warp, LinearGradient, RadialGradient,
-    Blur, AlphaLock, Clipping
+    Blur, AlphaLock, Clipping, FillReference, VectorNudge
 };
 QString featureIconName(FeatureIcon feature);
 QString featureIconLabel(FeatureIcon feature);

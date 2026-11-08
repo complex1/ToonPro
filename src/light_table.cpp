@@ -340,6 +340,7 @@ bool LightTablePanel::finishPersistence() {
     commitValueEdits();
     // A Save invoked during reference manipulation keeps the latest visible pose.
     m_drag = Drag::None; m_tabletContact = false;
+    m_canvas->setExternalViewGestureActive(this, false);
     if (m_editing) m_canvas->setCursor(Qt::OpenHandCursor);
     return publishState();
 }
@@ -619,6 +620,7 @@ bool LightTablePanel::pointerPress(QPointF position) {
         if (m_drag == Drag::None && polygon.containsPoint(position, Qt::OddEvenFill)) m_drag = Drag::Move;
     }
     m_canvas->setCursor(m_drag == Drag::Move ? Qt::ClosedHandCursor : Qt::CrossCursor);
+    m_canvas->setExternalViewGestureActive(this, m_drag != Drag::None);
     return true;
 }
 void LightTablePanel::pointerMove(QPointF position) {
@@ -639,11 +641,13 @@ void LightTablePanel::pointerMove(QPointF position) {
 }
 void LightTablePanel::pointerRelease(QPointF position) {
     pointerMove(position); m_drag = Drag::None; m_tabletContact = false; publishState();
+    if (m_canvas) m_canvas->setExternalViewGestureActive(this, false);
     if (m_editing && m_canvas) m_canvas->setCursor(Qt::OpenHandCursor);
 }
 void LightTablePanel::cancelDrag() {
     if (m_drag != Drag::None && m_selected >= 0 && m_selected < m_pins.size()) m_pins[m_selected] = m_dragStart;
     m_drag = Drag::None; m_tabletContact = false;
+    if (m_canvas) m_canvas->setExternalViewGestureActive(this, false);
 }
 void LightTablePanel::hideEvent(QHideEvent *event) {
     setEditing(false);
@@ -688,7 +692,7 @@ bool LightTablePanel::eventFilter(QObject *watched, QEvent *event) {
         } else {
             // A lost release ends at the last contact sample, never at a
             // distant hover position. Subsequent hover only updates cursor.
-            m_drag = Drag::None; m_tabletContact = false; publishState(); m_canvas->setCursor(Qt::OpenHandCursor);
+            m_drag = Drag::None; m_tabletContact = false; m_canvas->setExternalViewGestureActive(this, false); publishState(); m_canvas->setCursor(Qt::OpenHandCursor);
         }
         event->accept(); return true;
     }
@@ -709,7 +713,7 @@ bool LightTablePanel::eventFilter(QObject *watched, QEvent *event) {
             pointerPress(mouse->position());
         } else if (event->type() == QEvent::MouseMove) {
             if (mouse->buttons().testFlag(Qt::LeftButton)) pointerMove(mouse->position());
-            else { m_drag = Drag::None; publishState(); m_canvas->setCursor(Qt::OpenHandCursor); }
+            else { m_drag = Drag::None; m_canvas->setExternalViewGestureActive(this, false); publishState(); m_canvas->setCursor(Qt::OpenHandCursor); }
         } else if (mouse->button() == Qt::LeftButton) pointerRelease(mouse->position());
         else return false;
         event->accept(); return true;

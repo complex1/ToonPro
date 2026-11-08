@@ -239,11 +239,14 @@ class ManagedProjectTests : public QObject {
         QCOMPARE(ea->canvas()->document()->history()->count(), 1);
         QCOMPARE(eb->canvas()->document()->history()->count(), 0);
         ea->canvas()->setRotation(23);
+        ea->canvas()->setCanvasMirrored(true);
         tabs->setCurrentWidget(ea);
         QCOMPARE(tabs->currentWidget(), ea);
         tabs->setCurrentIndex(0);
         tabs->setCurrentWidget(ea);
         QCOMPARE(ea->canvas()->rotation(), 23.);
+        QVERIFY(ea->canvas()->canvasMirrored());
+        QVERIFY(!eb->canvas()->canvasMirrored());
         QCOMPARE(ea->canvas()->document()->history()->count(), 1);
         QVERIFY(ea->saveManaged());
         QVERIFY(!ea->managedDirty());
@@ -401,7 +404,7 @@ class ManagedProjectTests : public QObject {
                 (surface ? surface : &w)->grab().save(output + "/" + name + ".png");
             }
         };
-        QImage art(QFINDTESTDATA("../website/assets/art/blue-hour.png"));
+        QImage art(QFINDTESTDATA("fixtures/managed-project/blue-hour.png"));
         QVERIFY(!art.isNull());
         art = art.scaled(640, 360, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
         auto illustrated = [&](const QString &name, bool animation = false) {

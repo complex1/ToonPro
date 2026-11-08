@@ -1,4 +1,7 @@
 #include "scene3d_controller.h"
+#include "reference3d_canvas.h"
+#include "reference3d_render.h"
+#include "feature_flags.h"
 #include "scene3d_cache.h"
 #include "drawing_tool_controller.h"
 #include "layer_panel.h"
@@ -43,6 +46,7 @@
 #include <QIODevice>
 #include <QtMath>
 #include <array>
+#include <utility>
 
 namespace toon {
 namespace {
@@ -400,6 +404,10 @@ Canvas::Canvas(QWidget *parent) : QWidget(parent), m_document(new Document(this)
     m_drawingTools = new DrawingToolController(this);
     m_guides = new GuideTool(this);
     m_scene3D = new Scene3DController(this);
+    m_reference3D = new Reference3DCanvasController(m_document,this);
+    m_reference3D->setLayerVisibilityFilter([this](const QString &id){return timelineSoloIncludesLayer(id);});
+    connect(m_reference3D,&Reference3DCanvasController::previewChanged,this,[this]{invalidateArtworkCache();update();});
+    connect(m_reference3D,&Reference3DCanvasController::warning,m_document,&Document::warning);
     m_keyframeTransformTool = new KeyframeTransformTool(this);
     m_cameraTool = new CameraTool(this);
     m_maskTool = new MaskTool(this);
@@ -532,6 +540,9 @@ Canvas::Canvas(QWidget *parent) : QWidget(parent), m_document(new Document(this)
 }
 
 Canvas::~Canvas() {
+    for (const auto &connection : std::as_const(m_externalViewGestures)) disconnect(connection);
+    m_externalViewGestures.clear();
+    m_reference3D->finishInteraction();m_reference3D->disconnect();
     m_effectsPreview->invalidate();
     m_effectsPreview->disconnect(this);
     // Preview cancellation and history destruction emit signals. Stop their
@@ -545,6 +556,9 @@ Canvas::~Canvas() {
     m_scene3D->cancelEdit();
     m_drawingTools->disconnect();
     m_drawingTools->cancel();
+    // Cancelling another tool can refresh selection controls, which still
+    // consult the reference controller while the canvas is being torn down.
+    delete m_reference3D;m_reference3D=nullptr;
 }
 
 void Canvas::setProject(const Project &p, int shotIndex) {
@@ -562,6 +576,7 @@ void Canvas::setProject(const Project &p, int shotIndex) {
     m_document->load(p);
     if (shotIndex > 0 && shotIndex < p.shots.size()) m_document->selectShot(p.shots[shotIndex].id);
     m_rotation = 0;
+    if (m_canvasMirrored) { m_canvasMirrored = false; emit canvasMirroredChanged(false); }
     fitSheet();
     emit documentChanged();
 }
@@ -571,7 +586,7 @@ QTransform Canvas::viewTransform() const {
     QTransform t;
     t.translate(width() / 2.0, height() / 2.0);
     t.rotate(m_rotation);
-    t.scale(m_zoom, m_zoom);
+    t.scale(m_canvasMirrored ? -m_zoom : m_zoom, m_zoom);
     t.translate(-m_center.x(), -m_center.y());
     return t;
 }
@@ -635,6 +650,32 @@ void Canvas::setRotation(qreal degrees) {
     m_fit = false;
     update();
     emit viewChanged();
+}
+void Canvas::setCanvasMirrored(bool enabled) {
+    if (!hasProject() || m_canvasMirrored == enabled) return;
+    // A view change during contact would splice two coordinate systems into
+    // one gesture. Keep pending previews, but wait for the current drag to end.
+    if (m_tablet || m_dragging || m_selecting || m_transformDrag != TransformDrag::None
+        || m_document->strokeActive() || m_guides->dragging() || m_drawingTools->dragging()
+        || m_maskTool->dragging() || m_cameraTool->dragging() || m_keyframeTransformTool->dragging()
+        || !m_externalViewGestures.isEmpty()
+        || m_reference3D->interactionActive()) return;
+    m_canvasMirrored = enabled;
+    refreshPointerCursor();
+    emit canvasMirroredChanged(enabled);
+    emit viewChanged();
+    update();
+}
+void Canvas::setExternalViewGestureActive(QObject *owner, bool active) {
+    if (!owner) return;
+    if (active) {
+        if (m_externalViewGestures.contains(owner)) return;
+        m_externalViewGestures.insert(owner, connect(owner, &QObject::destroyed, this, [this, owner] {
+            m_externalViewGestures.remove(owner);
+        }));
+    } else if (const auto found = m_externalViewGestures.find(owner); found != m_externalViewGestures.end()) {
+        disconnect(found.value()); m_externalViewGestures.erase(found);
+    }
 }
 void Canvas::centerOn(QPointF point) {
     if (!hasProject()) return;
@@ -747,6 +788,8 @@ EffectsPreviewSnapshot Canvas::effectsPreviewSnapshot(const QWidget *target, con
         scene.camera = evaluateSceneCamera(snapshot.shot, layer.id, snapshot.frame);
         snapshot.scenePreviews.insert(layer.id, scene3DPreview(scene, QSize(project().width, project().height)));
     }
+    m_reference3D->prepareLayerPreviews({project().width,project().height});
+    snapshot.referencePreviews=m_reference3D->preparedLayerPreviews();
     return snapshot;
 }
 void Canvas::scheduleStrokeArtworkUpdate() {
@@ -913,6 +956,9 @@ void Canvas::ensureArtworkCache() {
         m_effectsPreview->invalidate();
         setEffectsPreviewPending(false);
     }
+    if(hasProject())m_reference3D->prepareLayerPreviews({project().width,project().height});
+    const auto referenceImages=m_reference3D->preparedLayerPreviews();
+    const ReferenceLayerPreviewScope referenceScope(referenceImages);
     const Scene3DPreviewScope sceneView(m_scene3D->previewBaseKey(),m_scene3D->previewDisplayKey());
     const bool full = m_artworkCacheDirty || m_artworkCache.size() != pixels || m_artworkCache.devicePixelRatio() != ratio
         || m_artworkCache.dotsPerMeterX() != dotsX || m_artworkCache.dotsPerMeterY() != dotsY
@@ -1055,6 +1101,7 @@ void Canvas::paintEvent(QPaintEvent *) {
     p.drawImage(QPointF(), m_artworkCache);
     m_guides->paint(p);
     m_scene3D->paintHandles(p);
+    if(hasProject())m_reference3D->paintOverlay(p,artworkViewTransform(),{project().width,project().height});
     m_keyframeTransformTool->paint(p);
     m_cameraTool->paint(p);
     QElapsedTimer cursorTimer;if(profile)cursorTimer.start();
@@ -1121,7 +1168,7 @@ void Canvas::setSelectionCombine(SelectionCombine mode) {
     m_selectionCombine = mode; emit selectionCombineChanged();
 }
 bool Canvas::selectionGestureActive() const {
-    return m_stampContact || m_scene3D->editing() || m_drawingTools->active() || m_selecting || m_dragging || m_transformDrag != TransformDrag::None || m_document->strokeActive() || m_guides->dragging() || m_guides->creating;
+    return (m_reference3D && m_reference3D->interactionActive()) || m_stampContact || m_scene3D->editing() || m_drawingTools->active() || m_selecting || m_dragging || m_transformDrag != TransformDrag::None || m_document->strokeActive() || m_guides->dragging() || m_guides->creating;
 }
 void Canvas::setSelectionFocusOverlay(bool enabled) {
     if (m_selectionFocusOverlay == enabled) return;
@@ -1148,20 +1195,14 @@ QRectF Canvas::selectionViewportBounds() const {
     return transformBox().boundingRect();
 }
 bool Canvas::resolvePendingTransform() {
+    m_reference3D->finishInteraction();
     flushStampTransform();
     auto *advanced = m_drawingTools->transform();
     const bool rasterActive = m_document->transformActive();
     if (!rasterActive && !advanced->active()) return true;
     bool changed = rasterActive && (m_document->stampPlacementActive() || !m_document->transformMatrix().isIdentity());
     if (advanced->active()) {
-        changed |= !advanced->matrix().isIdentity();
-        if (advanced->warped()) {
-            QVector<QPointF> original;
-            const auto bounds = advanced->bounds();
-            for (int y = 0; y < 3; ++y) for (int x = 0; x < 3; ++x)
-                original.append(bounds.topLeft() + QPointF(bounds.width() * x / 2, bounds.height() * y / 2));
-            changed |= advanced->controlPoints() != original;
-        }
+        changed |= advanced->modified();
     }
     if (!changed) {
         advanced->cancel(); m_document->cancelTransform();
@@ -1189,6 +1230,10 @@ bool Canvas::resolvePendingTransform() {
     return false;
 }
 void Canvas::setTool(Tool tool) {
+    if (!features::legacy3DEditor && (tool == Tool::SceneObject || tool == Tool::SceneCamera || tool == Tool::SceneRig)) {
+        emit actionBlocked("Legacy 3D editing is retired.");
+        return;
+    }
     emit m_document->effectsEditResolutionRequested();
     m_document->commitEffectsEdit();
     m_maskTool->setEnabled(false);
@@ -1302,6 +1347,20 @@ void Canvas::setStabilization(qreal amount) {
     m_stabilization = qBound(0.0, amount, 100.0);
     emit brushChanged();
 }
+void Canvas::setStabilizationMode(StrokeFilterMode mode) {
+    if ((mode != StrokeFilterMode::Smooth && mode != StrokeFilterMode::Stabilizer) || m_stabilizationMode == mode) return;
+    m_stabilizationMode = mode; emit brushChanged();
+}
+void Canvas::setStabilizationDeadZone(qreal pixels) {
+    if (!std::isfinite(pixels)) return;
+    pixels = qBound(0.0, pixels, 20.0);
+    if (m_stabilizationDeadZone == pixels) return;
+    m_stabilizationDeadZone = pixels; emit brushChanged();
+}
+void Canvas::setStabilizationFinishAtEndpoint(bool enabled) {
+    if (m_stabilizationFinishAtEndpoint == enabled) return;
+    m_stabilizationFinishAtEndpoint = enabled; emit brushChanged();
+}
 QPainterPath Canvas::brushCursorPath() const {
     if(m_maskTool->enabled())return m_maskTool->cursorPath();
     if(m_keyframeTransformTool->enabled() || m_cameraTool->enabled())return {};
@@ -1395,7 +1454,10 @@ QPainterPath Canvas::brushCursorPath() const {
         }
         outline = m_tipOutline;
     }
-    QTransform t; t.translate(position.x(), position.y()); t.rotate(artworkRotation()); t.scale(artworkZoom(), artworkZoom());
+    // Use the actual linear view transform, including reflections and camera
+    // rotation, so an asymmetric tip still follows the pixels it will paint.
+    const auto view = artworkViewTransform();
+    QTransform t(view.m11(), view.m12(), view.m21(), view.m22(), position.x(), position.y());
     return t.map(outline);
 }
 QRectF Canvas::brushCursorRect() const { return brushCursorPath().boundingRect(); }
@@ -1416,6 +1478,7 @@ void Canvas::refreshPointerCursor() {
     if (!hasProject()) setCursor(Qt::ForbiddenCursor);
     else if (m_dragging) setCursor(Qt::ClosedHandCursor);
     else if (m_space || (m_tool == Tool::Hand && !m_keyframeTransformTool->enabled() && !m_maskTool->enabled())) setCursor(Qt::OpenHandCursor);
+    else if(m_reference3D&&m_reference3D->editable())setCursor(m_reference3D->interactionActive()?Qt::ClosedHandCursor:Qt::ArrowCursor);
     else if (!pointerBlockReason().isEmpty()) setCursor(Qt::ForbiddenCursor);
     else if (m_maskTool->enabled()) setCursor(m_pointerInside?Qt::BlankCursor:Qt::ArrowCursor);
     else if (m_cameraTool->enabled()) setCursor(Qt::SizeAllCursor);
@@ -1427,10 +1490,10 @@ void Canvas::refreshPointerCursor() {
         setCursor(m_pointerInside?Qt::BlankCursor:Qt::ArrowCursor);
     else if (m_tool == Tool::SceneObject || m_tool == Tool::SceneRig) setCursor(Qt::SizeAllCursor);
     else if (m_tool == Tool::SceneCamera) setCursor(Qt::OpenHandCursor);
-    else if (m_drawingTools->handlesTool() && m_tool!=Tool::Retouch && m_tool!=Tool::VectorEraser && m_tool!=Tool::VectorSimplify && m_tool!=Tool::VectorWidth && m_tool!=Tool::Brush && m_tool!=Tool::Eraser) setCursor(Qt::CrossCursor);
+    else if (m_drawingTools->handlesTool() && m_tool!=Tool::Retouch && m_tool!=Tool::VectorEraser && m_tool!=Tool::VectorSimplify && m_tool!=Tool::VectorWidth && m_tool!=Tool::VectorNudge && m_tool!=Tool::Brush && m_tool!=Tool::Eraser) setCursor(Qt::CrossCursor);
     // Hide the native pointer only for tools that draw a replacement brush outline.
     else if (m_tool == Tool::Brush || m_tool == Tool::Eraser || m_tool == Tool::Retouch
-        || m_tool == Tool::VectorEraser || m_tool == Tool::VectorSimplify || m_tool == Tool::VectorWidth)
+        || m_tool == Tool::VectorEraser || m_tool == Tool::VectorSimplify || m_tool == Tool::VectorWidth || m_tool == Tool::VectorNudge)
         setCursor(m_pointerInside ? Qt::BlankCursor : Qt::ArrowCursor);
     else setCursor(Qt::ArrowCursor);
     const auto hint = interactionHint();
@@ -1803,12 +1866,17 @@ void Canvas::beginPaintStroke(QPointF point, const BrushInput &input, bool erase
     // Both flags work on macOS too, where Qt maps Command to ControlModifier.
     if (modifiers & (Qt::ControlModifier | Qt::MetaModifier)) m_strokeConstraint = StrokeConstraint::AxisPending;
     else if (modifiers & Qt::ShiftModifier) m_strokeConstraint = StrokeConstraint::Straight;
+    if (m_strokeConstraint == StrokeConstraint::None) point = m_guides->beginSnap(point);
     m_strokeOrigin = point;
-    if (m_strokeConstraint == StrokeConstraint::None) m_guides->beginSnap(point);
     m_input = m_previousInput = input; m_strokeBrush = brush; m_hasDirection = false;
     m_pointerDirection = m_initialDirection = 0;
-    const auto sample = m_strokeFilter.begin(point, input.pressure,
-        m_strokeConstraint == StrokeConstraint::None && brush.smoothingEnabled ? m_stabilization : 0);
+    StrokeFilterSettings stabilization;
+    stabilization.mode = m_stabilizationMode;
+    stabilization.strength = m_strokeConstraint == StrokeConstraint::None && brush.smoothingEnabled ? m_stabilization : 0;
+    stabilization.pixelScale = 1 / artworkZoom();
+    stabilization.deadZone = m_stabilizationMode == StrokeFilterMode::Stabilizer ? m_stabilizationDeadZone : 0;
+    stabilization.finishAtEndpoint = m_stabilizationFinishAtEndpoint;
+    const auto sample = m_strokeFilter.begin(point, input.pressure, stabilization);
     m_paintedTip = sample.point; m_lastPaintInput = input;
     if (!m_strokeFilter.active() || !m_document->beginStroke(sample.point, input, brush, eraser)) {
         m_strokeFilter.reset();
@@ -1876,6 +1944,7 @@ void Canvas::continuePaintStroke(QPointF point, const BrushInput &input) {
         // still respond while the pen rests inside that initial dead zone.
         m_input = m_lastPaintInput = m_previousInput = input;
         m_strokeFilter.advance(m_strokeFilter.raw().point, input.pressure);
+        if (!m_strokeFilter.active()) { m_document->cancelStroke(); refreshPointerCursor(); return; }
         update(cursorBefore.united(brushCursorDamageRect()).adjusted(-3, -3, 3, 3).toAlignedRect());
         return;
     }
@@ -1899,7 +1968,11 @@ void Canvas::finishStroke() {
     flushStraightStroke();
     if (m_document->strokeActive() && m_strokeFilter.active() && m_strokeConstraint != StrokeConstraint::Straight && !m_holdShape->fitted()) {
         const auto raw = m_strokeFilter.raw();
-        applyStrokeSamples(m_strokeFilter.finish(raw.point, raw.pressure));
+        const auto tail = m_strokeFilter.finish(raw.point, raw.pressure);
+        if (m_strokeFilter.failed()) {
+            m_document->cancelStroke();
+            emit m_document->warning("This stroke exceeds the stabilizer's completion limit. Use Smooth mode or a lower strength for tight, repeated loops.");
+        } else applyStrokeSamples(tail);
     }
     m_strokeFilter.reset();
     m_holdShape->reset();
@@ -1921,6 +1994,8 @@ void Canvas::mousePressEvent(QMouseEvent *event) {
     if (hasProject() && (event->button() == Qt::MiddleButton || (event->button() == Qt::LeftButton && (m_tool == Tool::Hand || m_space)))) {
         finishStroke(); cancelOverlayDrag();
         m_dragging = true; m_last = event->position(); refreshPointerCursor();
+    } else if(hasProject() && m_tool!=Tool::Hand && m_reference3D->mousePress(event,artworkViewTransform(),{project().width,project().height})){
+        event->accept();return;
     } else if (event->button() == Qt::RightButton && m_tool == Tool::Guides) {
         cancelGuideCreation();
     } else if (event->button() == Qt::LeftButton) {
@@ -1944,6 +2019,7 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
     if (m_pointerModifiers != event->modifiers()) { m_pointerModifiers = event->modifiers(); refreshPointerCursor(); }
     trackPointer(event->position());
     if (!hasProject()) return;
+    if(!m_dragging && m_reference3D->mouseMove(event,artworkViewTransform(),{project().width,project().height})){event->accept();return;}
     if (m_stampContact && !(event->buttons() & Qt::LeftButton)) endPaintContact();
     if (m_dragging) {
         const auto inverse = viewTransform().inverted();
@@ -1965,6 +2041,7 @@ void Canvas::mouseMoveEvent(QMouseEvent *event) {
     else if (m_document->strokeActive()) continuePaintStroke(artworkPoint(event->position()), timedBrushInput(artworkPoint(event->position()), {}, event->timestamp()));
 }
 void Canvas::mouseReleaseEvent(QMouseEvent *event) {
+    if(hasProject()&&!m_dragging&&m_reference3D->mouseRelease(event,artworkViewTransform(),{project().width,project().height})){event->accept();return;}
     if (m_tablet || event->source() != Qt::MouseEventNotSynthesized) return;
     trackPointer(event->position());
     if (!hasProject()) return;
@@ -1986,12 +2063,14 @@ void Canvas::mouseReleaseEvent(QMouseEvent *event) {
     refreshPointerCursor();
 }
 void Canvas::wheelEvent(QWheelEvent *event) {
+    if(hasProject()&&m_tool!=Tool::Hand&&!m_space&&m_reference3D->wheel(event,artworkViewTransform(),{project().width,project().height})){event->accept();return;}
     if (m_document->strokeActive()) { event->accept(); return; }
     const qreal delta = event->angleDelta().y() ? event->angleDelta().y() : event->pixelDelta().y();
     zoomAt(m_zoom * std::pow(1.0015, delta), event->position());
     event->accept();
 }
 void Canvas::tabletEvent(QTabletEvent *event) {
+    if(hasProject()&&m_tool!=Tool::Hand&&!m_space&&m_reference3D->tablet(event,artworkViewTransform(),{project().width,project().height})){event->accept();return;}
     event->accept(); // Prevent a second, synthesized mouse stroke.
     const auto syncCursor = qScopeGuard([this, event] { syncTabletCursor(event->position()); });
     if (m_tablet && ((event->type() == QEvent::TabletMove && !(event->buttons() & Qt::LeftButton))
@@ -2010,11 +2089,17 @@ void Canvas::tabletEvent(QTabletEvent *event) {
     }
     BrushInput input;
     input.pressure = event->pressure();
-    QTransform inverseRotation; inverseRotation.rotate(-artworkRotation());
-    const auto tilt = inverseRotation.map(QPointF(event->xTilt(), event->yTilt()));
+    const auto view = artworkViewTransform();
+    const auto scale = artworkZoom();
+    const auto inverseOrientation = QTransform(view.m11() / scale, view.m12() / scale,
+        view.m21() / scale, view.m22() / scale, 0, 0).inverted();
+    const auto tilt = inverseOrientation.map(QPointF(event->xTilt(), event->yTilt()));
     input.tiltX = qBound(-90.0, tilt.x(), 90.0); input.tiltY = qBound(-90.0, tilt.y(), 90.0);
-    input.rotation = event->pointingDevice()->capabilities().testFlag(QInputDevice::Capability::Rotation)
-        ? std::remainder(event->rotation() - artworkRotation(), 360.0) : 0;
+    if (event->pointingDevice()->capabilities().testFlag(QInputDevice::Capability::Rotation)) {
+        const auto radians = qDegreesToRadians(event->rotation());
+        const auto direction = inverseOrientation.map(QPointF(std::cos(radians), std::sin(radians)));
+        input.rotation = qRadiansToDegrees(std::atan2(direction.y(), direction.x()));
+    }
     input.wheel = event->pointingDevice()->capabilities().testFlag(QInputDevice::Capability::TangentialPressure)
         ? qBound(0.0, (event->tangentialPressure() + 1) / 2, 1.0) : 1;
     input = timedBrushInput(artworkPoint(event->position()), input, event->timestamp(), event->type() == QEvent::TabletPress);
@@ -2026,6 +2111,7 @@ void Canvas::tabletEvent(QTabletEvent *event) {
         m_drawingTools->move(event->position(), event->modifiers(), input.pressure);
     if (event->type() == QEvent::TabletPress && event->button() == Qt::LeftButton) {
         if (m_holdShape->pending()) finishStroke();
+        if(m_tool==Tool::Hand||m_space){setFocus();m_tablet=true;cancelOverlayDrag();m_dragging=true;m_last=event->position();refreshPointerCursor();return;}
         if (!prepareStampPress(event->position(), event->modifiers())) return;
         if (rejectBlockedAction()) return;
         setFocus(); m_tablet = true;
@@ -2068,6 +2154,7 @@ void Canvas::tabletEvent(QTabletEvent *event) {
     }
 }
 void Canvas::keyPressEvent(QKeyEvent *event) {
+    if(m_reference3D->keyPress(event)){event->accept();return;}
     if (event->key() == Qt::Key_Alt) { m_pointerModifiers |= Qt::AltModifier; refreshPointerCursor(); }
     if(event->key()==Qt::Key_Escape && m_scene3D->editing()){m_scene3D->cancelEdit();event->accept();return;}
     if((event->key()==Qt::Key_Delete||event->key()==Qt::Key_Backspace)&&m_tool==Tool::SceneRig){m_scene3D->removeSelectedJoint();event->accept();return;}
@@ -2099,6 +2186,7 @@ void Canvas::keyReleaseEvent(QKeyEvent *event) {
     } else QWidget::keyReleaseEvent(event);
 }
 void Canvas::focusOutEvent(QFocusEvent *event) {
+    m_reference3D->finishInteraction();
     m_scene3D->pointerRelease();
     finishStroke(); cancelOverlayDrag(); m_dragging = false; m_space = false; m_tablet = false;
     m_pointerModifiers = Qt::NoModifier;
@@ -2225,6 +2313,9 @@ void Navigator::paintEvent(QPaintEvent *) {
         p.drawImage(QPointF(), m_preview);
         p.setTransform(miniatureTransform());
     } else {
+        m_canvas->reference3D()->prepareLayerPreviews({m_canvas->project().width,m_canvas->project().height});
+        const auto references=m_canvas->reference3D()->preparedLayerPreviews();
+        const ReferenceLayerPreviewScope nativeScope(references);
         const Scene3DPreviewScope sceneView(m_canvas->scene3D()->previewBaseKey(),m_canvas->scene3D()->previewDisplayKey());
         p.setTransform(miniatureTransform());
         paintSheet(p, m_canvas->project(), m_canvas->displayShot(), true,

@@ -1,3 +1,4 @@
+#include "feature_flags.h"
 #include "canvas.h"
 #include "camera_animation.h"
 #include "scene3d_controller.h"
@@ -31,6 +32,7 @@ private slots:
         QCOMPARE(canvas.document()->history()->count(),0);
     }
     void cameraGestureWritesCurrentKeyAndUndoKeepsBasePose() {
+        if (!features::legacy3DEditor) QSKIP("Legacy 3D authoring is retired; compatibility coverage remains enabled.");
         Canvas canvas;canvas.setProject(fixture());auto *controller=canvas.scene3D();auto *doc=canvas.document();
         doc->setCurrentFrame(5);const auto before=canvas.project().toJson();const auto camera=controller->scene()->camera;
         const auto base=canvas.shot().layers[0].scene3d->camera;const auto history=doc->history()->count();
@@ -57,6 +59,7 @@ private slots:
         canvas.document()->setCurrentFrame(0);QCOMPARE(scene3DPreview(*controller->scene(),{128,128}),old);
     }
     void existingCameraPanelShowsEvaluatedPoseAndResolvesTypedDraft() {
+        if (!features::legacy3DEditor) QSKIP("Legacy 3D authoring is retired; compatibility coverage remains enabled.");
         Canvas canvas;canvas.setProject(fixture());auto *controller=canvas.scene3D();Scene3DPanel panel(controller);
         canvas.document()->setCurrentFrame(5);auto *yaw=panel.findChild<ValueSlider*>("scene3DYaw");QVERIFY(yaw);
         QCOMPARE(yaw->value(),80.);const int count=canvas.document()->history()->count();

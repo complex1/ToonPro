@@ -112,6 +112,11 @@ VectorEditPanel::VectorEditPanel(Canvas *canvas,QWidget *parent):QWidget(parent)
     layout->addWidget(brush);
     auto *radius = number(brushLayout,"Radius","vectorEditBrushRadius",1,256,30,0,"px");
     auto *strength = number(brushLayout,"Strength","widthBrushStrength",1,100,20,0,"%");
+    auto*nudge=new QWidget;auto*nudgeLayout=new QVBoxLayout(nudge);nudgeLayout->setContentsMargins(0,0,0,0);nudgeLayout->setSpacing(ui::metrics::controlGap);layout->addWidget(nudge);
+    auto*nudgeRadius=number(nudgeLayout,"Radius","vectorNudgeRadius",1,256,40,0,"px");
+    nudgeRadius->setToolTip("Local push radius in artwork pixels. Drag from the area to push; falloff is smooth at its edge.");
+    auto*nudgeStrength=number(nudgeLayout,"Strength","vectorNudgeStrength",1,100,75,0,"%");
+    nudgeStrength->setToolTip("Percentage of the drag displacement applied at the brush center; pen pressure also controls the push.");
     layout->addStretch();
     connect(mode,&QTabBar::currentChanged,this,[=](int index){
         controller->setPathEditMode(static_cast<DrawingToolController::PathEditMode>(index));
@@ -146,10 +151,12 @@ VectorEditPanel::VectorEditPanel(Canvas *canvas,QWidget *parent):QWidget(parent)
     connect(direction,&QTabBar::currentChanged,this,[=](int index){controller->widthThicken=index==0;canvas->notifyToolSettingsEdited();});
     connect(radius,&ValueSlider::valueChanged,this,[=](qreal value){controller->widthBrushRadius=value;controller->notifySettings();canvas->notifyToolSettingsEdited();});
     connect(strength,&ValueSlider::valueChanged,this,[=](qreal value){controller->widthBrushStrength=value/100;canvas->notifyToolSettingsEdited();});
+    connect(nudgeRadius,&ValueSlider::valueChanged,this,[=](qreal value){controller->nudgeRadius=value;controller->notifySettings();canvas->notifyToolSettingsEdited();});
+    connect(nudgeStrength,&ValueSlider::valueChanged,this,[=](qreal value){controller->nudgeStrength=value/100;canvas->notifyToolSettingsEdited();});
     const auto refresh=[=,this]{
         using T=Canvas::Tool;
         const auto tool=canvas->tool(); const bool pathEdit=tool==T::VectorNode;
-        const bool simplifyBrush=tool==T::VectorSimplify, widthBrush=tool==T::VectorWidth;
+        const bool simplifyBrush=tool==T::VectorSimplify, widthBrush=tool==T::VectorWidth,nudgeBrush=tool==T::VectorNudge;
         bool vector=false,editable=false,animatedLayer=false;
         if(doc->isOpen()){
             const auto &layers=doc->activeShot().layers;const int active=doc->activeLayer();
@@ -173,6 +180,7 @@ VectorEditPanel::VectorEditPanel(Canvas *canvas,QWidget *parent):QWidget(parent)
         reset->setVisible(localWidth);reset->setEnabled(editable&&object.has_value()&&!sourceBlocked);
         commands->setVisible(simplification||localWidth);
         brush->setVisible(simplifyBrush||widthBrush); brush->setEnabled(editable);
+        nudge->setVisible(nudgeBrush);nudge->setEnabled(editable&&!animatedLayer&&canvas->toolBlockReason().isEmpty());
         direction->setVisible(widthBrush); strength->parentWidget()->setVisible(widthBrush);
         status->setText(!vector?"Select a vector layer":!editable?"Layer locked or hidden":
             sourceBlocked?"Source · animated path locked":
@@ -183,6 +191,7 @@ VectorEditPanel::VectorEditPanel(Canvas *canvas,QWidget *parent):QWidget(parent)
         mode->setCurrentIndex(int(controller->pathEditMode));direction->setCurrentIndex(controller->widthThicken?0:1);
         tolerance->setValueSilently(controller->simplifyTolerance);radius->setValueSilently(controller->widthBrushRadius);
         strength->setValueSilently(controller->widthBrushStrength*100);
+        nudgeRadius->setValueSilently(controller->nudgeRadius);nudgeStrength->setValueSilently(controller->nudgeStrength*100);
         if(object){
             width->setValueSilently(object->strokeWidth);opacity->setValueSilently(object->opacity*100);
             if(color->property("strokeColor").value<QColor>()!=object->stroke){

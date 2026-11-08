@@ -52,7 +52,7 @@ private slots:
         QVERIFY(!button(panel, "addGuide")->isEnabled());
         canvas.setProject(Project::create()); canvas.setTool(Canvas::Tool::Guides);
         panel.resize(270, 650); panel.show(); QTest::qWait(10);
-        auto *tabs = panel.findChild<QTabBar *>("guideTypes"); QVERIFY(tabs); QCOMPARE(tabs->count(), 6);
+        auto *tabs = panel.findChild<QTabBar *>("guideTypes"); QVERIFY(tabs); QCOMPARE(tabs->count(), 7);
         QCOMPARE(tabs->style()->styleHint(QStyle::SH_ToolTip_WakeUpDelay, nullptr, tabs), ui::tooltipDelayMs);
         for (int i = 0; i < tabs->count(); ++i) {
             QVERIFY(!tabs->tabIcon(i).isNull()); QVERIFY(!tabs->tabToolTip(i).isEmpty());
@@ -73,6 +73,34 @@ private slots:
         QTest::addColumn<QString>("placement");
         QTest::newRow("three-point") << 4 << int(GuideType::ThreePoint) << "three vanishing points";
         QTest::newRow("fisheye") << 5 << int(GuideType::Fisheye) << "curve height";
+    }
+    void ellipseHasDirectAccessibleTypeAndOnlyRelevantProperties() {
+        Canvas canvas; canvas.setProject(Project::create()); canvas.setTool(Canvas::Tool::Guides);
+        GuidePanel panel(&canvas); panel.resize(220, 540); panel.show(); QTest::qWait(10);
+        auto *types = panel.findChild<QTabBar *>("guideTypes"); QCOMPARE(types->count(), 7);
+        QVERIFY(types->tabRect(6).right() < types->width());
+        QTest::mouseClick(types, Qt::LeftButton, Qt::NoModifier, types->tabRect(6).center());
+        QCOMPARE(canvas.guideCreationType(), GuideType::Ellipse);
+        QCOMPARE(types->accessibleTabName(6), QString("Ellipse ruler"));
+        QVERIFY(types->tabToolTip(6).contains("12 screen pixels")); QVERIFY(!types->tabIcon(6).isNull());
+        button(panel, "addGuide")->click(); QVERIFY(canvas.guideCreating());
+        QVERIFY(panel.findChild<QLabel *>("guidePlacementStatus")->text().contains("ellipse height"));
+        button(panel, "cancelGuideCreation")->click(); canvas.addDefaultGuide(GuideType::Ellipse);
+        auto *density = panel.findChild<ValueSlider *>("guideDensity"); QVERIFY(!density->isVisibleTo(&panel));
+        QVERIFY(button(panel, "guideVertical")->isHidden());
+        auto *name = panel.findChild<QLineEdit *>("guideName"); name->setText("Eye construction"); commit(name);
+        QCOMPARE(selected(canvas).name, QString("Eye construction"));
+        auto *list = panel.findChild<QTreeWidget *>("guideList");
+        clickColumn(list, 0, 2); QVERIFY(selected(canvas).locked);
+        clickColumn(list, 0, 3); QVERIFY(!selected(canvas).snapping);
+        clickColumn(list, 0, 1); QVERIFY(!selected(canvas).visible);
+        canvas.document()->history()->undo(); QVERIFY(selected(canvas).visible);
+        canvas.addDefaultGuide(GuideType::ParallelRuler); QVERIFY(density->isVisibleTo(&panel));
+        const auto output = qEnvironmentVariable("TOON_UI_PREVIEW");
+        if (!output.isEmpty()) {
+            canvas.selectGuide(canvas.drawingGuides().first().id); QDir().mkpath(output);
+            QVERIFY(panel.grab().save(output + "/ellipse-guide-properties.png"));
+        }
     }
     void extendedTypePlacementAndProperties() {
         QFETCH(int, index); QFETCH(int, typeValue); QFETCH(QString, placement);

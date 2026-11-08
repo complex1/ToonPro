@@ -17,12 +17,21 @@ set(CMAKE_AUTORCC ON)
 find_package(Qt6 6.10 REQUIRED COMPONENTS Core Gui Widgets Svg Concurrent Multimedia Sql MultimediaWidgets)
 find_package(ZLIB REQUIRED)
 
+# Compatibility switch retained for builds that explicitly omit reference 3D.
+# The reviewed workspace is artist-approved and available in normal builds.
+option(TOON_ENABLE_EXPERIMENTAL_3D "Enable the approved reference 3D workspace" ON)
+
 add_library(toon_core src/rig3d.cpp src/scene3d.cpp src/scene_model_io.cpp src/model_library.cpp src/scene3d_cache.cpp src/editable_object.cpp src/vector_brush.cpp src/vector_brush_storage.cpp src/vector_edit_geometry.cpp src/object_tools.cpp src/project.cpp src/sheet.cpp src/raster.cpp src/document.cpp src/storage.cpp
     src/brush_library.cpp src/abr_import.cpp src/brush_settings.cpp src/brush_engine.cpp src/layer_hierarchy.cpp
     src/raster_tools.cpp src/selection_geometry.cpp src/advanced_transform.cpp src/clipboard_tools.cpp src/raster_edit.cpp src/document_selection.cpp src/document_selection_actions.cpp src/drawing_guide.cpp src/guide_geometry.cpp)
 target_include_directories(toon_core PUBLIC src)
 target_sources(toon_core PRIVATE src/document_shots.cpp src/abr_descriptor.cpp)
+target_sources(toon_core PRIVATE src/layer_outline.cpp)
+target_sources(toon_core PRIVATE src/document_fill_reference.cpp)
+target_sources(toon_core PRIVATE src/perspective_detection.cpp src/perspective_source.cpp src/document_perspective.cpp)
+target_sources(toon_core PRIVATE src/puppet_warp.cpp src/puppet_warp_state.cpp)
 target_sources(toon_core PRIVATE src/cel_edit.cpp src/document_cels.cpp)
+target_sources(toon_core PRIVATE src/inbetween.cpp src/document_inbetween.cpp)
 target_sources(toon_core PRIVATE src/timeline_cues.cpp)
 target_sources(toon_core PRIVATE src/symbol_poses.cpp)
 target_sources(toon_core PRIVATE src/timeline_organization.cpp src/timeline_solo.cpp)
@@ -42,12 +51,31 @@ target_sources(toon_core PRIVATE src/camera_animation.cpp src/document_camera.cp
 target_sources(toon_core PRIVATE src/layer_effects.cpp src/document_effects.cpp src/effect_render.cpp src/mask_selection.cpp)
 target_sources(toon_core PRIVATE src/timeline_ripple.cpp src/document_ripple.cpp src/drawing_template_library.cpp src/onion_settings.cpp)
 target_sources(toon_core PRIVATE src/managed_project_store.cpp)
+target_sources(toon_core PRIVATE src/line_art.cpp src/line_art_edges.cpp src/document_line_art.cpp)
+target_sources(toon_core PRIVATE src/reference3d.cpp src/reference3d_import.cpp src/reference3d_builtin.cpp src/reference3d_library.cpp src/reference3d_pose.cpp src/reference3d_pose_library.cpp src/reference3d_catalog.cpp src/reference3d_pets.cpp)
+target_sources(toon_core PRIVATE src/reference3d_render.cpp src/reference3d_layer_serialization.cpp src/document_reference3d.cpp)
+qt_add_resources(toon_core reference3d_anatomy
+    PREFIX "/reference3d"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/resources/reference3d"
+    FILES resources/reference3d/anatomy-v1.bin)
+qt_add_resources(toon_core reference3d_catalog
+    BIG_RESOURCES
+    PREFIX "/reference3d"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/resources/reference3d"
+    FILES resources/reference3d/seed-san-v1.toon3dasset
+          resources/reference3d/alicia-solid-v1.toon3dasset
+          resources/reference3d/dog-v1.toon3dasset
+          resources/reference3d/cat-v1.toon3dasset
+          resources/reference3d/bird-v1.toon3dasset
+          resources/reference3d/pet-poses-v1.json
+    OPTIONS --compress-algo zlib --compress 9 --threshold 0)
 target_link_libraries(toon_core PUBLIC Qt6::Core Qt6::Gui Qt6::Sql ZLIB::ZLIB)
 
 add_library(toon_workspace src/scene3d_rig_controller.cpp src/rig3d_panel.cpp src/scene3d_controller.cpp src/scene3d_renderer.cpp src/scene3d_panel.cpp src/model_library_panel.cpp resources/scene3d/scene3d.qrc src/canvas_availability.cpp src/vector_edit_panel.cpp src/tool_catalog.cpp src/tool_session.cpp src/tool_navigation_panel.cpp src/tool_management_panel.cpp src/icon_column.cpp src/drawing_tool_controller.cpp src/drawing_tool_panel.cpp src/canvas.cpp src/project_dialog.cpp src/main_window.cpp src/drawing_panels.cpp
     src/value_slider.cpp src/property_row.cpp src/scrub_value.cpp src/icons.cpp src/reference_panel.cpp src/stroke_filter.cpp src/brush_panel.cpp src/brush_settings_panel.cpp
     src/layer_panel.cpp src/selection_extras.cpp src/selection_panel.cpp src/selection_context_bar.cpp src/ui_theme.cpp src/brush_widgets.cpp src/color_panel.cpp src/guide_tool.cpp src/guide_panel.cpp resources/toon_icons.qrc)
 target_sources(toon_workspace PRIVATE src/shots_panel.cpp src/palette_library.cpp src/project_save.cpp src/package_smoke.cpp)
+target_sources(toon_workspace PRIVATE src/reference3d_canvas.cpp src/reference3d_layer_panel.cpp)
 target_sources(toon_workspace PRIVATE src/scene3d_skin_controller.cpp src/skin3d_panel.cpp src/skin3d_view.cpp)
 target_sources(toon_workspace PRIVATE src/scene3d_pose_controller.cpp src/pose3d_panel.cpp src/timeline_controller.cpp src/timeline_panel.cpp)
 target_sources(toon_workspace PRIVATE src/timeline_controller_cels.cpp src/drawing_reuse_dialog.cpp)
@@ -69,12 +97,17 @@ target_sources(toon_workspace PRIVATE src/effects_preview_renderer.cpp)
 target_sources(toon_workspace PRIVATE src/movie_review_controller.cpp src/movie_review_renderer.cpp src/movie_review_panel.cpp)
 target_sources(toon_workspace PRIVATE src/character_model_panel.cpp src/character_color_panel.cpp)
 target_sources(toon_workspace PRIVATE src/character_recolor.cpp src/character_recolor_dialog.cpp)
+target_sources(toon_workspace PRIVATE src/rife_job.cpp src/inbetween_panel.cpp)
 target_sources(toon_workspace PRIVATE src/symbol_library_panel.cpp src/symbol_editor_dialog.cpp src/timeline_controller_symbols.cpp src/symbol_clip_panel.cpp src/symbol_frame_picker_dialog.cpp)
 target_sources(toon_workspace PRIVATE src/cel_paint_check.cpp src/cel_paint_check_panel.cpp
     src/cel_shading.cpp src/cel_shading_panel.cpp src/light_table.cpp)
 target_sources(toon_workspace PRIVATE src/timeline_ripple_dialog.cpp src/drawing_template_dialog.cpp src/onion_settings_dialog.cpp)
 target_sources(toon_workspace PRIVATE src/project_workspace_window.cpp src/dashboard_gallery.cpp src/workspace_setup_widgets.cpp)
+target_sources(toon_workspace PRIVATE src/line_art_dialog.cpp src/main_window_line_art.cpp)
+target_sources(toon_workspace PRIVATE src/perspective_dialog.cpp src/main_window_perspective.cpp)
+target_sources(toon_workspace PRIVATE src/reference3d_review.cpp)
 target_link_libraries(toon_workspace PUBLIC toon_core Qt6::Widgets Qt6::Svg Qt6::Concurrent Qt6::Multimedia Qt6::MultimediaWidgets)
+target_compile_definitions(toon_workspace PUBLIC TOON_ENABLE_EXPERIMENTAL_3D=$<BOOL:${TOON_ENABLE_EXPERIMENTAL_3D}>)
 target_sources(toon_workspace PRIVATE src/drawing_input.cpp src/brush_surface_pattern_widget.cpp src/advanced_brush_dynamics_widget.cpp)
 target_sources(toon_workspace PRIVATE src/history_panel.cpp src/auto_actions_panel.cpp)
 target_sources(toon_workspace PRIVATE src/hold_shape_tool.cpp src/shape_choice_bar.cpp)
@@ -127,7 +160,7 @@ if(NOT _toon_filament_mode STREQUAL "OFF" AND _toon_filament_available)
     endforeach()
     target_link_libraries(toon_workspace PRIVATE "-framework Cocoa" "-framework Metal" "-framework CoreVideo" "-framework QuartzCore")
 else()
-    message(STATUS "3D reference rendering disabled for this build (${_toon_arch}, ${_toon_filament_mode}). Drawing, animation, audio and project storage remain available.")
+    message(STATUS "Legacy Filament 3D rendering disabled for this build (${_toon_arch}, ${_toon_filament_mode}). The reference workspace uses its independent base-color preview when enabled.")
 endif()
 
 qt_add_executable(ToonPro MACOSX_BUNDLE WIN32 src/main.cpp)
@@ -138,6 +171,45 @@ set_target_properties(ToonPro PROPERTIES
     MACOSX_BUNDLE_BUNDLE_NAME "Toon Pro"
     MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
     MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}")
+
+# A separate bundle/settings identity lets the artist enter the new workspace
+# directly without opening a production project or replacing the normal app.
+if(TOON_ENABLE_EXPERIMENTAL_3D)
+    qt_add_executable(ToonPro3DReview MACOSX_BUNDLE WIN32 src/reference3d_review_main.cpp)
+    target_link_libraries(ToonPro3DReview PRIVATE toon_workspace)
+    target_compile_definitions(ToonPro3DReview PRIVATE TOON_APP_VERSION="${PROJECT_VERSION}")
+    set_target_properties(ToonPro3DReview PROPERTIES
+        OUTPUT_NAME "Toon Pro 3D Review"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "studio.toonpro.reference-review"
+        MACOSX_BUNDLE_BUNDLE_NAME "Toon Pro 3D Review"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}")
+endif()
+
+if(APPLE)
+    foreach(_toon_notice_app ToonPro ToonPro3DReview)
+        if(TARGET ${_toon_notice_app})
+            add_custom_command(TARGET ${_toon_notice_app} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_BUNDLE_CONTENT_DIR:${_toon_notice_app}>/Resources/licenses"
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/third-party/makehuman/LICENSE.CC0.txt"
+                    "$<TARGET_BUNDLE_CONTENT_DIR:${_toon_notice_app}>/Resources/licenses/makehuman-assets-CC0.txt")
+        endif()
+    endforeach()
+endif()
+
+# Optional, pinned local RIFE runtime. No downloads happen during a build.
+# scripts/setup_rife.py prepares only the executable and compact v4.6 model.
+set(TOON_RIFE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.deps/rife" CACHE PATH "RIFE executable and rife-v4.6 model directory")
+if(EXISTS "${TOON_RIFE_ROOT}/rife-v4.6/flownet.bin")
+    if(APPLE)
+        set(_toon_rife_destination "$<TARGET_BUNDLE_CONTENT_DIR:ToonPro>/Resources/rife")
+    else()
+        set(_toon_rife_destination "$<TARGET_FILE_DIR:ToonPro>/rife")
+    endif()
+    add_custom_command(TARGET ToonPro POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${TOON_RIFE_ROOT}" "${_toon_rife_destination}"
+        COMMENT "Bundling local RIFE runtime")
+endif()
 
 if(MSVC)
     # Source strings and test fixtures contain Unicode. Propagate encoding to
@@ -156,6 +228,41 @@ endif()
 include(CTest)
 if(BUILD_TESTING)
     find_package(Qt6 6.10 REQUIRED COMPONENTS Test)
+    foreach(perspective_suite perspective_detection perspective_dialog)
+        qt_add_executable(toon_${perspective_suite}_tests tests/test_${perspective_suite}.cpp)
+        target_link_libraries(toon_${perspective_suite}_tests PRIVATE toon_workspace Qt6::Test)
+        if(perspective_suite STREQUAL "perspective_detection")
+            add_test(NAME ${perspective_suite} COMMAND toon_${perspective_suite}_tests)
+        else()
+            add_test(NAME ${perspective_suite} COMMAND toon_${perspective_suite}_tests -platform offscreen)
+        endif()
+        set_tests_properties(${perspective_suite} PROPERTIES TIMEOUT 120)
+    endforeach()
+    foreach(fill_suite fill_reference fill_reference_ui)
+        qt_add_executable(toon_${fill_suite}_tests tests/test_${fill_suite}.cpp)
+        target_link_libraries(toon_${fill_suite}_tests PRIVATE toon_workspace Qt6::Test)
+        add_test(NAME ${fill_suite} COMMAND toon_${fill_suite}_tests -platform offscreen)
+        set_tests_properties(${fill_suite} PROPERTIES TIMEOUT 120)
+    endforeach()
+    qt_add_executable(toon_experimental_3d_tests tests/test_experimental_3d.cpp)
+    target_link_libraries(toon_experimental_3d_tests PRIVATE toon_workspace Qt6::Test)
+    add_test(NAME experimental_3d COMMAND toon_experimental_3d_tests -platform offscreen)
+    set_tests_properties(experimental_3d PROPERTIES TIMEOUT 90)
+    foreach(reference_suite reference3d reference3d_import reference3d_builtin reference3d_library reference3d_pose reference3d_pose_library reference3d_catalog reference3d_pets reference3d_review reference3d_layer_storage reference3d_layer_render reference3d_canvas reference3d_layer_panel reference3d_native_integration)
+        qt_add_executable(toon_${reference_suite}_tests tests/test_${reference_suite}.cpp)
+        target_link_libraries(toon_${reference_suite}_tests PRIVATE toon_workspace Qt6::Test)
+        add_test(NAME ${reference_suite} COMMAND toon_${reference_suite}_tests -platform offscreen)
+        set_tests_properties(${reference_suite} PROPERTIES TIMEOUT 120)
+    endforeach()
+    qt_add_executable(toon_line_art_tests tests/test_line_art.cpp)
+    target_link_libraries(toon_line_art_tests PRIVATE toon_workspace Qt6::Test)
+    target_compile_definitions(toon_line_art_tests PRIVATE TOON_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME line_art COMMAND toon_line_art_tests -platform offscreen)
+    set_tests_properties(line_art PROPERTIES TIMEOUT 180)
+    qt_add_executable(toon_line_art_quality_tests tests/test_line_art_quality.cpp)
+    target_link_libraries(toon_line_art_quality_tests PRIVATE toon_core Qt6::Widgets Qt6::Test)
+    add_test(NAME line_art_quality COMMAND toon_line_art_quality_tests -platform offscreen)
+    set_tests_properties(line_art_quality PROPERTIES TIMEOUT 180)
     foreach(studio_suite managed_project project_kind studio_project studio_panels production_workspace studio_navigation_extra motion_study)
         qt_add_executable(toon_${studio_suite}_tests tests/${studio_suite}_tests.cpp)
         target_link_libraries(toon_${studio_suite}_tests PRIVATE toon_workspace Qt6::Test)
@@ -347,6 +454,10 @@ if(BUILD_TESTING)
         add_test(NAME ${effects_suite} COMMAND toon_${effects_suite}_tests -platform offscreen)
         set_tests_properties(${effects_suite} PROPERTIES TIMEOUT 90)
     endforeach()
+    qt_add_executable(toon_layer_outline_tests tests/test_layer_outline.cpp)
+    target_link_libraries(toon_layer_outline_tests PRIVATE toon_workspace Qt6::Test)
+    add_test(NAME layer_outline COMMAND toon_layer_outline_tests -platform offscreen)
+    set_tests_properties(layer_outline PROPERTIES TIMEOUT 120)
     foreach(effects_suite effects_panel effects_canvas effects_workspace)
         qt_add_executable(toon_${effects_suite}_tests tests/${effects_suite}_tests.cpp)
         target_link_libraries(toon_${effects_suite}_tests PRIVATE toon_workspace Qt6::Test)
@@ -513,6 +624,11 @@ if(BUILD_TESTING)
         else()
             target_link_libraries(toon_${scene_suite}_tests PRIVATE toon_workspace Qt6::Test)
         endif()
+        # Keep legacy storage/render compatibility. The retired rig/weight
+        # editor must not return when the replacement review flag is enabled.
+        if(scene_suite MATCHES "^(scene_workspace|rig3d_panel|rig_workspace|skin3d_panel|skin_workspace|pose3d_panel|pose_workspace)$")
+            continue()
+        endif()
         if(scene_suite STREQUAL "rig3d" OR scene_suite STREQUAL "skin3d" OR scene_suite STREQUAL "skin3d_view" OR scene_suite STREQUAL "pose3d")
             add_test(NAME ${scene_suite} COMMAND toon_${scene_suite}_tests)
         else()
@@ -542,6 +658,10 @@ if(BUILD_TESTING)
     target_link_libraries(toon_canvas_smoothing_tests PRIVATE toon_workspace Qt6::Test)
     add_test(NAME canvas_smoothing COMMAND toon_canvas_smoothing_tests -platform offscreen)
     set_tests_properties(canvas_smoothing PROPERTIES TIMEOUT 60)
+    qt_add_executable(toon_canvas_mirror_tests tests/test_canvas_mirror.cpp)
+    target_link_libraries(toon_canvas_mirror_tests PRIVATE toon_workspace Qt6::Test)
+    add_test(NAME canvas_mirror COMMAND toon_canvas_mirror_tests -platform offscreen)
+    set_tests_properties(canvas_mirror PROPERTIES TIMEOUT 60)
     foreach(tool_test tool_catalog tool_session tool_navigation_panel tool_management_panel)
         qt_add_executable(toon_${tool_test}_tests tests/test_${tool_test}.cpp)
         target_link_libraries(toon_${tool_test}_tests PRIVATE toon_workspace Qt6::Test)
@@ -624,6 +744,12 @@ if(BUILD_TESTING)
         add_test(NAME ${recolor_suite} COMMAND toon_${recolor_suite}_tests -platform offscreen)
         set_tests_properties(${recolor_suite} PROPERTIES TIMEOUT 120)
     endforeach()
+    foreach(inbetween_suite inbetween inbetween_panel)
+        qt_add_executable(toon_${inbetween_suite}_tests tests/test_${inbetween_suite}.cpp)
+        target_link_libraries(toon_${inbetween_suite}_tests PRIVATE toon_workspace Qt6::Test)
+        add_test(NAME ${inbetween_suite} COMMAND toon_${inbetween_suite}_tests -platform offscreen)
+        set_tests_properties(${inbetween_suite} PROPERTIES TIMEOUT 120)
+    endforeach()
     qt_add_executable(toon_stabilizer_tests tests/test_stabilizer.cpp)
     target_link_libraries(toon_stabilizer_tests PRIVATE toon_workspace Qt6::Test)
     add_test(NAME stabilizer COMMAND toon_stabilizer_tests -platform offscreen)
@@ -680,12 +806,16 @@ if(BUILD_TESTING)
         endif()
         set_tests_properties(${ui_suite} PROPERTIES TIMEOUT 60)
     endforeach()
-    foreach(edit_suite IN ITEMS advanced_transform clipboard_tools)
+    foreach(edit_suite IN ITEMS advanced_transform clipboard_tools puppet_warp)
         qt_add_executable(toon_${edit_suite}_tests tests/test_${edit_suite}.cpp)
         target_link_libraries(toon_${edit_suite}_tests PRIVATE toon_core Qt6::Widgets Qt6::Test)
         add_test(NAME ${edit_suite} COMMAND toon_${edit_suite}_tests -platform offscreen)
         set_tests_properties(${edit_suite} PROPERTIES TIMEOUT 60)
     endforeach()
+    qt_add_executable(toon_puppet_warp_ui_tests tests/test_puppet_warp_ui.cpp)
+    target_link_libraries(toon_puppet_warp_ui_tests PRIVATE toon_workspace Qt6::Test)
+    add_test(NAME puppet_warp_ui COMMAND toon_puppet_warp_ui_tests -platform offscreen)
+    set_tests_properties(puppet_warp_ui PROPERTIES TIMEOUT 120)
     set_tests_properties(foundation drawing controls cursor reference_storage references stabilizer brush_library abr brush_engine brush_panel brush_advanced brush_settings_panel PROPERTIES TIMEOUT 60)
     if(WIN32)
         # QtTest otherwise sends plain output to OutputDebugString on hosted
@@ -710,6 +840,14 @@ endif()
 
 option(TOON_BUILD_BENCHMARKS "Build opt-in offscreen performance benchmarks" OFF)
 if(TOON_BUILD_BENCHMARKS)
+    qt_add_executable(toon_reference3d_prepare_asset tests/reference3d_prepare_asset.cpp)
+    target_link_libraries(toon_reference3d_prepare_asset PRIVATE toon_core)
+    qt_add_executable(toon_reference3d_prepare_pets tests/reference3d_prepare_pets.cpp)
+    target_link_libraries(toon_reference3d_prepare_pets PRIVATE toon_core)
+    qt_add_executable(toon_reference3d_asset_review tests/reference3d_asset_review.cpp)
+    target_link_libraries(toon_reference3d_asset_review PRIVATE toon_workspace)
+    qt_add_executable(toon_reference3d_review_benchmark tests/benchmark_reference3d_review.cpp)
+    target_link_libraries(toon_reference3d_review_benchmark PRIVATE toon_workspace)
     qt_add_executable(toon_recolor_benchmark scripts/recolor_benchmark.cpp)
     target_link_libraries(toon_recolor_benchmark PRIVATE toon_workspace)
     qt_add_executable(toon_effects_bench tests/benchmark_effects.cpp)
@@ -738,6 +876,10 @@ if(UNIX AND NOT APPLE)
     set(CMAKE_INSTALL_LIBDIR "lib" CACHE PATH "Portable runtime library directory" FORCE)
     set_target_properties(ToonPro PROPERTIES INSTALL_RPATH "$ORIGIN/../lib" INSTALL_RPATH_USE_LINK_PATH FALSE)
 endif()
+set(_toon_experimental_3d_json "false")
+if(TOON_ENABLE_EXPERIMENTAL_3D)
+    set(_toon_experimental_3d_json "true")
+endif()
 set(_toon_filament_json "false")
 set(_toon_renderer "unavailable")
 if(TOON_FILAMENT_ENABLED)
@@ -758,9 +900,16 @@ else()
     set(_toon_metadata_destination "${CMAKE_INSTALL_DATADIR}/toon-pro")
 endif()
 file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/build-capabilities-$<CONFIG>.json" CONTENT
-"{\n  \"application\": \"Toon Pro\",\n  \"version\": \"${PROJECT_VERSION}\",\n  \"qtVersion\": \"${Qt6_VERSION}\",\n  \"system\": \"${CMAKE_SYSTEM_NAME}\",\n  \"architecture\": \"${_toon_arch}\",\n  \"configuration\": \"$<CONFIG>\",\n  \"filamentRequested\": \"${_toon_filament_mode}\",\n  \"filamentEnabled\": ${_toon_filament_json},\n  \"renderer3D\": \"${_toon_renderer}\",\n  \"minimumOS\": \"${_toon_minimum_os}\",\n  \"desktopBackend\": \"${_toon_desktop_backend}\"\n}\n")
+"{\n  \"application\": \"Toon Pro\",\n  \"version\": \"${PROJECT_VERSION}\",\n  \"qtVersion\": \"${Qt6_VERSION}\",\n  \"system\": \"${CMAKE_SYSTEM_NAME}\",\n  \"architecture\": \"${_toon_arch}\",\n  \"configuration\": \"$<CONFIG>\",\n  \"filamentRequested\": \"${_toon_filament_mode}\",\n  \"filamentEnabled\": ${_toon_filament_json},\n  \"renderer3D\": \"${_toon_renderer}\",\n  \"experimental3DEnabled\": ${_toon_experimental_3d_json},\n  \"minimumOS\": \"${_toon_minimum_os}\",\n  \"desktopBackend\": \"${_toon_desktop_backend}\"\n}\n")
 install(TARGETS ToonPro BUNDLE DESTINATION . RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+if(EXISTS "${TOON_RIFE_ROOT}/rife-v4.6/flownet.bin" AND NOT APPLE)
+    install(DIRECTORY "${TOON_RIFE_ROOT}/" DESTINATION "${CMAKE_INSTALL_BINDIR}/rife" USE_SOURCE_PERMISSIONS)
+endif()
 install(FILES "${CMAKE_BINARY_DIR}/build-capabilities-$<CONFIG>.json" DESTINATION "${_toon_metadata_destination}" RENAME build-capabilities.json)
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/third-party/cgltf/LICENSE"
+    DESTINATION "${_toon_metadata_destination}/licenses" RENAME cgltf-MIT.txt)
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/third-party/makehuman/LICENSE.CC0.txt"
+    DESTINATION "${_toon_metadata_destination}/licenses" RENAME makehuman-assets-CC0.txt)
 set(_toon_deploy_runtime_options)
 if(MSVC)
     # A portable ZIP must carry its compiler DLLs beside ToonPro.exe. A smoke

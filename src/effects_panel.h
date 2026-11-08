@@ -38,7 +38,7 @@ private:
     void finishValue();
     void previewValue(int field, double value);
     void changeEffect(const std::function<void(LayerEffects &)> &change);
-    void pickColor(bool shadow);
+    void pickColor(int effect);
     bool prepareAction();
     void maskAction(const std::function<void()> &action);
     void refreshThumbnail();
@@ -60,14 +60,14 @@ private:
     QTabBar *m_tabs, *m_maskMode, *m_maskPropertyTabs;
     EffectPropertyPages *m_pages;
     QScrollArea *m_scroll;
-    std::array<int,5> m_scrollPositions{};
+    std::array<int,6> m_scrollPositions{};
     int m_currentPage = 0;
     QToolButton *m_master, *m_addAdjustment, *m_maskAdd, *m_maskSelection,
         *m_maskEnabled, *m_maskRemove, *m_maskPaint, *m_maskInvert,
-        *m_maskRevealAll, *m_maskHideAll, *m_shadowColor, *m_glowColor;
-    std::array<QToolButton *,4> m_enabled{};
-    std::array<QWidget *,4> m_effectBodies{}, m_effectHeadings{};
-    std::array<ValueSlider *,11> m_values{};
+        *m_maskRevealAll, *m_maskHideAll, *m_shadowColor, *m_glowColor, *m_outlineColor;
+    std::array<QToolButton *,5> m_enabled{};
+    std::array<QWidget *,5> m_effectBodies{}, m_effectHeadings{};
+    std::array<ValueSlider *,12> m_values{};
     std::array<ValueSlider *,3> m_maskValues{};
     std::array<ValueSlider *,7> m_maskPlacementValues{};
     QHash<int,QToolButton *> m_keyButtons;

@@ -14,7 +14,7 @@ int maskTiles(const Project &project) {
     return projectMaskTileCount(project);
 }
 bool compatibleEffects(const RasterLayer &layer,const LayerEffects &effects) {
-    return !layer.adjustment||(!effects.blurEnabled&&!effects.shadowEnabled&&!effects.glowEnabled);
+    return !layer.adjustment||(!effects.blurEnabled&&!effects.shadowEnabled&&!effects.glowEnabled&&!effects.outlineEnabled);
 }
 // The inspector passes evaluated values. Keep keyed source settings unchanged
 // and write only the fields the artist actually changed at this frame.
@@ -56,7 +56,7 @@ QString Document::effectsEditReason(const QString &requested) const {
     int index=indexOf(shot,id);
     if(index<0)return "Choose a layer.";
     if(!layerPresentAtFrame(shot,id,m_currentFrame))return "Choose a drawing exposed at this frame.";
-    if(shot.layers[index].scene3d)return "Effects apply to artwork, not 3D references.";
+    if(shot.layers[index].scene3d||shot.layers[index].reference3d)return "Effects apply to artwork, not 3D references.";
     if(layerIsAnnotation(shot.layers,index))return "Effects apply to artwork, not production notes.";
     QSet<QString> visited;
     while(index>=0) {

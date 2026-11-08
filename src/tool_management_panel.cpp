@@ -27,6 +27,7 @@
 #include <QTabWidget>
 #include <QToolButton>
 #include <QVBoxLayout>
+#include <algorithm>
 #include <functional>
 
 namespace toon {
@@ -344,13 +345,13 @@ void ToolManagementPanel::refresh() {
     const auto selected = selectedTools();
     const QSignalBlocker groupBlock(m_groups), toolBlock(m_tools);
     QStringList groupIds, toolIds;
-    for (const auto &entry : m_catalog->entries()) if (entry.group) groupIds.append(entry.id);
-    for (const auto &tool : m_catalog->tools()) toolIds.append(tool.id);
+    for (const auto &entry : m_catalog->availableEntries()) if (entry.group) groupIds.append(entry.id);
+    for (const auto &tool : m_catalog->availableTools()) toolIds.append(tool.id);
     const bool rebuildGroups = !sameRows(m_groups, groupIds), rebuildTools = !sameRows(m_tools, toolIds);
     if (rebuildGroups) m_groups->clear();
     if (rebuildTools) m_tools->clear();
     int groupRow = 0;
-    for (const auto &entry : m_catalog->entries()) if (entry.group) {
+    for (const auto &entry : m_catalog->availableEntries()) if (entry.group) {
         auto *item = rebuildGroups ? new QListWidgetItem(m_groups) : m_groups->item(groupRow);
         ++groupRow;
         item->setText(entry.name); item->setIcon(entry.customIcon.isNull() ? appIcon(entry.icon) : QIcon(QPixmap::fromImage(entry.customIcon)));
@@ -361,7 +362,7 @@ void ToolManagementPanel::refresh() {
     if (!itemFor(m_groups, m_groupId)) m_groupId = m_groups->count() ? m_groups->item(0)->data(Qt::UserRole).toString() : QString();
     m_groups->setCurrentItem(itemFor(m_groups, m_groupId));
     int toolRow = 0;
-    for (const auto &tool : m_catalog->tools()) {
+    for (const auto &tool : m_catalog->availableTools()) {
         auto *item = rebuildTools ? new QListWidgetItem(m_tools) : m_tools->item(toolRow);
         ++toolRow;
         item->setText(tool.name); item->setIcon(appIcon(tool.icon)); item->setData(Qt::UserRole, tool.id);
@@ -388,7 +389,8 @@ void ToolManagementPanel::refreshGroup() {
     m_iconPreview->setPixmap(icon.pixmap(QSize(ui::metrics::primaryIcon, ui::metrics::primaryIcon), devicePixelRatioF()));
     m_iconPreview->setToolTip(entry->customIcon.isNull() ? "Built-in group icon" : "Custom group icon stored in your tool library");
     m_clearIcon->setEnabled(!entry->customIcon.isNull());
-    static_cast<ElidedLabel *>(m_memberCount)->setFullText(QString("%1 tool%2").arg(entry->tools.size()).arg(entry->tools.size() == 1 ? "" : "s"));
+    const auto count = std::count_if(entry->tools.cbegin(), entry->tools.cend(), [this](const auto &id) { return m_catalog->toolEnabled(id); });
+    static_cast<ElidedLabel *>(m_memberCount)->setFullText(QString("%1 tool%2").arg(count).arg(count == 1 ? "" : "s"));
 }
 void ToolManagementPanel::refreshTools() {
     const auto ids = selectedTools(); m_toolProperties->setEnabled(!ids.isEmpty() && m_catalog->writable());
@@ -476,7 +478,7 @@ void ToolManagementPanel::editMembership() {
     auto *layout = new QVBoxLayout(&dialog); layout->setContentsMargins(8, 8, 8, 8); layout->setSpacing(ui::metrics::controlGap);
     auto *search = field("membershipSearch", "Search tools or tags"); enableSearchClear(search); layout->addWidget(search);
     auto *choices = list("membershipTools", "Tools in this group"); layout->addWidget(choices, 1);
-    for (const auto &tool : m_catalog->tools()) {
+    for (const auto &tool : m_catalog->availableTools()) {
         auto *item = new QListWidgetItem(appIcon(tool.icon), tool.name, choices);
         item->setData(Qt::UserRole, tool.id); item->setToolTip(metadataText(tool.name, tool.tags));
         item->setData(Qt::AccessibleTextRole, item->toolTip()); item->setCheckState(entry->tools.contains(tool.id) ? Qt::Checked : Qt::Unchecked);
@@ -493,6 +495,9 @@ void ToolManagementPanel::editMembership() {
         const auto *current = m_catalog->entry(entryId); if (!current) { dialog.reject(); return; }
         QStringList checked;
         for (int i = 0; i < choices->count(); ++i) if (choices->item(i)->checkState() == Qt::Checked) checked.append(choices->item(i)->data(Qt::UserRole).toString());
+        // Quarantined definitions are absent from this dialog. Editing visible
+        // membership must not silently delete their saved placements.
+        for (const auto &id : current->tools) if (!m_catalog->toolEnabled(id)) checked.append(id);
         QStringList ordered; for (const auto &id : current->tools) if (checked.contains(id)) ordered.append(id);
         for (const auto &id : checked) if (!ordered.contains(id)) ordered.append(id);
         // A cancelled pending-transform guard keeps this dialog and its choices.

@@ -6,6 +6,7 @@
 #include <QApplication>
 #include <QDir>
 #include <QFile>
+#include <QFocusEvent>
 #include <QDoubleSpinBox>
 #include <QLineEdit>
 #include <QListWidget>
@@ -141,6 +142,41 @@ private slots:
         pen(canvas, QEvent::TabletPress, a); pen(canvas, QEvent::TabletMove, b); pen(canvas, QEvent::TabletRelease, b);
         QCOMPARE(canvas.document()->history()->count(), 1); QVERIFY(!canvas.document()->strokeActive());
         QCOMPARE(panel.pins().size(), 1);
+    }
+    void mirrorWaitsForPinContactAndRecoversOnEveryExit_data() {
+        QTest::addColumn<int>("exit");QTest::addColumn<bool>("tablet");
+        QTest::newRow("mouse-release")<<0<<false;QTest::newRow("pen-release")<<0<<true;
+        QTest::newRow("escape")<<1<<false;QTest::newRow("lost-mouse-release")<<2<<false;
+        QTest::newRow("lost-pen-release")<<2<<true;QTest::newRow("hide")<<3<<false;
+        QTest::newRow("destroy-owner")<<4<<false;QTest::newRow("save-finishes")<<5<<false;
+        QTest::newRow("focus-loss")<<6<<false;
+    }
+    void mirrorWaitsForPinContactAndRecoversOnEveryExit() {
+        QFETCH(int,exit);QFETCH(bool,tablet);
+        Canvas canvas;setup(canvas);auto *panel=new LightTablePanel(&canvas);panel->show();
+        QVERIFY(panel->pinImage(drawing(),"Pose"));panel->setEditing(true);QVERIFY(panel->editing());
+        const auto start=panel->artworkToViewport().map(panel->pins()[0].bounds.center());
+        if(tablet)pen(canvas,QEvent::TabletPress,start);else mouse(canvas,QEvent::MouseButtonPress,start);
+        canvas.setCanvasMirrored(true);QVERIFY(!canvas.canvasMirrored());
+        if(tablet)pen(canvas,QEvent::TabletMove,start+QPointF(18,10));else mouse(canvas,QEvent::MouseMove,start+QPointF(18,10));
+        const auto moved=panel->pins()[0].offset;QVERIFY(!moved.isNull());
+        canvas.setCanvasMirrored(true);QVERIFY(!canvas.canvasMirrored());QCOMPARE(panel->pins()[0].offset,moved);
+        if(exit==0){if(tablet)pen(canvas,QEvent::TabletRelease,start+QPointF(18,10));else mouse(canvas,QEvent::MouseButtonRelease,start+QPointF(18,10));}
+        else if(exit==1)QTest::keyClick(&canvas,Qt::Key_Escape);
+        else if(exit==2){
+            if(tablet){
+                static QPointingDevice device("Lost contact guard pen",613,QInputDevice::DeviceType::Stylus,
+                    QPointingDevice::PointerType::Pen,QInputDevice::Capability::Position|QInputDevice::Capability::Pressure,1,1);
+                QTabletEvent event(QEvent::TabletMove,&device,start,canvas.mapToGlobal(start),0,0,0,0,0,0,Qt::NoModifier,Qt::NoButton,Qt::NoButton);
+                QApplication::sendEvent(&canvas,&event);
+            }else{QMouseEvent event(QEvent::MouseMove,start,canvas.mapToGlobal(start),Qt::NoButton,Qt::NoButton,Qt::NoModifier);QApplication::sendEvent(&canvas,&event);}
+        }
+        else if(exit==3)panel->hide();
+        else if(exit==4){delete panel;panel=nullptr;}
+        else if(exit==5)QVERIFY(panel->finishPersistence());
+        else{QFocusEvent event(QEvent::FocusOut);QApplication::sendEvent(&canvas,&event);}
+        canvas.setCanvasMirrored(true);QVERIFY(canvas.canvasMirrored());
+        QCOMPARE(canvas.document()->history()->count(),0);delete panel;
     }
     void rotatedCameraMappingAndFocusedNumberDraft() {
         Canvas canvas; setup(canvas); LightTablePanel panel(&canvas); panel.show(); panel.resize(220, 410); panel.show();

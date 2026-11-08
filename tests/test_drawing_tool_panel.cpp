@@ -6,6 +6,7 @@
 #include "ui_theme.h"
 #include "value_slider.h"
 #include "property_row.h"
+#include "object_tools.h"
 #include <QTabBar>
 #include <QHBoxLayout>
 #include <QTabWidget>
@@ -24,6 +25,24 @@ class DrawingToolPanelTests:public QObject{
  Q_OBJECT
 private slots:
  void initTestCase(){applyTheme();}
+ void vectorNudgeHasFocusedRadiusAndStrengthProperties(){
+    Canvas canvas;canvas.setProject(Project::create());QVERIFY(ObjectTools::addLayer(canvas.document(),LayerKind::Vector));QVERIFY(!ObjectTools::addPath(canvas.document(),{BezierNode::corner({80,100}),BezierNode::corner({240,100})},false,Qt::black,5).isEmpty());
+    std::unique_ptr<QWidget> properties(drawingPanel(&canvas,"propertiesPanel"));properties->resize(240,400);properties->show();canvas.setTool(Canvas::Tool::VectorNudge);QTest::qWait(10);
+    auto*radius=properties->findChild<ValueSlider*>("vectorNudgeRadius");auto*strength=properties->findChild<ValueSlider*>("vectorNudgeStrength");QVERIFY(radius);QVERIFY(strength);QVERIFY(radius->isVisible());QVERIFY(strength->isVisible());QVERIFY(radius->findChild<QSlider*>());QVERIFY(radius->findChild<QDoubleSpinBox*>());const int history=canvas.document()->history()->count();radius->setValue(57);strength->setValue(43);QCOMPARE(canvas.drawingTools()->nudgeRadius,57.);QCOMPARE(canvas.drawingTools()->nudgeStrength,.43);QCOMPARE(canvas.document()->history()->count(),history);
+    if(!qEnvironmentVariableIsEmpty("TOON_UI_PREVIEW")){const auto output=qEnvironmentVariable("TOON_UI_PREVIEW");QVERIFY(QDir().mkpath(output));QVERIFY(properties->grab().save(output+"/vector-nudge-properties.png"));}
+ }
+ void fillAndVectorEraseControlsAreDirectAndPrecise(){
+    Canvas canvas;canvas.setProject(Project::create());DrawingToolPanel panel(&canvas);panel.resize(260,420);panel.show();canvas.setTool(Canvas::Tool::Bucket);
+    auto*mode=panel.findChild<QTabBar*>("fillMode");auto*expansion=panel.findChild<ValueSlider*>("fillExpansion");QVERIFY(mode);QVERIFY(expansion);
+    QCOMPARE(mode->count(),2);QVERIFY(mode->isVisible());QVERIFY(!mode->accessibleName().isEmpty());
+    mode->setCurrentIndex(1);QVERIFY(canvas.drawingTools()->encloseFillMode);
+    auto*number=expansion->findChild<QDoubleSpinBox*>();QVERIFY(number);number->setFocus();number->selectAll();QTest::keyClicks(number,"-3");QTest::keyClick(number,Qt::Key_Return);
+    QCOMPARE(canvas.drawingTools()->fillSettings.expansion,-3);QVERIFY(expansion->findChild<QSlider*>());
+    canvas.setTool(Canvas::Tool::MagicWand);QVERIFY(!mode->isVisible());QVERIFY(!expansion->isVisible());
+    canvas.setTool(Canvas::Tool::VectorEraser);auto*erase=panel.findChild<QTabBar*>("vectorEraseMode");QVERIFY(erase);QCOMPARE(erase->count(),3);QVERIFY(erase->isVisible());
+    for(int i=0;i<3;++i){QVERIFY(!erase->tabIcon(i).isNull());QVERIFY(!erase->tabToolTip(i).isEmpty());QVERIFY(!erase->accessibleTabName(i).isEmpty());erase->setCurrentIndex(i);QCOMPARE(int(canvas.drawingTools()->vectorEraseMode),i);}
+    QCOMPARE(canvas.document()->history()->count(),0);
+ }
  void liveBrushSamplesDoNotBroadcastUnchangedToolProperties(){
     Canvas canvas;canvas.setProject(Project::create());
     std::unique_ptr<QWidget> properties(drawingPanel(&canvas,"propertiesPanel"));
@@ -68,7 +87,7 @@ private slots:
     canvas.setTool(Canvas::Tool::VectorEraser);QVERIFY(!panel.findChild<ValueSlider*>("retouchStrength")->isVisible());
  }
  void responsiveRowsKeepEditorsUsableAndHiddenPagesDoNotForceScrolling(){
-    Canvas canvas;canvas.setProject(Project::create());DrawingToolPanel panel(&canvas);panel.resize(220,150);panel.show();canvas.setTool(Canvas::Tool::Bucket);
+    Canvas canvas;canvas.setProject(Project::create());DrawingToolPanel panel(&canvas);panel.resize(220,260);panel.show();canvas.setTool(Canvas::Tool::Bucket);
     QTRY_COMPARE(panel.verticalScrollBar()->maximum(),0);
     auto *tolerance=panel.findChild<ValueSlider*>("fillTolerance");
     auto *row=qobject_cast<PropertyRow*>(tolerance->parentWidget());QVERIFY(row);
@@ -188,6 +207,15 @@ private slots:
     if(qEnvironmentVariableIsEmpty("TOON_UI_PREVIEW"))QSKIP("Preview output is opt-in");
     Canvas canvas;canvas.setProject(Project::create());QWidget gallery;auto*layout=new QHBoxLayout(&gallery);const QList<Canvas::Tool> tools={Canvas::Tool::Gradient,Canvas::Tool::VectorPen,Canvas::Tool::Text,Canvas::Tool::Retouch,Canvas::Tool::AdvancedTransform};
     QVector<Canvas*> canvases;for(auto t:tools){auto*c=new Canvas(&gallery);c->setProject(Project::create());c->hide();canvases<<c;auto*p=new DrawingToolPanel(c);p->setFixedSize(250,570);layout->addWidget(p);c->setTool(t);}gallery.show();QTest::qWait(30);QDir().mkpath(qEnvironmentVariable("TOON_UI_PREVIEW"));QVERIFY(gallery.grab().save(qEnvironmentVariable("TOON_UI_PREVIEW")+"/drawing-properties.png"));
+ }
+ void renderFillAndErasePreview(){
+    if(qEnvironmentVariableIsEmpty("TOON_UI_PREVIEW"))QSKIP("Preview output is opt-in");
+    const auto output=qEnvironmentVariable("TOON_UI_PREVIEW");QVERIFY(QDir().mkpath(output));
+    Canvas canvas;canvas.setProject(Project::create());DrawingToolPanel panel(&canvas);panel.resize(260,420);panel.show();
+    canvas.setTool(Canvas::Tool::Bucket);panel.findChild<ValueSlider*>("fillExpansion")->setValue(2);QTest::qWait(25);QVERIFY(panel.grab().save(output+"/fill-point.png"));
+    panel.findChild<QTabBar*>("fillMode")->setCurrentIndex(1);QTest::qWait(25);QVERIFY(panel.grab().save(output+"/fill-enclose.png"));
+    canvas.setTool(Canvas::Tool::VectorEraser);panel.findChild<QTabBar*>("vectorEraseMode")->setCurrentIndex(2);QTest::qWait(25);QVERIFY(panel.grab().save(output+"/vector-erase-modes.png"));
+    panel.resize(220,420);QTest::qWait(25);QVERIFY(panel.grab().save(output+"/vector-erase-narrow.png"));
  }
 };
 QTEST_MAIN(DrawingToolPanelTests)

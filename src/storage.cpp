@@ -51,6 +51,10 @@ const QByteArray magicV36 = "TOONPRO36\n";
 const QByteArray magicV37 = "TOONPRO37\n";
 const QByteArray magicV38 = "TOONPRO38\n";
 const QByteArray magicV39 = "TOONPRO39\n";
+const QByteArray magicV40 = "TOONPRO40\n";
+const QByteArray magicV41 = "TOONPRO41\n";
+const QByteArray magicV42 = "TOONPRO42\n";
+const QByteArray magicV43 = "TOONPRO43\n";
 constexpr qint64 maxManifest = 4 * 1024 * 1024;
 constexpr qint64 maxBrushManifest = 32 * 1024 * 1024;
 constexpr qint64 maxSkinManifest = 64 * 1024 * 1024;
@@ -81,7 +85,7 @@ bool saveProject(const Project &p, const QString &path, QString *error, const st
     if (cancelled && cancelled()) return fail("Save cancelled.");
     const auto metadata = p.toJson();
     const auto manifest = QJsonDocument(metadata).toJson(QJsonDocument::Compact);
-    const auto &magic = metadata.value("version").toInt() >= 39 ? magicV39 : metadata.value("version").toInt() >= 38 ? magicV38 : metadata.value("version").toInt() >= 37 ? magicV37 : metadata.value("version").toInt() >= 36 ? magicV36 : metadata.value("version").toInt() >= 35 ? magicV35 : metadata.value("version").toInt() >= 34 ? magicV34 : metadata.value("version").toInt() >= 33 ? magicV33 : metadata.value("version").toInt() >= 32 ? magicV32 : metadata.value("version").toInt() >= 31 ? magicV31 : metadata.value("version").toInt() >= 30 ? magicV30 : metadata.value("version").toInt() >= 29 ? magicV29 : metadata.value("version").toInt() >= 28 ? magicV28 : metadata.value("version").toInt() >= 27 ? magicV27 : metadata.value("version").toInt() >= 26 ? magicV26 : metadata.value("version").toInt() >= 25 ? magicV25 : metadata.value("version").toInt() >= 24 ? magicV24 : metadata.value("version").toInt() >= 23 ? magicV23 : metadata.value("version").toInt() >= 22 ? magicV22 : metadata.value("version").toInt() >= 21 ? magicV21 : metadata.value("version").toInt() >= 20 ? magicV20 : magicV19;
+    const auto &magic = metadata.value("version").toInt() >= 43 ? magicV43 : metadata.value("version").toInt() >= 42 ? magicV42 : metadata.value("version").toInt() >= 41 ? magicV41 : metadata.value("version").toInt() >= 40 ? magicV40 : metadata.value("version").toInt() >= 39 ? magicV39 : metadata.value("version").toInt() >= 38 ? magicV38 : metadata.value("version").toInt() >= 37 ? magicV37 : metadata.value("version").toInt() >= 36 ? magicV36 : metadata.value("version").toInt() >= 35 ? magicV35 : metadata.value("version").toInt() >= 34 ? magicV34 : metadata.value("version").toInt() >= 33 ? magicV33 : metadata.value("version").toInt() >= 32 ? magicV32 : metadata.value("version").toInt() >= 31 ? magicV31 : metadata.value("version").toInt() >= 30 ? magicV30 : metadata.value("version").toInt() >= 29 ? magicV29 : metadata.value("version").toInt() >= 28 ? magicV28 : metadata.value("version").toInt() >= 27 ? magicV27 : metadata.value("version").toInt() >= 26 ? magicV26 : metadata.value("version").toInt() >= 25 ? magicV25 : metadata.value("version").toInt() >= 24 ? magicV24 : metadata.value("version").toInt() >= 23 ? magicV23 : metadata.value("version").toInt() >= 22 ? magicV22 : metadata.value("version").toInt() >= 21 ? magicV21 : metadata.value("version").toInt() >= 20 ? magicV20 : magicV19;
     if (manifest.size() > maxSkinManifest) return fail("Project manifest exceeds the 64 MiB limit.");
     if (cancelled && cancelled()) return fail("Save cancelled.");
     QSaveFile file(path);
@@ -164,6 +168,12 @@ bool saveProject(const Project &p, const QString &path, QString *error, const st
         if (file.pos() + png.size() + 36 > maxContainer) return fail("Project exceeds the 300 MB container limit.");
         if (!writeBlob(stream, png)) return fail("Could not write light-table snapshot.");
     }
+    for(const auto *shot:projectArtworkShots(p))for(const auto &layer:shot->layers)if(layer.puppetWarp)for(const auto &tile:layer.puppetWarp->sourceTiles){
+        if(cancelled&&cancelled())return fail("Save cancelled.");QByteArray png;QBuffer buffer(&png);buffer.open(QIODevice::WriteOnly);
+        if(!tile.save(&buffer,"PNG")||png.size()>1024*1024)return fail("Could not encode retained warp source tile.");
+        if(file.pos()+png.size()+36>maxContainer)return fail("Project exceeds the 300 MB container limit.");
+        if(!writeBlob(stream,png))return fail("Could not write retained warp source tile.");
+    }
     if (cancelled && cancelled()) return fail("Save cancelled.");
     if (stream.status() != QDataStream::Ok || !file.commit()) return fail(file.errorString());
     return true;
@@ -176,7 +186,7 @@ std::optional<Project> loadProject(const QString &path, QString *error) {
     int version = 1;
     qsizetype prefixSize = 0;
     if (prefix.startsWith("TOONPRO")) {
-        const QList<QByteArray> headers{magicV2, magicV3, magicV4, magicV5, magicV6, magicV7, magicV8, magicV9, magicV10, magicV11, magicV12, magicV13, magicV14, magicV15, magicV16, magicV17, magicV18, magicV19, magicV20, magicV21, magicV22, magicV23, magicV24, magicV25, magicV26, magicV27, magicV28, magicV29, magicV30, magicV31, magicV32, magicV33, magicV34, magicV35, magicV36, magicV37, magicV38, magicV39};
+        const QList<QByteArray> headers{magicV2, magicV3, magicV4, magicV5, magicV6, magicV7, magicV8, magicV9, magicV10, magicV11, magicV12, magicV13, magicV14, magicV15, magicV16, magicV17, magicV18, magicV19, magicV20, magicV21, magicV22, magicV23, magicV24, magicV25, magicV26, magicV27, magicV28, magicV29, magicV30, magicV31, magicV32, magicV33, magicV34, magicV35, magicV36, magicV37, magicV38, magicV39, magicV40, magicV41, magicV42, magicV43};
         bool recognized = false;
         for (int index = 0; index < headers.size(); ++index) if (prefix.startsWith(headers[index])) {
             version = index + 2;
@@ -411,6 +421,16 @@ std::optional<Project> loadProject(const QString &path, QString *error) {
             pin.image = image.convertToFormat(QImage::Format_ARGB32_Premultiplied);
             if (pin.image.isNull()) return fail("Could not load light-table snapshot pixels.");
         }
+    }
+    if(version>=40){
+        for(auto *shot:artwork)for(auto &layer:shot->layers)if(layer.puppetWarp)for(auto tile=layer.puppetWarp->sourceTiles.begin();tile!=layer.puppetWarp->sourceTiles.end();++tile){
+            if(++count>maxProjectTiles)return fail("Project exceeds the 1024-tile limit including retained warp sources.");
+            auto data=readBlob(stream,1024*1024);if(!data)return fail("Damaged or missing retained warp source/checksum.");
+            QBuffer buffer(&*data);buffer.open(QIODevice::ReadOnly);QImageReader reader(&buffer,"PNG");reader.setAutoDetectImageFormat(false);
+            if(reader.size()!=QSize(tileSize,tileSize)||data->size()<33||quint8((*data)[24])>8)return fail("Invalid retained warp source dimensions or bit depth.");
+            const auto image=reader.read();if(image.isNull())return fail("Could not decode retained warp source.");*tile=image.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+        }
+        project->m_puppetResourcesLoaded=true;
     }
     if (!file.atEnd()) return fail("Unexpected trailing project data.");
     if (version >= 7) {

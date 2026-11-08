@@ -3,6 +3,7 @@
 #include "raster_tools.h"
 #include "object_tools.h"
 #include "advanced_transform.h"
+#include <QSet>
 class QPlainTextEdit;
 
 namespace toon {
@@ -13,6 +14,7 @@ public:
     enum class PathEditMode { Transform, Nodes, Width };
     PathEditMode pathEditMode = PathEditMode::Transform;
     qreal simplifyTolerance = 2, widthBrushRadius = 30, widthBrushStrength = .2;
+    qreal nudgeRadius = 40, nudgeStrength = .75;
     bool widthThicken = true;
     qreal objectOpacity = 1;
     void setPathEditMode(PathEditMode mode);
@@ -26,11 +28,19 @@ public:
     RasterFillSettings fillSettings;
     RetouchSettings retouchSettings;
     QGradientStops gradientStops{{0,Qt::black},{1,Qt::white}};
-    bool radialGradient=false, shapeFill=false, shapeStroke=true, closedPath=false, eraseSegments=false;
+    bool radialGradient=false, shapeFill=false, shapeStroke=true, closedPath=false;
+    bool encloseFillMode=false;
+    VectorEraseMode vectorEraseMode=VectorEraseMode::WholeStroke;
     QColor fillColor=Qt::white;
     qreal strokeWidth=3;
     EditableObject textStyle;
     bool warpMode=false, selectionBoundary=false;
+    bool puppetMode=false, showPuppetMesh=true;
+    int puppetDensity=16;
+    bool setPuppetMode(bool enabled);
+    bool setPuppetDensity(int density);
+    bool removeSelectedPuppetPins();
+    int selectedPuppetPinCount() const { return m_selectedPuppetPins.size(); }
     AdvancedTransform *transform() { return &m_transform; }
     bool beginAdvanced(const QStringList &ids={},bool selectionOnly=false);
     bool handlesTool() const;
@@ -69,6 +79,7 @@ private:
     void selectObject(const QString &id);
     EditableObject styledObject(EditableObject object) const;
     void applyVectorBrush(QPointF point, qreal pressure);
+    void applyVectorNudge(QPointF point, qreal pressure);
     QPointF rotationHandle(const EditableObject &object) const;
     QVector<int> visibleNodeIndices(const EditableObject &object) const;
     QTransform objectLayerTransform() const;
@@ -82,8 +93,10 @@ private:
     AdvancedTransform m_transform;
     QPointF m_start,m_current;
     QVector<QPointF> m_points,m_transformPoints;
+    QSet<int> m_selectedPuppetPins;
     QVector<BezierNode> m_nodes;
     QPainterPath m_eraseSweep;
+    QPainterPath m_enclosePath;
     QString m_objectId;
     QString m_contextLayerId;
     EditableObject m_editObject;
@@ -94,6 +107,7 @@ private:
     QPointer<QPlainTextEdit> m_textEditor;
     bool m_textEdit=false, m_textResolving=false, m_openTextOnRelease=false, m_focusingTextEditor=false;
     QVector<EditableObject> m_editObjects;
+    QTransform m_nudgeLayerTransform;
     QPointF m_lastBrushPoint;
     QPainterPath m_simplifyRegion;
     int m_handle=-1,m_node=-1,m_control=0,m_contextNodeCount=0;

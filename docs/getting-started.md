@@ -89,4 +89,4 @@ Keep the complete `.toonstudio` folder together, including its catalog, document
 - [Animation tools and their versioned behavior](animation.md)
 - [Current implementation and verification](DEVELOPMENT.md)
 - [Published downloads and platform availability](https://complex1.github.io/ToonPro/download/)
-- [Illustrated project and asset guide source](../website/content/projects-and-assets.md)
+- [Website manual and feature content](../website/data/manual.json)

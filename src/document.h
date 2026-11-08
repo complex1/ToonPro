@@ -11,13 +11,21 @@
 #include <QStringList>
 
 namespace toon {
+struct LineArtResult;
+struct InbetweenPlan;
 struct StrokeInputSample { QPointF point; BrushInput input; };
 class Document : public QObject {
     Q_OBJECT
 public:
+    bool bakePuppetWarp();
     explicit Document(QObject *parent = nullptr);
     void load(const Project &project);
     bool isOpen() const { return m_open; }
+    quint64 contentRevision() const { return m_contentRevision; }
+    bool addPerspectiveGuides(const QVector<DrawingGuide> &, const QString &shotId,
+                              quint64 expectedRevision, int frame, const QString &sourceId = {});
+    bool createLineArtLayers(const QString &sourceId, quint64 expectedRevision, int frame,
+                             const LineArtResult &, bool hideSource);
     const Project &project() const { return m_project; }
     // Saved drawing aids are independent of artwork Undo and never alter pixels.
     bool setDrawingAids(const DrawingAids &aids, QString *error = nullptr);
@@ -48,6 +56,7 @@ public:
     bool rippleTimeline(const TimelineRippleEdit &edit, bool *changed = nullptr);
     bool addStaticTrack(const QString &name);
     bool createAnimationDrawing(bool duplicate = false, int durationFrames = 1);
+    bool insertInbetweens(const InbetweenPlan &, const QVector<QImage> &, quint64 expectedRevision);
     bool removeAnimationExposure();
     bool moveAnimationExposures(const QVector<TimelineCelRef> &refs, int deltaFrames);
     bool removeAnimationExposures(const QVector<TimelineCelRef> &refs);
@@ -131,6 +140,13 @@ public:
     bool pasteTimelineKeys(const TimelineKeyClipboard &clipboard, int atFrame);
     void selectLayer(int index);
     void addLayer(bool annotation = false);
+    QString addReference3DLayer(const ReferenceScene &scene, const QString &name = {}, QString *error = nullptr);
+    bool setReference3DScene(const QString &layerId, const ReferenceScene &scene, QString *error = nullptr);
+    bool beginReference3DEdit(const QString &layerId, QString *error = nullptr);
+    bool previewReference3DScene(const ReferenceScene &scene, QString *error = nullptr);
+    void commitReference3DEdit();
+    void cancelReference3DEdit();
+    bool reference3DEditActive() const { return m_beforeReference3DEdit.has_value(); }
     void addGroup();
     void setLayerParent(const QString &parentId);
     void setLayerClipped(bool clipped);
@@ -146,6 +162,7 @@ public:
     void moveLayers(const QStringList &ids, const QString &parentId, const QString &beforeId = {});
     void setLayersVisible(const QStringList &ids, bool visible);
     void setLayersLocked(const QStringList &ids, bool locked);
+    bool setFillReferences(const QStringList &ids, bool reference);
     void setLayersRowColor(const QStringList &ids, const QColor &color);
     void setLayerBlendMode(LayerBlendMode mode);
     void setLayerPositionLocked(bool locked);
@@ -197,7 +214,7 @@ public:
     bool applyTransform();
     void cancelTransform();
     bool transformActive() const { return m_transformPreview.has_value(); }
-    bool editingGestureActive() const { return strokeActive() || transformActive() || m_externalEditActive || keyframeEditActive() || cameraEditActive() || effectsEditActive(); }
+    bool editingGestureActive() const { return strokeActive() || transformActive() || m_externalEditActive || keyframeEditActive() || cameraEditActive() || effectsEditActive() || reference3DEditActive(); }
     bool externalEditActive() const { return m_externalEditActive; }
     QRectF transformBounds() const { return m_transformBounds; }
     QTransform transformMatrix() const { return rasterTransform(m_transformBounds, m_transformParameters); }
@@ -250,6 +267,7 @@ signals:
     void transformChanged();
     void warning(const QString &message);
 private:
+    quint64 m_contentRevision = 0;
     friend class ProjectCommand;
     friend class AutoActions;
     friend class RasterTools;
@@ -281,6 +299,9 @@ private:
     bool m_open = false;
     bool m_committing = false;
     bool m_externalEditActive = false;
+    std::optional<Project> m_beforeReference3DEdit;
+    QString m_reference3DEditLayerId, m_reference3DEditShotId;
+    int m_reference3DEditFrame = -1;
     struct ShotView { QString layerId, animationTrackId; int frame = 0; };
     QHash<QString, ShotView> m_shotViews;
     QString m_activeShotId;
